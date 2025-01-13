@@ -1,15 +1,24 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { SyncOutlined } from '@ant-design/icons';
 import { useFieldSchema } from '@formily/react';
 import { Loader } from '@googlemaps/js-api-loader';
-import { css, useAPIClient, useApp, useCollection } from '@nocobase/client';
+import { css, useAPIClient, useApp, useCollection_deprecated, useNavigateNoUpdate } from '@nocobase/client';
 import { useMemoizedFn } from 'ahooks';
 import { Alert, App, Button, Spin } from 'antd';
 import React, { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { defaultImage } from '../../constants';
 import { useMapConfiguration } from '../../hooks';
 import { useMapTranslation } from '../../locale';
 import { MapEditorType } from '../../types';
+import { useMapHeight } from '../hook';
 import { Search } from './Search';
 import { getCurrentPosition, getIcon } from './utils';
 
@@ -80,7 +89,7 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
     const { value, onChange, block = false, readonly, disabled = block, zoom = 13, overlayCommonOptions } = props;
     const { accessKey } = useMapConfiguration(props.mapType) || {};
     const { t } = useMapTranslation();
-    const { getField } = useCollection();
+    const { getField } = useCollection_deprecated();
     const fieldSchema = useFieldSchema();
     const drawingManagerRef = useRef<google.maps.drawing.DrawingManager>();
     const map = useRef<google.maps.Map>();
@@ -89,6 +98,13 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
     const [errMessage, setErrMessage] = useState('');
     const api = useAPIClient();
     const { modal } = App.useApp();
+    const height = useMapHeight();
+
+    useEffect(() => {
+      if (map.current) {
+        map.current.setZoom(zoom);
+      }
+    }, [zoom]);
 
     const type = useMemo<MapEditorType>(() => {
       if (props.type) return props.type;
@@ -108,7 +124,7 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
       ...overlayCommonOptions,
     });
 
-    const navigate = useNavigate();
+    const navigate = useNavigateNoUpdate();
     const mapContainerRef = useRef<HTMLDivElement>();
     const cleanupOverlayListenersRef = useRef<Set<() => void>>(new Set());
 
@@ -148,9 +164,9 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
     });
 
     const toCenter = useMemoizedFn((position) => {
-      if (map.current) {
-        map.current.setCenter(position);
-        map.current.setZoom(zoom);
+      if (map.current && position) {
+        map.current?.setCenter(position);
+        map.current?.setZoom(zoom);
       }
     });
 
@@ -176,7 +192,7 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
         }
       });
 
-      map.current.setCenter(bounds.getCenter());
+      map.current?.setCenter?.(bounds.getCenter());
     });
 
     const onFocusOverlay = () => {
@@ -370,7 +386,6 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
       });
     });
     const app = useApp();
-
     if (!accessKey || errMessage) {
       return (
         <Alert
@@ -392,7 +407,7 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
       <div
         className={css`
           position: relative;
-          height: 500px;
+          height: ${height || 500}px !important;
         `}
       >
         {!map.current && (
@@ -478,3 +493,4 @@ export const GoogleMapsComponent = React.forwardRef<GoogleMapForwardedRefProps, 
     );
   },
 );
+GoogleMapsComponent.displayName = 'GoogleMapsComponent';

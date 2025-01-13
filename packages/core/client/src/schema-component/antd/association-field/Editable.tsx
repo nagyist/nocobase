@@ -1,19 +1,22 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { observer, useField, useForm } from '@formily/react';
 import React from 'react';
 import { SchemaComponentOptions } from '../../';
 import { useAssociationCreateActionProps as useCAP } from '../../../block-provider/hooks';
+import { useCollection_deprecated } from '../../../collection-manager';
+import { useAssociationFieldModeContext } from './AssociationFieldModeProvider';
 import { AssociationFieldProvider } from './AssociationFieldProvider';
-import { AssociationSelect } from './AssociationSelect';
-import { InternalFileManager } from './FileManager';
-import { InternalNester } from './InternalNester';
-import { InternalPicker } from './InternalPicker';
-import { InternalSubTable } from './InternalSubTable';
-import { InternaPopoverNester } from './InternalPopoverNester';
-import { InternalCascadeSelect } from './InternalCascadeSelect';
 import { CreateRecordAction } from './components/CreateRecordAction';
 import { useAssociationFieldContext } from './hooks';
-import { useCollection } from '../../../collection-manager';
 
 const EditableAssociationField = observer(
   (props: any) => {
@@ -21,11 +24,12 @@ const EditableAssociationField = observer(
     const field: Field = useField();
     const form = useForm();
     const { options: collectionField, currentMode } = useAssociationFieldContext();
+    const { getComponent } = useAssociationFieldModeContext();
 
     const useCreateActionProps = () => {
       const { onClick } = useCAP();
       const actionField: any = useField();
-      const { getPrimaryKey } = useCollection();
+      const { getPrimaryKey } = useCollection_deprecated();
       const primaryKey = getPrimaryKey();
       return {
         async onClick() {
@@ -48,15 +52,11 @@ const EditableAssociationField = observer(
       };
     };
 
+    const Component = getComponent(currentMode);
+
     return (
       <SchemaComponentOptions scope={{ useCreateActionProps }} components={{ CreateRecordAction }}>
-        {currentMode === 'Picker' && <InternalPicker {...props} />}
-        {currentMode === 'Nester' && <InternalNester {...props} />}
-        {currentMode === 'PopoverNester' && <InternaPopoverNester {...props} />}
-        {currentMode === 'Select' && <AssociationSelect {...props} />}
-        {currentMode === 'SubTable' && <InternalSubTable {...props} />}
-        {currentMode === 'FileManager' && <InternalFileManager {...props} />}
-        {currentMode === 'CascadeSelect' && <InternalCascadeSelect {...props} />}
+        <Component {...props} />
       </SchemaComponentOptions>
     );
   },

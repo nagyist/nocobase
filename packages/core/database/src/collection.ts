@@ -1,26 +1,44 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import merge from 'deepmerge';
 import { EventEmitter } from 'events';
 import { default as _, default as lodash } from 'lodash';
+import safeJsonStringify from 'safe-json-stringify';
 import {
   ModelOptions,
   ModelStatic,
   QueryInterfaceDropTableOptions,
+  QueryInterfaceOptions,
   SyncOptions,
   Transactionable,
   Utils,
 } from 'sequelize';
+import { BuiltInGroup } from './collection-group-manager';
 import { Database } from './database';
 import { BelongsToField, Field, FieldOptions, HasManyField } from './fields';
 import { Model } from './model';
-import { AdjacencyListRepository } from './repositories/tree-repository/adjacency-list-repository';
 import { Repository } from './repository';
 import { checkIdentifier, md5, snakeCase } from './utils';
 
 export type RepositoryType = typeof Repository;
 
-export type CollectionSortable = string | boolean | { name?: string; scopeKey?: string };
+export type CollectionSortable =
+  | string
+  | boolean
+  | {
+      name?: string;
+      scopeKey?: string;
+    };
 
 type dumpable = 'required' | 'optional' | 'skip';
+type dumpableType = 'meta' | 'business' | 'config';
 
 function EnsureAtomicity(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
   const originalMethod = descriptor.value;
@@ -29,6 +47,8 @@ function EnsureAtomicity(target: any, propertyKey: string, descriptor: PropertyD
     const model = this.model;
     const beforeAssociationKeys = Object.keys(model.associations);
     const beforeRawAttributes = Object.keys(model.rawAttributes);
+    const fieldName = args[0];
+    const beforeField = this.getField(fieldName);
 
     try {
       return originalMethod.apply(this, args);
@@ -45,6 +65,12 @@ function EnsureAtomicity(target: any, propertyKey: string, descriptor: PropertyD
       for (const key of createdRawAttributes) {
         delete this.model.rawAttributes[key];
       }
+
+      // remove field created in this method
+      if (!beforeField) {
+        this.removeField(fieldName);
+      }
+
       throw error;
     }
   };
@@ -52,33 +78,30 @@ function EnsureAtomicity(target: any, propertyKey: string, descriptor: PropertyD
   return descriptor;
 }
 
+export type BaseDumpRules = {
+  delayRestore?: any;
+};
+
+export type DumpRules =
+  | BuiltInGroup
+  | ({ required: true } & BaseDumpRules)
+  | ({ skipped: true } & BaseDumpRules)
+  | ({ group: BuiltInGroup | string } & BaseDumpRules);
+
 export interface CollectionOptions extends Omit<ModelOptions, 'name' | 'hooks'> {
   name: string;
   title?: string;
   namespace?: string;
-  /**
-   * Used for @nocobase/plugin-duplicator
-   * @see packages/core/database/src/collection-group-manager.tss
-   *
-   * @prop {'required' | 'optional' | 'skip'} dumpable - Determine whether the collection is dumped
-   * @prop {string[] | string} [with] - Collections dumped with this collection
-   * @prop {any} [delayRestore] - A function to execute after all collections are restored
-   */
-  duplicator?:
-    | dumpable
-    | {
-        dumpable: dumpable;
-        with?: string[] | string;
-        delayRestore?: any;
-      };
-
+  dumpRules?: DumpRules;
   tableName?: string;
   inherits?: string[] | string;
   viewName?: string;
   writableView?: boolean;
 
-  filterTargetKey?: string;
+  filterTargetKey?: string | string[];
   fields?: FieldOptions[];
+  fieldSort?: string[];
+
   model?: string | ModelStatic<Model>;
   repository?: string | RepositoryType;
   sortable?: CollectionSortable;
@@ -90,10 +113,21 @@ export interface CollectionOptions extends Omit<ModelOptions, 'name' | 'hooks'> 
    * @default 'options'
    */
   magicAttribute?: string;
-
   tree?: string;
-
   template?: string;
+
+  simplePaginate?: boolean;
+
+  /**
+   * where is the collection from
+   *
+   * values
+   * - 'plugin' - collection is from plugin
+   * - 'core' - collection is from core
+   * - 'user' - collection is from user
+   */
+  origin?: string;
+  asStrategyResource?: boolean;
 
   [key: string]: any;
 }
@@ -124,6 +158,7 @@ export class Collection<
     this.modelInit();
 
     this.db.modelCollection.set(this.model, this);
+    this.db.modelNameCollectionMap.set(this.model.name, this);
 
     // set tableName to collection map
     // the form of key is `${schema}.${tableName}` if schema exists
@@ -138,17 +173,34 @@ export class Collection<
     this.setSortable(options.sortable);
   }
 
-  get filterTargetKey() {
-    const targetKey = lodash.get(this.options, 'filterTargetKey', this.model.primaryKeyAttribute);
-    if (!targetKey && this.model.rawAttributes['id']) {
-      return 'id';
+  get filterTargetKey(): string | string[] {
+    const targetKey = this.options?.filterTargetKey;
+
+    if (Array.isArray(targetKey)) {
+      if (targetKey.length === 1) {
+        return targetKey[0];
+      }
+
+      return targetKey;
     }
 
-    return targetKey;
+    if (targetKey && this.model.getAttributes()[targetKey]) {
+      return targetKey;
+    }
+
+    if (this.model.primaryKeyAttributes.length > 1) {
+      return null;
+    }
+
+    return this.model.primaryKeyAttribute;
   }
 
   get name() {
     return this.options.name;
+  }
+
+  get origin() {
+    return this.options.origin || 'core';
   }
 
   get titleField() {
@@ -175,6 +227,10 @@ export class Collection<
     }
   }
 
+  isMultiFilterTargetKey() {
+    return Array.isArray(this.filterTargetKey) && this.filterTargetKey.length > 1;
+  }
+
   tableName() {
     const { name, tableName } = this.options;
     const tName = tableName || name;
@@ -182,7 +238,7 @@ export class Collection<
   }
 
   /**
-   * TODO
+   * @internal
    */
   modelInit() {
     if (this.model) {
@@ -211,9 +267,75 @@ export class Collection<
       M = model;
     }
 
+    const collection = this;
+
     // @ts-ignore
     this.model = class extends M {};
+
+    Object.defineProperty(this.model, 'primaryKeyAttribute', {
+      get: function () {
+        const singleFilterTargetKey: string = (() => {
+          if (!collection.options.filterTargetKey) {
+            return null;
+          }
+
+          if (Array.isArray(collection.options.filterTargetKey) && collection.options.filterTargetKey.length === 1) {
+            return collection.options.filterTargetKey[0];
+          }
+
+          return collection.options.filterTargetKey as string;
+        })();
+
+        if (!this._primaryKeyAttribute && singleFilterTargetKey && collection.getField(singleFilterTargetKey)) {
+          return singleFilterTargetKey;
+        }
+
+        return this._primaryKeyAttribute;
+      }.bind(this.model),
+
+      set(value) {
+        this._primaryKeyAttribute = value;
+      },
+    });
+
+    Object.defineProperty(this.model, 'primaryKeyAttributes', {
+      get: function () {
+        if (Array.isArray(this._primaryKeyAttributes) && this._primaryKeyAttributes.length) {
+          return this._primaryKeyAttributes;
+        }
+
+        if (collection.options.filterTargetKey) {
+          const fields = lodash.castArray(collection.options.filterTargetKey);
+          if (fields.every((field) => collection.getField(field))) {
+            return fields;
+          }
+        }
+
+        return this._primaryKeyAttributes;
+      }.bind(this.model),
+
+      set(value) {
+        this._primaryKeyAttributes = value;
+      },
+    });
+
+    Object.defineProperty(this.model, 'primaryKeyField', {
+      get: function () {
+        if (this.primaryKeyAttribute) {
+          return this.rawAttributes[this.primaryKeyAttribute].field || this.primaryKeyAttribute;
+        }
+
+        return null;
+      }.bind(this.model),
+
+      set(val) {
+        this._primaryKeyField = val;
+      },
+    });
+
     this.model.init(null, this.sequelizeModelOptions());
+
+    this.model.options.modelName = this.options.name;
 
     if (!autoGenId) {
       this.model.removeAttribute('id');
@@ -230,11 +352,6 @@ export class Collection<
     if (typeof repository === 'string') {
       repo = this.context.database.repositories.get(repository) || Repository;
     }
-
-    if (this.options.tree == 'adjacency-list' || this.options.tree == 'adjacencyList') {
-      repo = AdjacencyListRepository;
-    }
-
     this.repository = new repo(this);
   }
 
@@ -252,6 +369,14 @@ export class Collection<
 
   getField<F extends Field>(name: string): F {
     return this.fields.get(name);
+  }
+
+  getFieldByField(field: string): Field {
+    return this.findField((f) => f.options.field === field);
+  }
+
+  getFields() {
+    return [...this.fields.values()];
   }
 
   addField(name: string, options: FieldOptions): Field {
@@ -284,12 +409,27 @@ export class Collection<
     }
   }
 
+  /**
+   * @internal
+   */
+  correctOptions(options) {
+    if (options.primaryKey && options.autoIncrement) {
+      delete options.defaultValue;
+    }
+  }
+
   @EnsureAtomicity
   setField(name: string, options: FieldOptions): Field {
     checkIdentifier(name);
     this.checkFieldType(name, options);
 
     const { database } = this.context;
+
+    database.logger.trace(`beforeSetField: ${safeJsonStringify(options)}`, {
+      databaseInstanceId: database.instanceId,
+      collectionName: this.name,
+      fieldName: name,
+    });
 
     if (options.source) {
       const [sourceCollectionName, sourceFieldName] = options.source.split('.');
@@ -298,19 +438,22 @@ export class Collection<
         this.db.logger.warn(
           `source collection "${sourceCollectionName}" not found for field "${name}" at collection "${this.name}"`,
         );
+        return null;
       } else {
         const sourceField = sourceCollection.fields.get(sourceFieldName);
 
         if (!sourceField) {
           this.db.logger.warn(
-            `source field "${sourceFieldName}" not found for field "${name}" at collection "${this.name}"`,
+            `Source field "${sourceFieldName}" not found for field "${name}" at collection "${this.name}". Source collection: "${sourceCollectionName}"`,
           );
+          return null;
         } else {
           options = { ...lodash.omit(sourceField.options, ['name', 'primaryKey']), ...options };
         }
       }
     }
 
+    this.correctOptions(options);
     this.emit('field.beforeAdd', name, options, { collection: this });
 
     const field = database.buildField(
@@ -329,13 +472,14 @@ export class Collection<
       );
     }
 
-    if (this.options.autoGenId !== false && options.primaryKey) {
-      this.model.removeAttribute('id');
-    }
-
     this.removeField(name);
     this.fields.set(name, field);
     this.emit('field.afterAdd', field);
+
+    this.db.emit('field.afterAdd', {
+      collection: this,
+      field,
+    });
 
     // refresh children models
     if (this.isParent()) {
@@ -382,7 +526,93 @@ export class Collection<
     return this.context.database.removeCollection(this.name);
   }
 
-  async removeFromDb(options?: QueryInterfaceDropTableOptions) {
+  async removeFieldFromDb(name: string, options?: QueryInterfaceOptions) {
+    const field = this.getField(name);
+    if (!field) {
+      return;
+    }
+
+    const attribute = this.model.rawAttributes[name];
+
+    if (!attribute) {
+      field.remove();
+      // console.log('field is not attribute');
+      return;
+    }
+
+    // @ts-ignore
+    if (this.isInherited() && this.parentFields().has(name)) {
+      return;
+    }
+
+    if ((this.model as any)._virtualAttributes.has(this.name)) {
+      field.remove();
+      // console.log('field is virtual attribute');
+      return;
+    }
+
+    if (this.model.options.timestamps !== false) {
+      // timestamps 相关字段不删除
+      let timestampsFields = ['createdAt', 'updatedAt', 'deletedAt'];
+      if (this.db.options.underscored) {
+        timestampsFields = timestampsFields.map((fieldName) => snakeCase(fieldName));
+      }
+      if (timestampsFields.includes(field.columnName())) {
+        this.fields.delete(name);
+        return;
+      }
+    }
+
+    // 排序字段通过 sortable 控制
+    const sortable = this.options.sortable;
+    if (sortable) {
+      let sortField: any;
+      if (sortable === true) {
+        sortField = 'sort';
+      } else if (typeof sortable === 'string') {
+        sortField = sortable;
+      } else if (sortable.name) {
+        sortField = sortable.name || 'sort';
+      }
+      if (field.name === sortField) {
+        return;
+      }
+    }
+
+    if (this.isView()) {
+      field.remove();
+      return;
+    }
+
+    const columnReferencesCount = _.filter(this.model.rawAttributes, (attr) => attr.field == field.columnName()).length;
+
+    if (
+      (await field.existsInDb({
+        transaction: options?.transaction,
+      })) &&
+      columnReferencesCount == 1
+    ) {
+      const columns = await this.model.sequelize
+        .getQueryInterface()
+        .describeTable(this.getTableNameWithSchema(), options);
+
+      if (Object.keys(columns).length == 1) {
+        // remove table if only one column left
+        await this.removeFromDb({
+          ...options,
+          cascade: true,
+          dropCollection: false,
+        });
+      } else {
+        const queryInterface = this.db.sequelize.getQueryInterface();
+        await queryInterface.removeColumn(this.getTableNameWithSchema(), field.columnName(), options);
+      }
+    }
+
+    field.remove();
+  }
+
+  async removeFromDb(options?: QueryInterfaceDropTableOptions & { dropCollection?: boolean }) {
     if (
       !this.isView() &&
       (await this.existsInDb({
@@ -393,7 +623,9 @@ export class Collection<
       await queryInterface.dropTable(this.getTableNameWithSchema(), options);
     }
 
-    return this.remove();
+    if (options?.dropCollection !== false) {
+      return this.remove();
+    }
   }
 
   async existsInDb(options?: Transactionable) {
@@ -428,15 +660,17 @@ export class Collection<
     return field as Field;
   }
 
-  /**
-   * TODO
-   */
   updateOptions(options: CollectionOptions, mergeOptions?: any) {
     let newOptions = lodash.cloneDeep(options);
     newOptions = merge(this.options, newOptions, mergeOptions);
-    this.context.database.emit('beforeUpdateCollection', this, newOptions);
-    this.options = newOptions;
 
+    if (options.filterTargetKey) {
+      newOptions.filterTargetKey = options.filterTargetKey;
+    }
+
+    this.context.database.emit('beforeUpdateCollection', this, newOptions);
+
+    this.options = newOptions;
     this.setFields(options.fields, false);
     if (options.repository) {
       this.setRepository(options.repository);
@@ -467,12 +701,6 @@ export class Collection<
     }
   }
 
-  /**
-   * TODO
-   *
-   * @param name
-   * @param options
-   */
   updateField(name: string, options: FieldOptions) {
     if (!this.hasField(name)) {
       throw new Error(`field ${name} not exists`);
@@ -485,7 +713,16 @@ export class Collection<
     this.setField(options.name || name, options);
   }
 
-  addIndex(index: string | string[] | { fields: string[]; unique?: boolean; [key: string]: any }) {
+  addIndex(
+    index:
+      | string
+      | string[]
+      | {
+          fields: string[];
+          unique?: boolean;
+          [key: string]: any;
+        },
+  ) {
     if (!index) {
       return;
     }
@@ -525,6 +762,7 @@ export class Collection<
       if (lodash.isEqual(item.fields, indexName)) {
         return;
       }
+
       const name: string = item.fields.join(',');
       if (name.startsWith(`${indexName.join(',')},`)) {
         return;
@@ -562,9 +800,13 @@ export class Collection<
     this.model._indexes = indexes.filter((item) => {
       return !lodash.isEqual(item.fields, fields);
     });
+
     this.refreshIndexes();
   }
 
+  /**
+   * @internal
+   */
   refreshIndexes() {
     // @ts-ignore
     const indexes: any[] = this.model._indexes;
@@ -573,14 +815,10 @@ export class Collection<
     this.model._indexes = lodash.uniqBy(
       indexes
         .filter((item) => {
-          return item.fields.every((field) =>
-            Object.values(this.model.rawAttributes).find((fieldVal) => fieldVal.field === field),
-          );
+          return item.fields.every((field) => this.model.rawAttributes[field]);
         })
         .map((item) => {
-          if (this.options.underscored) {
-            item.fields = item.fields.map((field) => snakeCase(field));
-          }
+          item.fields = item.fields.map((field) => this.model.rawAttributes[field].field);
           return item;
         }),
       'name',
@@ -655,6 +893,16 @@ export class Collection<
     return `${schema}.${tableName}`;
   }
 
+  public getRealTableName(quoted = false) {
+    const realname = this.tableNameAsString();
+    return !quoted ? realname : this.db.sequelize.getQueryInterface().quoteIdentifiers(realname);
+  }
+
+  public getRealFieldName(name: string, quoted = false) {
+    const realname = this.model.getAttributes()[name].field;
+    return !quoted ? name : this.db.sequelize.getQueryInterface().quoteIdentifier(realname);
+  }
+
   public getTableNameWithSchemaAsString() {
     const tableName = this.model.tableName;
 
@@ -689,14 +937,21 @@ export class Collection<
     return false;
   }
 
+  unavailableActions() {
+    return [];
+  }
+
   protected sequelizeModelOptions() {
     const { name } = this.options;
-    return {
+
+    const attr = {
       ..._.omit(this.options, ['name', 'fields', 'model', 'targetKey']),
       modelName: name,
       sequelize: this.context.database.sequelize,
       tableName: this.tableName(),
     };
+
+    return attr;
   }
 
   protected bindFieldEventListener() {

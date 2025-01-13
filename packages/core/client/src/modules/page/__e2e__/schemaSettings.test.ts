@@ -1,8 +1,17 @@
-import { Page, expect, test } from '@nocobase/test/client';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { Page, expect, test } from '@nocobase/test/e2e';
 
 test.describe('page schema settings', () => {
   const showMenu = async (page: Page) => {
-    await page.getByLabel('schema-initializer-Grid-BlockInitializers').hover();
+    await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByLabel('designer-schema-settings-Page').hover();
   };
 
@@ -62,13 +71,13 @@ test.describe('page schema settings', () => {
 });
 
 test.describe('tabs schema settings', () => {
-  async function showSettings(page: Page) {
+  async function showSettingsOfTab(page: Page) {
     await page.getByText('Unnamed').hover();
     await page.getByRole('tab').getByLabel('designer-schema-settings-Page').hover();
   }
 
   async function enablePageTabs(page) {
-    await page.getByLabel('schema-initializer-Grid-BlockInitializers').hover();
+    await page.getByLabel('schema-initializer-Grid-page:addBlock').hover();
     await page.getByRole('button', { name: 'designer-schema-settings-Page' }).hover();
     await page.getByRole('menuitem', { name: 'Enable page tabs' }).click();
     await page.mouse.move(300, 0);
@@ -78,7 +87,7 @@ test.describe('tabs schema settings', () => {
     await mockPage().goto();
     await enablePageTabs(page);
 
-    await showSettings(page);
+    await showSettingsOfTab(page);
     await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
     await page.getByLabel('block-item-Input-Tab name').getByRole('textbox').click();
     await page.getByLabel('block-item-Input-Tab name').getByRole('textbox').fill('new name of page tab');
@@ -94,7 +103,7 @@ test.describe('tabs schema settings', () => {
     await mockPage().goto();
     await enablePageTabs(page);
 
-    await showSettings(page);
+    await showSettingsOfTab(page);
     await page.getByRole('menuitem', { name: 'Delete', exact: true }).click();
     await page.getByRole('button', { name: 'OK', exact: true }).click();
 

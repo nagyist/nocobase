@@ -1,10 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import type { DerivativeFunc } from '@ant-design/cssinjs';
 import classNames from 'classnames';
 import React, { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
 import { antdComponents } from './component-panel';
 import useControlledTheme from './hooks/useControlledTheme';
 import type { SelectedToken, Theme } from './interface';
-import type { Locale } from './locale';
 import { LocaleContext, zhCN } from './locale';
 import { mapRelatedAlias, seedRelatedAlias, seedRelatedMap } from './meta/TokenRelation';
 import type { TokenPanelProProps } from './token-panel-pro';
@@ -41,7 +49,7 @@ export type ThemeEditorProps = {
   className?: string;
   style?: React.CSSProperties;
   darkAlgorithm?: DerivativeFunc<any, any>;
-  locale?: Locale;
+  locale?: any;
 };
 
 const ThemeEditor = forwardRef<ThemeEditorRef, ThemeEditorProps>(
@@ -151,5 +159,6 @@ const ThemeEditor = forwardRef<ThemeEditorRef, ThemeEditorProps>(
     );
   },
 );
+ThemeEditor.displayName = 'ThemeEditor';
 
 export default ThemeEditor;

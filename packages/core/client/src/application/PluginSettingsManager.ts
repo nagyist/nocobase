@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { set } from 'lodash';
-import { createElement } from 'react';
+import React, { createElement } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import { Icon } from '../icon';
@@ -11,7 +20,7 @@ export const ADMIN_SETTINGS_PATH = '/admin/settings/';
 export const SNIPPET_PREFIX = 'pm.';
 
 export interface PluginSettingOptions {
-  title: string;
+  title: any;
   /**
    * @default Outlet
    */
@@ -23,12 +32,15 @@ export interface PluginSettingOptions {
    */
   sort?: number;
   aclSnippet?: string;
+  link?: string;
+  isTopLevel?: boolean;
   [index: string]: any;
 }
 
 export interface PluginSettingsPageType {
-  label?: string;
-  title: string;
+  label?: string | React.ReactElement;
+  title: string | React.ReactElement;
+  link?: string;
   key: string;
   icon: any;
   path: string;
@@ -44,15 +56,18 @@ export interface PluginSettingsPageType {
 export class PluginSettingsManager {
   protected settings: Record<string, PluginSettingOptions> = {};
   protected aclSnippets: string[] = [];
+  public app: Application;
+  private cachedList = {};
 
-  constructor(
-    _pluginSettings: Record<string, PluginSettingOptions>,
-    protected app: Application,
-  ) {
+  constructor(_pluginSettings: Record<string, PluginSettingOptions>, app: Application) {
     this.app = app;
     Object.entries(_pluginSettings || {}).forEach(([name, pluginSettingOptions]) => {
       this.add(name, pluginSettingOptions);
     });
+  }
+
+  clearCache() {
+    this.cachedList = {};
   }
 
   setAclSnippets(aclSnippets: string[]) {
@@ -61,6 +76,9 @@ export class PluginSettingsManager {
 
   getAclSnippet(name: string) {
     const setting = this.settings[name];
+    if (setting?.skipAclConfigure) {
+      return null;
+    }
     return setting?.aclSnippet ? setting.aclSnippet : `${SNIPPET_PREFIX}${name}`;
   }
 
@@ -75,8 +93,13 @@ export class PluginSettingsManager {
   add(name: string, options: PluginSettingOptions) {
     const nameArr = name.split('.');
     const topLevelName = nameArr[0];
-    this.settings[name] = { Component: Outlet, ...options, name, topLevelName };
-
+    this.settings[name] = {
+      ...this.settings[name],
+      Component: Outlet,
+      ...options,
+      name,
+      topLevelName: options.topLevelName || topLevelName,
+    };
     // add children
     if (nameArr.length > 1) {
       set(this.settings, nameArr.join('.children.'), this.settings[name]);
@@ -100,6 +123,7 @@ export class PluginSettingsManager {
   }
 
   hasAuth(name: string) {
+    if (this.aclSnippets.includes(`!${this.getAclSnippet('*')}`)) return false;
     return this.aclSnippets.includes(`!${this.getAclSnippet(name)}`) === false;
   }
 
@@ -124,6 +148,7 @@ export class PluginSettingsManager {
       .sort((a, b) => (a.sort || 0) - (b.sort || 0));
     const { title, icon, aclSnippet, ...others } = pluginSetting;
     return {
+      isTopLevel: name === pluginSetting.topLevelName,
       ...others,
       aclSnippet: this.getAclSnippet(name),
       title,
@@ -137,14 +162,21 @@ export class PluginSettingsManager {
   }
 
   getList(filterAuth = true): PluginSettingsPageType[] {
-    return Array.from(new Set(Object.values(this.settings).map((item) => item.topLevelName)))
+    const cacheKey = JSON.stringify(filterAuth);
+    if (this.cachedList[cacheKey]) return this.cachedList[cacheKey];
+
+    return (this.cachedList[cacheKey] = Array.from(
+      new Set(Object.values(this.settings).map((item) => item.topLevelName)),
+    )
       .sort((a, b) => a.localeCompare(b)) // sort by name
       .map((name) => this.get(name, filterAuth))
       .filter(Boolean)
-      .sort((a, b) => (a.sort || 0) - (b.sort || 0));
+      .sort((a, b) => (a.sort || 0) - (b.sort || 0)));
   }
 
   getAclSnippets() {
-    return Object.keys(this.settings).map((name) => this.getAclSnippet(name));
+    return Object.keys(this.settings)
+      .map((name) => this.getAclSnippet(name))
+      .filter(Boolean);
   }
 }

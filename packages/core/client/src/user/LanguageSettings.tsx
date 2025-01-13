@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { MenuProps } from 'antd';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +20,6 @@ export const useLanguageSettings = () => {
   const enabledLanguages: string[] = useMemo(() => data?.data?.enabledLanguages || [], [data?.data?.enabledLanguages]);
   const result = useMemo<MenuProps['items'][0]>(() => {
     return {
-      role: 'button',
       key: 'language',
       eventKey: 'LanguageSettings',
       label: (
@@ -27,7 +35,7 @@ export const useLanguageSettings = () => {
             })}
           defaultValue={i18n.language}
           onChange={async (lang) => {
-            await api.resource('users').updateProfile({
+            await api.resource('users').updateLang({
               values: {
                 appLang: lang,
               },

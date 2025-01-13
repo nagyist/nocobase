@@ -8,11 +8,11 @@ const path = require('path');
 console.log('VERSION: ', packageJson.version);
 
 function getUmiConfig() {
-  const { APP_PORT, API_BASE_URL } = process.env;
+  const { APP_PORT, API_BASE_URL, API_CLIENT_STORAGE_TYPE, API_CLIENT_STORAGE_PREFIX, APP_PUBLIC_PATH } = process.env;
   const API_BASE_PATH = process.env.API_BASE_PATH || '/api/';
   const PROXY_TARGET_URL = process.env.PROXY_TARGET_URL || `http://127.0.0.1:${APP_PORT}`;
-  const LOCAL_STORAGE_BASE_URL = '/storage/uploads/';
-  const STATIC_PATH = '/static/';
+  const LOCAL_STORAGE_BASE_URL = 'storage/uploads/';
+  const STATIC_PATH = 'static/';
 
   function getLocalStorageProxy() {
     if (LOCAL_STORAGE_BASE_URL.startsWith('http')) {
@@ -20,11 +20,11 @@ function getUmiConfig() {
     }
 
     return {
-      [LOCAL_STORAGE_BASE_URL]: {
+      [APP_PUBLIC_PATH + LOCAL_STORAGE_BASE_URL]: {
         target: PROXY_TARGET_URL,
         changeOrigin: true,
       },
-      [STATIC_PATH]: {
+      [APP_PUBLIC_PATH + STATIC_PATH]: {
         target: PROXY_TARGET_URL,
         changeOrigin: true,
       },
@@ -37,7 +37,11 @@ function getUmiConfig() {
       return memo;
     }, {}),
     define: {
+      'process.env.APP_PUBLIC_PATH': process.env.APP_PUBLIC_PATH,
+      'process.env.WS_PATH': process.env.WS_PATH,
       'process.env.API_BASE_URL': API_BASE_URL || API_BASE_PATH,
+      'process.env.API_CLIENT_STORAGE_PREFIX': API_CLIENT_STORAGE_PREFIX,
+      'process.env.API_CLIENT_STORAGE_TYPE': API_CLIENT_STORAGE_TYPE,
       'process.env.APP_ENV': process.env.APP_ENV,
       'process.env.VERSION': packageJson.version,
       'process.env.WEBSOCKET_URL': process.env.WEBSOCKET_URL,
@@ -50,6 +54,15 @@ function getUmiConfig() {
         target: PROXY_TARGET_URL,
         changeOrigin: true,
         pathRewrite: { [`^${API_BASE_PATH}`]: API_BASE_PATH },
+        onProxyRes(proxyRes, req, res) {
+          if (req.headers.accept === 'text/event-stream') {
+            res.writeHead(res.statusCode, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-transform',
+              Connection: 'keep-alive',
+            });
+          }
+        },
       },
       // for local storage
       ...getLocalStorageProxy(),
@@ -107,7 +120,13 @@ function resolveNocobasePackagesAlias(config) {
   }
 }
 
+function getNodeModulesPath(packageDir) {
+  const node_modules_dir = path.join(process.cwd(), 'node_modules');
+  return path.join(node_modules_dir, packageDir);
+}
 class IndexGenerator {
+  nocobaseDir = getNodeModulesPath('@nocobase');
+
   constructor(outputPath, pluginsPath) {
     this.outputPath = outputPath;
     this.pluginsPath = pluginsPath;
@@ -128,14 +147,14 @@ class IndexGenerator {
   generate() {
     this.generatePluginContent();
     if (process.env.NODE_ENV === 'production') return;
-    this.pluginsPath.forEach((pluginPath) => {
-      if (!fs.existsSync(pluginPath)) {
-        return;
-      }
-      fs.watch(pluginPath, { recursive: false }, () => {
-        this.generatePluginContent();
-      });
-    });
+    // this.pluginsPath.forEach((pluginPath) => {
+    //   if (!fs.existsSync(pluginPath)) {
+    //     return;
+    //   }
+    //   fs.watch(pluginPath, { recursive: false }, () => {
+    //     this.generatePluginContent();
+    //   });
+    // });
   }
 
   get indexContent() {
@@ -147,7 +166,11 @@ function devDynamicImport(packageName: string): Promise<any> {
   if (!fileName) {
     return Promise.resolve(null);
   }
-  return import(\`./packages/\${fileName}\`)
+  try {
+    return import(\`./packages/\${fileName}\`)
+  } catch (error) {
+    return Promise.resolve(null);
+  }
 }
 export default devDynamicImport;`;
   }
@@ -161,9 +184,9 @@ export default function devDynamicImport(packageName: string): Promise<any> {
 
   generatePluginContent() {
     if (fs.existsSync(this.outputPath)) {
-      fs.rmdirSync(this.outputPath, { recursive: true, force: true });
+      fs.rmSync(this.outputPath, { recursive: true, force: true });
     }
-    fs.mkdirSync(this.outputPath);
+    fs.mkdirSync(this.outputPath, { recursive: true, force: true });
     const validPluginPaths = this.pluginsPath.filter((pluginsPath) => fs.existsSync(pluginsPath));
     if (!validPluginPaths.length || process.env.NODE_ENV === 'production') {
       fs.writeFileSync(this.indexPath, this.emptyIndexContent);
@@ -189,23 +212,45 @@ export default function devDynamicImport(packageName: string): Promise<any> {
   }
 
   getContent(pluginsPath) {
-    const pluginFolders = glob
-      .sync(['*/package.json', '*/*/package.json'], { cwd: pluginsPath, onlyFiles: true, absolute: true })
-      .map((item) => path.dirname(item));
-    const pluginInfos = pluginFolders
-      .filter((folder) => {
-        const pluginPackageJsonPath = path.join(folder, 'package.json');
-        const pluginSrcClientPath = path.join(folder, 'src', 'client');
-        return fs.existsSync(pluginPackageJsonPath) && fs.existsSync(pluginSrcClientPath);
+    const pluginFolders = glob.sync(['*/package.json', '*/*/package.json'], {
+      cwd: pluginsPath,
+      onlyFiles: true,
+      absolute: true,
+    });
+
+    const storagePluginFolders = glob.sync(['*/package.json', '*/*/package.json'], {
+      cwd: process.env.PLUGIN_STORAGE_PATH,
+      onlyFiles: true,
+      absolute: true,
+    });
+
+    const nocobasePluginFolders = glob
+      .sync(['plugin-*/package.json'], { cwd: this.nocobaseDir, onlyFiles: true, absolute: true })
+      .map((item) => fs.realpathSync(item));
+    const pluginInfos = Array.from(new Set([...pluginFolders, ...storagePluginFolders, ...nocobasePluginFolders]))
+      .filter((item) => {
+        const dirname = path.dirname(item);
+        const clientJs = path.join(dirname, 'client.js');
+        return fs.existsSync(clientJs);
       })
-      .map((folder) => {
-        const pluginPackageJsonPath = path.join(folder, 'package.json');
+      .map((pluginPackageJsonPath) => {
         const pluginPackageJson = require(pluginPackageJsonPath);
-        const pluginSrcClientPath = path
-          .relative(this.packagesPath, path.join(folder, 'src', 'client'))
-          .replaceAll('\\', '/');
-        const pluginFileName = `${path.basename(pluginsPath)}_${path.basename(folder).replaceAll('-', '_')}`;
-        const exportStatement = `export { default } from '${pluginSrcClientPath}';`;
+        const pluginPathArr = pluginPackageJsonPath.replaceAll(path.sep, '/').split('/');
+        const hasNamespace = pluginPathArr[pluginPathArr.length - 3].startsWith('@');
+        const pluginFileName = (hasNamespace
+          ? `${pluginPathArr[pluginPathArr.length - 3].replace('@', '')}_${pluginPathArr[pluginPathArr.length - 2]}`
+          : pluginPathArr[pluginPathArr.length - 2]
+        ).replaceAll('-', '_');
+
+        let exportStatement = '';
+        if (pluginPackageJsonPath.includes('packages')) {
+          const pluginSrcClientPath = path
+            .relative(this.packagesPath, path.join(path.dirname(pluginPackageJsonPath), 'src', 'client'))
+            .replaceAll(path.sep, '/');
+          exportStatement = `export { default } from '${pluginSrcClientPath}';`;
+        } else {
+          exportStatement = `export { default } from '${pluginPackageJson.name}/client';`;
+        }
         return { exportStatement, pluginFileName, packageJsonName: pluginPackageJson.name };
       });
 
@@ -216,3 +261,13 @@ export default function devDynamicImport(packageName: string): Promise<any> {
 exports.getUmiConfig = getUmiConfig;
 exports.resolveNocobasePackagesAlias = resolveNocobasePackagesAlias;
 exports.IndexGenerator = IndexGenerator;
+
+exports.generatePlugins = function () {
+  const pluginDirs = (process.env.PLUGIN_PATH || 'packages/plugins/,packages/samples/,packages/pro-plugins/')
+    .split(',')
+    .map((item) => path.join(process.cwd(), item));
+
+  const outputPluginPath = path.join(process.env.APP_PACKAGE_ROOT, 'client', 'src', '.plugins');
+  const indexGenerator = new IndexGenerator(outputPluginPath, pluginDirs);
+  indexGenerator.generate();
+};

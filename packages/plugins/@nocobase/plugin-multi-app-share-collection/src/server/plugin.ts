@@ -1,44 +1,35 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import Database from '@nocobase/database';
 import PluginMultiAppManager from '@nocobase/plugin-multi-app-manager';
 import { Application, AppSupervisor, Plugin } from '@nocobase/server';
 import lodash from 'lodash';
-import { resolve } from 'path';
 
 const subAppFilteredPlugins = ['multi-app-share-collection', 'multi-app-manager'];
-const unSyncPlugins = ['localization-management'];
+const unSyncPlugins = ['localization'];
 
 class SubAppPlugin extends Plugin {
   beforeLoad() {
     const mainApp = this.options.mainApp;
     const subApp = this.app;
 
-    const sharedCollectionGroups = [
-      'audit-logs',
-      'workflow',
-      'charts',
-      'collection-manager',
-      'file-manager',
-      'graph-collection-manager',
-      'map',
-      'sequence-field',
-      'snapshot-field',
-      'verification',
-      'localization-management',
-    ];
+    const sharedCollections = [];
 
-    const collectionGroups = mainApp.db.collectionGroupManager.getGroups();
-
-    const sharedCollectionGroupsCollections = [];
-
-    for (const group of collectionGroups) {
-      if (sharedCollectionGroups.includes(group.namespace)) {
-        sharedCollectionGroupsCollections.push(...group.collections);
+    for (const collection of (mainApp.db as Database).collections.values()) {
+      if (collection.options.shared) {
+        sharedCollections.push(collection.name);
       }
     }
 
-    const sharedCollections = [...sharedCollectionGroupsCollections.flat(), 'users', 'users_jobs'];
-
     subApp.on('beforeLoadPlugin', (plugin) => {
-      if (plugin.name === 'collection-manager') {
+      if (plugin.name === 'data-source-main') {
         plugin.setLoadFilter({
           'name.$ne': 'roles',
         });
@@ -47,6 +38,10 @@ class SubAppPlugin extends Plugin {
 
     subApp.db.on('beforeDefineCollection', (options) => {
       const name = options.name;
+
+      if (name === 'roles') {
+        options.loadedFromCollectionManager = true;
+      }
 
       // 共享的Collection指向主应用的 系统schema
       if (sharedCollections.includes(name)) {
@@ -136,7 +131,7 @@ export class MultiAppShareCollectionPlugin extends Plugin {
       throw new Error('multi-app-share-collection plugin only support postgres');
     }
     const plugin = this.pm.get('multi-app-manager');
-    if (!plugin.enabled) {
+    if (!plugin?.enabled) {
       throw new Error(`${this.name} plugin need multi-app-manager plugin enabled`);
     }
   }
@@ -252,15 +247,6 @@ export class MultiAppShareCollectionPlugin extends Plugin {
       return;
     }
 
-    await this.db.import({
-      directory: resolve(__dirname, 'collections'),
-    });
-
-    // this.db.addMigrations({
-    //   namespace: 'multi-app-share-collection',
-    //   directory: resolve(__dirname, './migrations'),
-    // });
-
     this.app.resourcer.registerActionHandlers({
       'applications:shareCollections': async (ctx, next) => {
         const { filterByTk, values } = ctx.action.params;
@@ -281,9 +267,13 @@ export class MultiAppShareCollectionPlugin extends Plugin {
         schema: appName,
       };
 
-      const plugins = [...mainApp.pm.getAliases()].filter(
-        (name) => name !== 'multi-app-manager' && name !== 'multi-app-share-collection',
-      );
+      const plugins = [...mainApp.pm.getPlugins().values()]
+        .filter(
+          (plugin) =>
+            plugin?.options?.packageName !== '@nocobase/plugin-multi-app-manager' &&
+            plugin?.options?.packageName !== '@nocobase/plugin-multi-app-share-collection',
+        )
+        .map((plugin) => plugin.name);
 
       return {
         database: lodash.merge(databaseOptions, {
@@ -293,7 +283,7 @@ export class MultiAppShareCollectionPlugin extends Plugin {
         }),
         plugins: plugins.includes('nocobase') ? ['nocobase'] : plugins,
         resourcer: {
-          prefix: '/api',
+          prefix: process.env.API_BASE_PATH,
         },
         logger: {
           ...mainApp.options.logger,

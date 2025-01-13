@@ -1,3 +1,5 @@
+
+
 /**
  * title: 勾选
  */
@@ -9,7 +11,6 @@ import {
   Application,
   BlockItem,
   CollectionField,
-  CollectionManagerProvider,
   CurrentUserProvider,
   FormItem,
   Input,
@@ -20,7 +21,7 @@ import {
   TableV2,
 } from '@nocobase/client';
 import React from 'react';
-import { mainCollections, mockAPIClient } from '../../../../testUtils';
+import { mockAPIClient } from '../../../../testUtils';
 import data from './mockData';
 
 const { apiClient, mockRequest } = mockAPIClient();
@@ -93,12 +94,12 @@ const schema: ISchema = {
                 value: {
                   type: 'array',
                   'x-component': 'TableV2.Selector',
+                  'x-use-component-props': 'useTableSelectorProps',
                   'x-component-props': {
                     rowKey: 'id',
                     rowSelection: {
                       type: 'checkbox',
                     },
-                    useProps: '{{ useTableSelectorProps }}',
                   },
                   properties: {
                     column1: {
@@ -130,10 +131,10 @@ const schema: ISchema = {
                       title: '{{ t("Submit") }}',
                       'x-action': 'submit',
                       'x-component': 'Action',
+                      'x-use-component-props': 'usePickActionProps',
                       'x-component-props': {
                         type: 'primary',
                         htmlType: 'submit',
-                        useProps: '{{ usePickActionProps }}',
                       },
                     },
                   },
@@ -178,11 +179,9 @@ const Root = () => {
   return (
     <APIClientProvider apiClient={apiClient}>
       <CurrentUserProvider>
-        <CollectionManagerProvider collections={mainCollections}>
-          <SchemaComponentProvider components={components}>
-            <SchemaComponent schema={schema} />
-          </SchemaComponentProvider>
-        </CollectionManagerProvider>
+        <SchemaComponentProvider components={components}>
+          <SchemaComponent schema={schema} />
+        </SchemaComponentProvider>
       </CurrentUserProvider>
     </APIClientProvider>
   );

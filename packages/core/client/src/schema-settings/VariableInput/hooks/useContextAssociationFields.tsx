@@ -1,12 +1,21 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { error } from '@nocobase/utils/client';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CollectionFieldOptions, useCollectionManager } from '../../../collection-manager';
+import { CollectionFieldOptions_deprecated, useCollectionManager_deprecated } from '../../../collection-manager';
 import { useCompile, useGetFilterOptions } from '../../../schema-component';
 import { FieldOption, Option } from '../type';
 
 export const useIsSameOrChildCollection = () => {
-  const { getChildrenCollections } = useCollectionManager();
+  const { getChildrenCollections } = useCollectionManager_deprecated();
   return (contextCollection, targetCollection) => {
     if (contextCollection === targetCollection) {
       return true;
@@ -71,7 +80,7 @@ export const useContextAssociationFields = ({
   schema: any;
   maxDepth?: number;
   contextCollectionName: string;
-  collectionField: CollectionFieldOptions;
+  collectionField: CollectionFieldOptions_deprecated;
 }) => {
   const { t } = useTranslation();
   const compile = useCompile();
@@ -92,7 +101,9 @@ export const useContextAssociationFields = ({
         const children =
           getChildren(
             getFilterOptions(collectionName).filter((v) => {
-              const isAssociationField = ['hasOne', 'hasMany', 'belongsTo', 'belongsToMany'].includes(v.type);
+              const isAssociationField = ['hasOne', 'hasMany', 'belongsTo', 'belongsToMany', 'belongsToArray'].includes(
+                v.type,
+              );
               return isAssociationField;
             }),
             {

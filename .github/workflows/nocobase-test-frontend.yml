@@ -1,12 +1,17 @@
-name: NocoBase FrontEnd Test
+name: NocoBase frontEnd test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
   push:
     branches:
       - main
-      - develop
+      - next
     paths:
       - 'packages/**'
+      - '**/yarn.lock'
       - '.github/workflows/nocobase-test-frontend.yml'
       - '!packages/core/acl/**'
       - '!packages/core/actions/**'
@@ -17,6 +22,7 @@ on:
     paths:
       - '.github/workflows/nocobase-test-frontend.yml'
       - 'packages/**'
+      - '**/yarn.lock'
       - '!packages/core/acl/**'
       - '!packages/core/actions/**'
       - '!packages/core/database/**'
@@ -27,16 +33,18 @@ jobs:
   frontend-test:
     strategy:
       matrix:
-        node_version: [ '18' ]
+        node_version: ['20']
     runs-on: ubuntu-latest
     container: node:${{ matrix.node_version }}
     steps:
       - uses: actions/checkout@v2
+
       - name: Use Node.js ${{ matrix.node_version }}
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node_version }}
           cache: 'yarn'
+
       - run: yarn install
       - run: yarn test:client
     timeout-minutes: 30

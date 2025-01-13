@@ -1,7 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { Repository } from '@nocobase/database';
+import { vi } from 'vitest';
 import { Collection } from '../collection';
 import { Database } from '../database';
 import { mockDatabase } from './';
-import { Repository } from '@nocobase/database';
 
 describe('repository', () => {
   test('value to filter', async () => {
@@ -30,6 +40,7 @@ describe('find by targetKey', function () {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
   });
 
   afterEach(async () => {
@@ -279,7 +290,9 @@ describe('repository create with belongs to many', () => {
     await db.clean({ drop: true });
   });
 
-  afterEach(async () => [await db.close()]);
+  afterEach(async () => {
+    await db.close();
+  });
 
   it('should save value at through table', async () => {
     const Product = db.collection({
@@ -351,6 +364,7 @@ describe('repository.create', () => {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
     User = db.collection({
       name: 'users',
       fields: [
@@ -501,7 +515,7 @@ describe('repository.update', () => {
       name: 'user2',
     });
 
-    const hook = jest.fn();
+    const hook = vi.fn();
     db.on('users.afterUpdate', hook);
 
     await User.repository.update({
@@ -528,7 +542,7 @@ describe('repository.update', () => {
     const p2 = await Post.repository.create({ values: { name: 'p2', userId: u1.id } });
     const p3 = await Post.repository.create({ values: { name: 'p3' } });
 
-    const hook = jest.fn();
+    const hook = vi.fn();
     db.on('posts.afterUpdate', hook);
 
     await Post.repository.update({
@@ -555,7 +569,7 @@ describe('repository.update', () => {
     const p2 = await Post.repository.create({ values: { name: 'p2', userId: u1.id } });
     const p3 = await Post.repository.create({ values: { name: 'p3' } });
 
-    const hook = jest.fn();
+    const hook = vi.fn();
     db.on('posts.afterUpdate', hook);
 
     await Post.repository.update({
@@ -674,6 +688,7 @@ describe('repository.destroy', () => {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
     User = db.collection({
       name: 'users',
       fields: [
@@ -697,6 +712,21 @@ describe('repository.destroy', () => {
 
   afterEach(async () => {
     await db.close();
+  });
+
+  it('should destroy with filterByTk and empty filter', async () => {
+    const user = await User.repository.create({ values: { name: 'user1' } });
+
+    await User.repository.destroy({
+      filterByTk: user.id,
+      filter: {},
+    });
+
+    const user1 = await User.repository.findOne({
+      filterByTk: user.id,
+    });
+
+    expect(user1).toBeNull();
   });
 
   it('destroy1', async () => {
@@ -726,6 +756,7 @@ describe('repository.relatedQuery', () => {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
     User = db.collection({
       name: 'users',
       fields: [

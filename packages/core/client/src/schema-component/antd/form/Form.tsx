@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { FormLayout } from '@formily/antd-v5';
 import { createForm } from '@formily/core';
 import { FieldContext, FormContext, observer, RecursionField, useField, useFieldSchema } from '@formily/react';
@@ -6,14 +15,11 @@ import { ConfigProvider, Spin } from 'antd';
 import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { useAttach, useComponent } from '../..';
 import { useRequest } from '../../../api-client';
-import { useCollection } from '../../../collection-manager';
-import {
-  GeneralSchemaDesigner,
-  SchemaSettingsDivider,
-  SchemaSettingsRemove,
-  SchemaSettingsTemplate,
-} from '../../../schema-settings';
+import { useCollection_deprecated } from '../../../collection-manager';
+import { GeneralSchemaDesigner, SchemaSettingsDivider, SchemaSettingsRemove } from '../../../schema-settings';
+import { SchemaSettingsTemplate } from '../../../schema-settings/SchemaSettingsTemplate';
 import { useSchemaTemplate } from '../../../schema-templates';
+import { useBlockTemplateContext } from '../../../schema-templates/BlockTemplateProvider';
 
 type Opts = Options<any, any> & { uid?: string };
 
@@ -87,6 +93,7 @@ const useDefaultValues = (opts: any = {}, props: FormProps = {}) => {
 };
 
 const FormBlockContext = createContext<any>(null);
+FormBlockContext.displayName = 'FormBlockContext';
 
 export const Form: React.FC<FormProps> & { Designer?: any } = observer(
   (props) => {
@@ -100,6 +107,7 @@ export const Form: React.FC<FormProps> & { Designer?: any } = observer(
         async onSuccess(data) {
           await form.reset();
           form.setValues(data?.data);
+          form.setInitialValues(data?.data);
         },
       },
       props,
@@ -121,11 +129,12 @@ export const Form: React.FC<FormProps> & { Designer?: any } = observer(
 );
 
 Form.Designer = function Designer() {
-  const { name, title } = useCollection();
+  const { name, title } = useCollection_deprecated();
   const template = useSchemaTemplate();
+  const { componentNamePrefix } = useBlockTemplateContext();
   return (
     <GeneralSchemaDesigner template={template} title={title || name}>
-      <SchemaSettingsTemplate componentName={'Form'} collectionName={name} />
+      <SchemaSettingsTemplate componentName={`${componentNamePrefix}Form`} collectionName={name} />
       <SchemaSettingsDivider />
       <SchemaSettingsRemove
         removeParentsIfNoChildren

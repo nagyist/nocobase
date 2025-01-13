@@ -1,38 +1,33 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Model, Op } from 'sequelize';
 
+import { BelongsToManyRepository, Collection, HasManyRepository, SortField, TargetKey } from '@nocobase/database';
 import { Context } from '..';
-import {
-  BelongsToManyRepository,
-  Collection,
-  HasManyRepository,
-  Repository,
-  SortField,
-  TargetKey,
-} from '@nocobase/database';
 import { getRepositoryFromParams } from '../utils';
 
 export async function move(ctx: Context, next) {
-  const repository = getRepositoryFromParams(ctx);
+  const repository = ctx.databaseRepository || getRepositoryFromParams(ctx);
+  const { sourceId, targetId, targetScope, sticky, method } = ctx.action.params;
 
-  const { sourceId, targetId, sortField, targetScope, sticky, method } = ctx.action.params;
+  let sortField = ctx.action.params.sortField;
 
   if (repository instanceof BelongsToManyRepository) {
     throw new Error("Sorting association as 'belongs-to-many' type is not supported.");
   }
 
-  if (repository instanceof HasManyRepository) {
-    const hasManyField = repository.sourceCollection.getField(repository.associationName);
-    if (!hasManyField.options.sortable) {
-      throw new Error(
-        `association ${hasManyField.options.name} in ${repository.sourceCollection.name} is not sortable`,
-      );
-    }
+  if (repository instanceof HasManyRepository && !sortField) {
+    sortField = `${repository.association.foreignKey}Sort`;
   }
 
-  const sortAbleCollection = new SortAbleCollection(
-    repository instanceof Repository ? repository.collection : repository.targetCollection,
-    repository instanceof Repository ? sortField : `${repository.association.foreignKey}Sort`,
-  );
+  const sortAbleCollection = new SortAbleCollection(repository.collection, sortField);
 
   if (sourceId && targetId) {
     await sortAbleCollection.move(sourceId, targetId, {
@@ -80,8 +75,8 @@ export class SortAbleCollection {
 
   // insert source position to target position
   async move(sourceInstanceId: TargetKey, targetInstanceId: TargetKey, options: MoveOptions = {}) {
-    const sourceInstance = await this.collection.repository.findById(sourceInstanceId);
-    const targetInstance = await this.collection.repository.findById(targetInstanceId);
+    const sourceInstance = await this.collection.repository.findByTargetKey(sourceInstanceId);
+    const targetInstance = await this.collection.repository.findByTargetKey(targetInstanceId);
 
     if (this.scopeKey && sourceInstance.get(this.scopeKey) !== targetInstance.get(this.scopeKey)) {
       await sourceInstance.update({
@@ -93,7 +88,7 @@ export class SortAbleCollection {
   }
 
   async changeScope(sourceInstanceId: TargetKey, targetScope: any, method?: string) {
-    const sourceInstance = await this.collection.repository.findById(sourceInstanceId);
+    const sourceInstance = await this.collection.repository.findByTargetKey(sourceInstanceId);
     const targetScopeValue = targetScope[this.scopeKey];
 
     if (targetScopeValue && sourceInstance.get(this.scopeKey) !== targetScopeValue) {
@@ -113,7 +108,7 @@ export class SortAbleCollection {
   }
 
   async sticky(sourceInstanceId: TargetKey) {
-    const sourceInstance = await this.collection.repository.findById(sourceInstanceId);
+    const sourceInstance = await this.collection.repository.findByTargetKey(sourceInstanceId);
     await sourceInstance.update(
       {
         [this.field.get('name')]: 0,

@@ -1,24 +1,34 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { ISchema, observer, useField, useFieldSchema } from '@formily/react';
 import _ from 'lodash';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCollection, useCollectionManager } from '../collection-manager';
-import { useDesignable } from '../schema-component';
-import { getTempFieldState } from '../schema-component/antd/form-v2/utils';
+import { useCollection_deprecated, useCollectionManager_deprecated } from '../collection-manager';
+import { useDesignable, useCompile } from '../schema-component';
 import { SchemaSettingsModalItem, SchemaSettingsSwitchItem } from '../schema-settings';
+import { getTempFieldState } from '../schema-settings/LinkageRules/bindLinkageRulesToFiled';
 
 export const GeneralSchemaItems: React.FC<{
   required?: boolean;
 }> = observer(
   (props) => {
     const { required = true } = props;
-    const { getCollectionJoinField } = useCollectionManager();
-    const { getField } = useCollection();
+    const { getCollectionJoinField } = useCollectionManager_deprecated();
+    const { getField } = useCollection_deprecated();
     const field = useField<Field>();
     const fieldSchema = useFieldSchema();
     const { t } = useTranslation();
     const { dn, refresh } = useDesignable();
+    const compile = useCompile();
     const collectionField = getField(fieldSchema['name']) || getCollectionJoinField(fieldSchema['x-collection-field']);
     return (
       <>
@@ -43,16 +53,16 @@ export const GeneralSchemaItems: React.FC<{
               } as ISchema
             }
             onSubmit={({ title }) => {
-              if (title) {
-                field.title = title;
-                fieldSchema.title = title;
-                dn.emit('patch', {
-                  schema: {
-                    'x-uid': fieldSchema['x-uid'],
-                    title: fieldSchema.title,
-                  },
-                });
-              }
+              const result = title.trim() === '' ? collectionField?.uiSchema?.title : title;
+              field.title = compile(result);
+              fieldSchema.title = title;
+              dn.emit('patch', {
+                schema: {
+                  'x-uid': fieldSchema['x-uid'],
+                  title: fieldSchema.title,
+                },
+              });
+
               dn.refresh();
             }}
           />

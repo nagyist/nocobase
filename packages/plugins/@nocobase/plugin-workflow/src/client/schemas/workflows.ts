@@ -1,11 +1,21 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import React from 'react';
 import { ISchema, useForm } from '@formily/react';
 import { useActionContext, useRecord, useResourceActionContext, useResourceContext } from '@nocobase/client';
 import { message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { NAMESPACE } from '../locale';
 // import { triggers } from '../triggers';
-import React from 'react';
 import { executionSchema } from './executions';
+import { TriggerOptionRender } from '../components/TriggerOptionRender';
 
 const collection = {
   name: 'workflows',
@@ -30,9 +40,36 @@ const collection = {
         type: 'string',
         'x-decorator': 'FormItem',
         'x-component': 'Select',
+        enum: '{{useTriggersOptions()}}',
         'x-component-props': {
-          options: `{{getTriggersOptions()}}`,
+          optionRender: TriggerOptionRender,
+          popupMatchSelectWidth: true,
+          listHeight: 300,
         },
+        required: true,
+      } as ISchema,
+    },
+    {
+      type: 'boolean',
+      name: 'sync',
+      interface: 'radioGroup',
+      uiSchema: {
+        title: `{{t("Mode", { ns: "${NAMESPACE}" })}}`,
+        type: 'boolean',
+        'x-decorator': 'FormItem',
+        'x-component': 'Radio.Group',
+        enum: [
+          {
+            label: `{{ t("Asynchronously", { ns: "${NAMESPACE}" }) }}`,
+            value: false,
+            color: 'cyan',
+          },
+          {
+            label: `{{ t("Synchronously", { ns: "${NAMESPACE}" }) }}`,
+            value: true,
+            color: 'orange',
+          },
+        ],
         required: true,
       } as ISchema,
     },
@@ -89,6 +126,27 @@ const workflowFieldset = {
     'x-component': 'CollectionField',
     'x-decorator': 'FormItem',
   },
+  sync: {
+    type: 'boolean',
+    title: `{{ t("Execute mode", { ns: "${NAMESPACE}" }) }}`,
+    description: `{{ t("Execute workflow asynchronously or synchronously based on trigger type, and could not be changed after created.", { ns: "${NAMESPACE}" }) }}`,
+    'x-decorator': 'FormItem',
+    'x-component': 'SyncOptionSelect',
+    'x-component-props': {
+      options: [
+        {
+          label: `{{ t("Asynchronously", { ns: "${NAMESPACE}" }) }}`,
+          value: false,
+          tooltip: `{{ t("Will be executed in the background as a queued task.", { ns: "${NAMESPACE}" }) }}`,
+        },
+        {
+          label: `{{ t("Synchronously", { ns: "${NAMESPACE}" }) }}`,
+          value: true,
+          tooltip: `{{ t("For user actions that require immediate feedback. Can not use asynchronous nodes in such mode, and it is not recommended to perform time-consuming operations under synchronous mode.", { ns: "${NAMESPACE}" }) }}`,
+        },
+      ],
+    },
+  },
   enabled: {
     'x-component': 'CollectionField',
     'x-decorator': 'FormItem',
@@ -101,14 +159,6 @@ const workflowFieldset = {
     type: 'object',
     'x-component': 'fieldset',
     properties: {
-      // NOTE: not to expose this option for now, because hard to track errors
-      // useTransaction: {
-      //   type: 'boolean',
-      //   title: `{{ t("Use transaction", { ns: "${NAMESPACE}" }) }}`,
-      //   description: `{{ t("Data operation nodes in workflow will run in a same transaction until any interruption. Any failure will cause data rollback, and will also rollback the history of the execution.", { ns: "${NAMESPACE}" }) }}`,
-      //   'x-decorator': 'FormItem',
-      //   'x-component': 'Checkbox',
-      // },
       deleteExecutionOnStatus: {
         type: 'array',
         title: `{{ t("Auto delete history when execution is on end status", { ns: "${NAMESPACE}" }) }}`,
@@ -123,6 +173,7 @@ const workflowFieldset = {
 };
 
 export const workflowSchema: ISchema = {
+  name: 'workflow',
   type: 'void',
   properties: {
     provider: {
@@ -143,7 +194,7 @@ export const workflowSchema: ISchema = {
           },
         },
       },
-      'x-component': 'CollectionProvider',
+      'x-component': 'CollectionProvider_deprecated',
       'x-component-props': {
         collection,
       },
@@ -165,17 +216,52 @@ export const workflowSchema: ISchema = {
               },
               'x-action': 'filter',
               'x-component': 'Filter.Action',
+              'x-use-component-props': 'cm.useFilterActionProps',
               'x-component-props': {
                 icon: 'FilterOutlined',
-                useProps: '{{ cm.useFilterActionProps }}',
               },
               'x-align': 'left',
+            },
+            refresher: {
+              type: 'void',
+              title: '{{ t("Refresh") }}',
+              'x-component': 'Action',
+              'x-use-component-props': 'useRefreshActionProps',
+              'x-component-props': {
+                icon: 'ReloadOutlined',
+              },
+            },
+            sync: {
+              type: 'void',
+              title: `{{t("Sync", { ns: "${NAMESPACE}" })}}`,
+              'x-decorator': 'Tooltip',
+              'x-decorator-props': {
+                title: `{{ t("Sync enabled status of all workflows from database", { ns: "${NAMESPACE}" }) }}`,
+              },
+              'x-component': 'Action',
+              'x-component-props': {
+                icon: 'SyncOutlined',
+                useAction() {
+                  const { t } = useTranslation();
+                  const { resource } = useResourceContext();
+                  const service = useResourceActionContext();
+                  return {
+                    async run() {
+                      await resource.sync();
+                      await service?.refresh();
+                      message.success(t('Operation succeeded'));
+                    },
+                  };
+                },
+              },
+              'x-reactions': ['{{useWorkflowSyncAction}}'],
             },
             delete: {
               type: 'void',
               title: '{{t("Delete")}}',
               'x-component': 'Action',
               'x-component-props': {
+                icon: 'DeleteOutlined',
                 useAction: '{{ cm.useBulkDestroyAction }}',
                 confirm: {
                   title: "{{t('Delete record')}}",
@@ -189,6 +275,7 @@ export const workflowSchema: ISchema = {
               'x-component': 'Action',
               'x-component-props': {
                 type: 'primary',
+                icon: 'PlusOutlined',
               },
               properties: {
                 drawer: {
@@ -204,6 +291,7 @@ export const workflowSchema: ISchema = {
                   properties: {
                     title: workflowFieldset.title,
                     type: workflowFieldset.type,
+                    sync: workflowFieldset.sync,
                     description: workflowFieldset.description,
                     options: workflowFieldset.options,
                     footer: {
@@ -263,6 +351,18 @@ export const workflowSchema: ISchema = {
               properties: {
                 type: {
                   type: 'string',
+                  'x-component': 'CollectionField',
+                  'x-read-pretty': true,
+                },
+              },
+            },
+            sync: {
+              type: 'void',
+              'x-decorator': 'Table.Column.Decorator',
+              'x-component': 'Table.Column',
+              properties: {
+                sync: {
+                  type: 'boolean',
                   'x-component': 'CollectionField',
                   'x-read-pretty': true,
                 },
@@ -341,6 +441,7 @@ export const workflowSchema: ISchema = {
                           properties: {
                             title: workflowFieldset.title,
                             enabled: workflowFieldset.enabled,
+                            sync: workflowFieldset.sync,
                             description: workflowFieldset.description,
                             options: workflowFieldset.options,
                             footer: {

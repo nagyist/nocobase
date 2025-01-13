@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import actions, { Context, utils } from '@nocobase/actions';
 import { Op, Repository } from '@nocobase/database';
 
@@ -7,7 +16,7 @@ export async function update(context: Context, next) {
   const repository = utils.getRepositoryFromParams(context) as Repository;
   const { filterByTk, values } = context.action.params;
   context.action.mergeParams({
-    whitelist: ['title', 'description', 'enabled', 'config', 'options'],
+    whitelist: ['title', 'description', 'enabled', 'triggerTitle', 'config', 'options'],
   });
   // only enable/disable
   if (Object.keys(values).includes('config')) {
@@ -54,12 +63,11 @@ export async function destroy(context: Context, next) {
 }
 
 export async function revision(context: Context, next) {
-  const plugin = context.app.getPlugin('workflow') as Plugin;
-  const { db } = context;
+  const plugin = context.app.getPlugin(Plugin);
   const repository = utils.getRepositoryFromParams(context);
   const { filterByTk, filter = {}, values = {} } = context.action.params;
 
-  context.body = await db.sequelize.transaction(async (transaction) => {
+  context.body = await context.db.sequelize.transaction(async (transaction) => {
     const origin = await repository.findOne({
       filterByTk,
       filter,
@@ -74,6 +82,7 @@ export async function revision(context: Context, next) {
       ? {
           key: filter.key,
           title: origin.title,
+          triggerTitle: origin.triggerTitle,
           allExecuted: origin.allExecuted,
         }
       : values;
@@ -83,6 +92,7 @@ export async function revision(context: Context, next) {
         title: `${origin.title} copy`,
         description: origin.description,
         ...revisionData,
+        sync: origin.sync,
         type: origin.type,
         config:
           typeof trigger.duplicateConfig === 'function'
@@ -140,7 +150,7 @@ export async function revision(context: Context, next) {
 }
 
 export async function sync(context: Context, next) {
-  const plugin = context.app.getPlugin('workflow');
+  const plugin = context.app.getPlugin(Plugin);
   const repository = utils.getRepositoryFromParams(context);
   const { filterByTk, filter = {} } = context.action.params;
 

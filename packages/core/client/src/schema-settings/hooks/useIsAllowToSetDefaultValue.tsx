@@ -1,14 +1,22 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Form } from '@formily/core';
 import { Schema, useFieldSchema } from '@formily/react';
-import React, { useContext, useMemo } from 'react';
-import {
-  CollectionFieldOptions,
-  useCollection,
-  useCollectionManager,
-  useFormBlockContext,
-  useFormBlockType,
-} from '../..';
-import { isPatternDisabled, isSystemField } from '../SchemaSettings';
+import React, { useCallback, useContext, useMemo } from 'react';
+import { useFormBlockContext, useFormBlockType } from '../../block-provider/FormBlockProvider';
+import { CollectionFieldOptions_deprecated } from '../../collection-manager/types';
+import { useCollectionManager } from '../../data-source/collection/CollectionManagerProvider';
+import { useCollection } from '../../data-source/collection/CollectionProvider';
+import { useDataSourceManager } from '../../data-source/data-source/DataSourceManagerProvider';
+import { isSystemField } from '../SchemaSettings';
+import { isPatternDisabled } from '../isPatternDisabled';
 
 interface DefaultValueProviderProps {
   isAllowToSetDefaultValue: (params: IsAllowToSetDefaultValueParams) => boolean;
@@ -16,7 +24,7 @@ interface DefaultValueProviderProps {
 }
 
 export interface IsAllowToSetDefaultValueParams {
-  collectionField: CollectionFieldOptions;
+  collectionField: CollectionFieldOptions_deprecated;
   getInterface: (name: string) => any;
   formBlockType?: 'update' | 'create';
   form: Form;
@@ -27,7 +35,7 @@ export interface IsAllowToSetDefaultValueParams {
 interface Props {
   form?: Form;
   fieldSchema?: Schema<any, any, any, any, any, any, any, any, any>;
-  collectionField?: CollectionFieldOptions;
+  collectionField?: CollectionFieldOptions_deprecated;
 }
 
 const DefaultValueContext = React.createContext<Omit<DefaultValueProviderProps, 'children'>>(null);
@@ -42,31 +50,47 @@ export const DefaultValueProvider = (props: DefaultValueProviderProps) => {
   return <DefaultValueContext.Provider value={value}>{props.children}</DefaultValueContext.Provider>;
 };
 
-const useIsAllowToSetDefaultValue = ({ form, fieldSchema, collectionField }: Props = {}) => {
-  const { getInterface, getCollectionJoinField } = useCollectionManager();
-  const { getField } = useCollection();
+export const useIsAllowToSetDefaultValue = ({ form, fieldSchema, collectionField }: Props = {}) => {
+  const dm = useDataSourceManager();
+  const cm = useCollectionManager();
+  const collection = useCollection();
   const { form: innerForm } = useFormBlockContext();
   const innerFieldSchema = useFieldSchema();
   const { type } = useFormBlockType();
   const { isAllowToSetDefaultValue = _isAllowToSetDefaultValue } = useContext(DefaultValueContext) || {};
-  const innerCollectionField =
-    getField(innerFieldSchema['name']) || getCollectionJoinField(innerFieldSchema['x-collection-field']);
 
-  return {
-    isAllowToSetDefaultValue: (isSubTableColumn?: boolean) => {
-      return isAllowToSetDefaultValue({
-        collectionField: collectionField || innerCollectionField,
-        getInterface,
-        form: form || innerForm,
-        formBlockType: type,
-        fieldSchema: fieldSchema || innerFieldSchema,
-        isSubTableColumn,
-      });
-    },
+  const result = {
+    isAllowToSetDefaultValue: useCallback(
+      (isSubTableColumn?: boolean) => {
+        const innerCollectionField =
+          collection.getField(innerFieldSchema['name']) ||
+          cm.getCollectionField(innerFieldSchema['x-collection-field']);
+
+        return isAllowToSetDefaultValue({
+          collectionField: collectionField || innerCollectionField,
+          getInterface: dm?.collectionFieldInterfaceManager.getFieldInterface.bind(dm?.collectionFieldInterfaceManager),
+          form: form || innerForm,
+          formBlockType: type,
+          fieldSchema: fieldSchema || innerFieldSchema,
+          isSubTableColumn,
+        });
+      },
+      [
+        cm,
+        collection,
+        collectionField,
+        dm?.collectionFieldInterfaceManager,
+        fieldSchema,
+        form,
+        innerFieldSchema,
+        innerForm,
+        isAllowToSetDefaultValue,
+        type,
+      ],
+    ),
   };
+  return result;
 };
-
-export default useIsAllowToSetDefaultValue;
 
 export const interfacesOfUnsupportedDefaultValue = [
   'o2o',

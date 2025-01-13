@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { genStyleHook } from '../__builtins__';
 
 const useStyles = genStyleHook('nb-action', (token) => {
@@ -8,11 +17,10 @@ const useStyles = genStyleHook('nb-action', (token) => {
       position: 'relative',
       '&:hover': { '> .general-schema-designer': { display: 'block' } },
       '&.nb-action-link': {
-        '> .general-schema-designer': {
-          top: '-10px',
-          bottom: '-10px',
-          left: '-10px',
-          right: '-10px',
+        margin: '-12px',
+        padding: '12px',
+        '.nb-action-title': {
+          marginInlineStart: '0px',
         },
       },
       '> .general-schema-designer': {
@@ -41,6 +49,13 @@ const useStyles = genStyleHook('nb-action', (token) => {
             alignSelf: 'stretch',
           },
         },
+      },
+
+      '.ant-btn-icon': {
+        marginInlineEnd: '0px !important',
+      },
+      '.nb-action-title': {
+        marginInlineStart: `${token.controlPaddingHorizontalSM}px`,
       },
     },
   };

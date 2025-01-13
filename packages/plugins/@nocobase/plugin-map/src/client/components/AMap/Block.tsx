@@ -1,28 +1,41 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { CheckOutlined, EnvironmentOutlined, ExpandOutlined } from '@ant-design/icons';
-import { RecursionField, Schema, useField, useFieldSchema } from '@formily/react';
 import {
-  ActionContextProvider,
   RecordProvider,
   css,
+  getLabelFormatValue,
   useCollection,
-  useCollectionManager,
+  useCollectionManager_deprecated,
+  useCollectionParentRecordData,
+  useCollection_deprecated,
   useCompile,
   useFilterAPI,
+  usePopupUtils,
   useProps,
 } from '@nocobase/client';
 import { useMemoizedFn } from 'ahooks';
 import { Button, Space } from 'antd';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { defaultImage, selectedImage } from '../../constants';
 import { useMapTranslation } from '../../locale';
-import { AMapComponent, AMapForwardedRefProps } from './Map';
 import { getSource } from '../../utils';
+import { MapBlockDrawer } from '../MapBlockDrawer';
+import { AMapComponent, AMapForwardedRefProps } from './Map';
 
 export const AMapBlock = (props) => {
+  // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
   const { collectionField, fieldNames, dataSource, fixedBlock, zoom, setSelectedRecordKeys, lineSort } =
     useProps(props);
-  const { name, getPrimaryKey } = useCollection();
-  const { getCollectionJoinField } = useCollectionManager();
+  const { name, getPrimaryKey } = useCollection_deprecated();
+  const { getCollectionJoinField } = useCollectionManager_deprecated();
   const primaryKey = getPrimaryKey();
   const [isMapInitialization, setIsMapInitialization] = useState(false);
   const mapRef = useRef<AMapForwardedRefProps>();
@@ -35,7 +48,11 @@ export const AMapBlock = (props) => {
   const [, setPrevSelected] = useState<any>(null);
   const selectingModeRef = useRef(selectingMode);
   selectingModeRef.current = selectingMode;
+  const { fields } = useCollection();
+  const parentRecordData = useCollectionParentRecordData();
+  const { openPopup } = usePopupUtils();
 
+  const labelUiSchema = fields.find((v) => v.name === fieldNames?.marker)?.uiSchema;
   const setOverlayOptions = (overlay: AMap.Polygon | AMap.Marker, state?: boolean) => {
     const extData = overlay.getExtData();
     const selected = typeof state === 'undefined' ? extData.selected : !state;
@@ -120,6 +137,7 @@ export const AMapBlock = (props) => {
     const overlays = dataSource
       .map((item) => {
         const data = getSource(item, fieldNames?.field, cf?.interface)?.filter(Boolean);
+        const title = getLabelFormatValue(labelUiSchema, item[fieldNames.marker]);
         if (!data?.length) return [];
         return data.map((mapItem) => {
           const overlay = mapRef.current?.setOverlay(collectionField.type, mapItem, {
@@ -129,7 +147,7 @@ export const AMapBlock = (props) => {
             label: {
               direction: 'bottom',
               offset: [0, 5],
-              content: fieldNames?.marker ? compile(item[fieldNames.marker]) : undefined,
+              content: fieldNames?.marker ? compile(title) : undefined,
             },
             extData: {
               id: item[primaryKey],
@@ -183,6 +201,9 @@ export const AMapBlock = (props) => {
 
         if (data) {
           setRecord(data);
+          openPopup({
+            recordData: data,
+          });
         }
       };
       o.on('click', onClick);
@@ -228,7 +249,17 @@ export const AMapBlock = (props) => {
       });
       events.forEach((e) => e());
     };
-  }, [dataSource, isMapInitialization, fieldNames, name, primaryKey, collectionField.type, isConnected, lineSort]);
+  }, [
+    dataSource,
+    isMapInitialization,
+    fieldNames,
+    name,
+    primaryKey,
+    collectionField.type,
+    isConnected,
+    lineSort,
+    openPopup,
+  ]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -291,7 +322,9 @@ export const AMapBlock = (props) => {
           </Space>
         ) : null}
       </div>
-      <MapBlockDrawer record={record} setVisible={setRecord} />
+      <RecordProvider record={record} parent={parentRecordData}>
+        <MapBlockDrawer />
+      </RecordProvider>
       <AMapComponent
         {...collectionField?.uiSchema?.['x-component-props']}
         ref={mapRefCallback}
@@ -305,31 +338,6 @@ export const AMapBlock = (props) => {
         }}
       ></AMapComponent>
     </div>
-  );
-};
-
-const MapBlockDrawer = (props) => {
-  const { setVisible, record } = props;
-  const fieldSchema = useFieldSchema();
-  const schema = useMemo(
-    () =>
-      fieldSchema.reduceProperties((buf, current) => {
-        if (current.name === 'drawer') {
-          return current;
-        }
-        return buf;
-      }, null),
-    [fieldSchema],
-  );
-
-  return (
-    schema && (
-      <ActionContextProvider value={{ visible: !!record, setVisible }}>
-        <RecordProvider record={record}>
-          <RecursionField schema={schema} name={schema.name} />
-        </RecordProvider>
-      </ActionContextProvider>
-    )
   );
 };
 

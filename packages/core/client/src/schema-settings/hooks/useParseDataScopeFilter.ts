@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { flatten, unflatten } from '@nocobase/utils/client';
 import { useCallback } from 'react';
 import { useLocalVariables, useVariables } from '../../variables';
@@ -10,14 +19,13 @@ interface Props {
    * 被排除的变量不会被解析，会按原值返回
    */
   exclude?: string[];
-  currentRecord?: any;
 }
 
 // TODO: 建议变量名统一命名为 `$n` 开头，以防止与 formily 内置变量冲突
 const defaultExclude = ['$user', '$date', '$nDate', '$nRole'];
 
-const useParseDataScopeFilter = ({ exclude = defaultExclude, currentRecord }: Props = {}) => {
-  const localVariables = useLocalVariables({ currentRecord });
+const useParseDataScopeFilter = ({ exclude = defaultExclude }: Props = {}) => {
+  const localVariables = useLocalVariables();
   const variables = useVariables();
 
   /**
@@ -47,7 +55,7 @@ const useParseDataScopeFilter = ({ exclude = defaultExclude, currentRecord }: Pr
           if (exclude.includes(getVariableName(value))) {
             return value;
           }
-          const result = variables?.parseVariable(value, localVariables);
+          const result = variables?.parseVariable(value, localVariables).then(({ value }) => value);
           return result;
         },
       });
@@ -55,7 +63,7 @@ const useParseDataScopeFilter = ({ exclude = defaultExclude, currentRecord }: Pr
         Object.keys(flat).map(async (key) => {
           flat[key] = await flat[key];
           if (flat[key] === undefined) {
-            flat[key] = null;
+            delete flat[key];
           }
           return flat[key];
         }),
@@ -63,6 +71,7 @@ const useParseDataScopeFilter = ({ exclude = defaultExclude, currentRecord }: Pr
       const result = unflatten(flat);
       return result;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [exclude, localVariables, variables?.parseVariable],
   );
 

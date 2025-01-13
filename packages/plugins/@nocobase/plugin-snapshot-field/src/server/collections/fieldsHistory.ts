@@ -1,13 +1,21 @@
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export default {
-  namespace: 'snapshot-field.snapshot-field',
-  duplicator: 'required',
+import { defineCollection } from '@nocobase/database';
+
+export default defineCollection({
+  dumpRules: 'required',
   name: 'fieldsHistory',
-  title: '{{t("Fields history")}}',
   autoGenId: false,
   model: 'FieldModel',
   timestamps: false,
+  shared: true,
   sortable: {
     name: 'sort',
     scopeKey: 'collectionName',
@@ -72,4 +80,4 @@ export default {
       defaultValue: {},
     },
   ],
-} as CollectionOptions;
+});

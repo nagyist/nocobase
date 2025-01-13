@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { CloseCircleOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { observer } from '@formily/react';
@@ -53,7 +62,7 @@ export const FilterItem = observer(
     return (
       // 添加 nc-filter-item 类名是为了帮助编写测试时更容易选中该元素
       <div style={style} className="nc-filter-item">
-        <Space>
+        <Space wrap>
           <Cascader
             // @ts-ignore
             role="button"

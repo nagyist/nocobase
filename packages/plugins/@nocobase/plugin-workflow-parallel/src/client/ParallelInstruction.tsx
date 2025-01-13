@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React, { useState } from 'react';
 import { Button, Tooltip } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -49,6 +58,7 @@ export default class extends Instruction {
       default: 'all',
     },
   };
+  branching = true;
   components = {
     RadioWithTooltip,
   };
@@ -109,6 +119,7 @@ export default class extends Instruction {
                         icon={<PlusOutlined />}
                         onClick={() => setBranchCount(branchCount - 1)}
                         disabled={workflow.executed}
+                        size="small"
                       />
                     </div>
                   ) : null
@@ -136,6 +147,7 @@ export default class extends Instruction {
                   transform: rotate(-45deg);
                 }
               `}
+              size="small"
               onClick={() => setBranchCount(branchCount + 1)}
               disabled={workflow.executed}
             />

@@ -1,8 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { render } from '@nocobase/test/client';
 import React from 'react';
-import { render } from 'testUtils';
-import AppContextProvider from '../../testUtils/AppContextProvider';
 import { SettingsMenu } from '../CurrentUser';
 import { useCurrentUserSettingsMenu } from '../CurrentUserSettingsMenuProvider';
+
+const AppContextProvider = (props) => {
+  return <div></div>;
+};
 
 // TODO: AppContextProvider 没有提供足够的上下文环境
 describe.skip('CurrentUserSettingsMenuProvider', () => {

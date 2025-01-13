@@ -1,13 +1,29 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Plugin, useCollection } from '@nocobase/client';
 import { FileManagerProvider } from './FileManagerProvider';
 import { FileStoragePane } from './FileStorage';
 import { NAMESPACE } from './locale';
 import { storageTypes } from './schemas/storageTypes';
+import { AttachmentFieldInterface } from './interfaces/attachment';
+import { FileCollectionTemplate } from './templates';
+import { useAttachmentFieldProps, useFileCollectionStorageRules } from './hooks';
+import { FileSizeField } from './FileSizeField';
 
-export class FileManagerPlugin extends Plugin {
+export class PluginFileManagerClient extends Plugin {
   storageTypes = new Map();
 
   async load() {
+    this.app.dataSourceManager.addFieldInterfaces([AttachmentFieldInterface]);
+    this.app.dataSourceManager.addCollectionTemplates([FileCollectionTemplate]);
+
     this.app.use(FileManagerProvider);
     this.app.pluginSettingsManager.add(NAMESPACE, {
       title: `{{t("File manager", { ns: "${NAMESPACE}" })}}`,
@@ -19,7 +35,7 @@ export class FileManagerPlugin extends Plugin {
       this.registerStorageType(storageType.name, storageType);
     });
 
-    const tableActionInitializers = this.app.schemaInitializerManager.get('TableActionInitializers');
+    const tableActionInitializers = this.app.schemaInitializerManager.get('table:configureActions');
     tableActionInitializers?.add('enableActions.upload', {
       title: "{{t('Upload')}}",
       Component: 'UploadActionInitializer',
@@ -35,6 +51,15 @@ export class FileManagerPlugin extends Plugin {
         return collection.template === 'file';
       },
     });
+
+    this.app.addScopes({
+      useAttachmentFieldProps,
+      useFileCollectionStorageRules,
+    });
+
+    this.app.addComponents({
+      FileSizeField,
+    });
   }
 
   registerStorageType(name: string, options) {
@@ -42,4 +67,4 @@ export class FileManagerPlugin extends Plugin {
   }
 }
 
-export default FileManagerPlugin;
+export default PluginFileManagerClient;

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ApartmentOutlined } from '@ant-design/icons';
 import { Graph } from '@antv/x6';
 import { MiniMap } from '@antv/x6-plugin-minimap';
@@ -9,25 +18,26 @@ import { cx } from '@emotion/css';
 import { SchemaOptionsContext } from '@formily/react';
 import {
   APIClientProvider,
-  CollectionCategroriesContext,
-  CollectionCategroriesProvider,
-  CollectionManagerContext,
-  CollectionManagerProvider,
+  ApplicationContext,
+  CollectionCategoriesContext,
   CurrentAppInfoContext,
+  DataSourceApplicationProvider,
   SchemaComponent,
   SchemaComponentOptions,
   Select,
-  collection,
   useAPIClient,
-  useCollectionManager,
+  useApp,
+  useCollectionManager_deprecated,
   useCompile,
   useCurrentAppInfo,
+  useDataSourceManager,
+  useDataSource,
   useGlobalTheme,
 } from '@nocobase/client';
 import { App, Button, ConfigProvider, Layout, Spin, Switch, Tooltip } from 'antd';
 import dagre from 'dagre';
 import lodash from 'lodash';
-import React, { createContext, forwardRef, useContext, useEffect, useLayoutEffect, useState } from 'react';
+import React, { createContext, forwardRef, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAsyncDataSource, useCreateActionAndRefreshCM } from './action-hooks';
 import { AddCollectionAction } from './components/AddCollectionAction';
@@ -40,6 +50,7 @@ import { SelectCollectionsAction } from './components/SelectCollectionsAction';
 import { SimpleNodeView } from './components/ViewNode';
 import useStyles from './style';
 import {
+  cleanGraphContainer,
   formatData,
   getChildrenCollections,
   getDiffEdge,
@@ -47,7 +58,7 @@ import {
   getInheritCollections,
   getPopupContainer,
   useGCMTranslation,
-  cleanGraphContainer,
+  collection,
 } from './utils';
 const { drop, groupBy, last, maxBy, minBy, take, uniq } = lodash;
 
@@ -219,6 +230,7 @@ function optimizeEdge(edge) {
 }
 
 export const CollapsedContext = createContext<any>({});
+CollapsedContext.displayName = 'CollapsedContext';
 const formatNodeData = () => {
   const layoutNodes = [];
   const edges = targetGraph.getEdges();
@@ -269,7 +281,7 @@ const handelResetLayout = (isTemporaryLayout?) => {
     const positionId = positions.find((v) => v.collectionName === node.id)?.id;
     if (node) {
       const pos = g.node(id);
-      updatePositionData.push({ id: positionId, x: pos.x, y: pos.y });
+      updatePositionData.push({ id: positionId, collectionName: node.id, x: pos.x, y: pos.y });
       node.position(pos?.x, pos?.y);
     }
   });
@@ -313,7 +325,12 @@ const handelResetLayout = (isTemporaryLayout?) => {
           const calculatedPosition = { x: referenceNode.x + 320 * index + 280, y: referenceNode.y };
           node.position(calculatedPosition.x, calculatedPosition.y);
           const positionId = positions.find((v) => v.collectionName === node.id)?.id;
-          updatePositionData.push({ id: positionId, x: calculatedPosition.x, y: calculatedPosition.y });
+          updatePositionData.push({
+            id: positionId,
+            collectionName: node.id,
+            x: calculatedPosition.x,
+            y: calculatedPosition.y,
+          });
         }
       });
     }
@@ -332,7 +349,12 @@ const handelResetLayout = (isTemporaryLayout?) => {
         const calculatedPosition = { x: col * 325 + minX, y: row * 300 + maxY + 300 };
         node.position(calculatedPosition.x, calculatedPosition.y);
         const positionId = positions.find((v) => v.collectionName === node.id)?.id;
-        updatePositionData.push({ id: positionId, x: calculatedPosition.x, y: calculatedPosition.y });
+        updatePositionData.push({
+          id: positionId,
+          collectionName: node.id,
+          x: calculatedPosition.x,
+          y: calculatedPosition.y,
+        });
       }
     });
   });
@@ -341,7 +363,10 @@ const handelResetLayout = (isTemporaryLayout?) => {
   });
   targetGraph.positionCell(nodes[0], 'top-left', { padding: 100 });
   if (!isTemporaryLayout) {
-    targetGraph.updatePositionAction(updatePositionData, true);
+    const updateData = updatePositionData.filter((v) => v.id);
+    const createData = updatePositionData.filter((v) => !v.id);
+    updateData.length > 0 && targetGraph.updatePositionAction(updateData, true);
+    createData.length > 0 && targetGraph.saveGraphPositionAction(createData);
   }
 };
 
@@ -351,22 +376,24 @@ export const GraphDrawPage = React.memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedCollections = searchParams.get('collections');
   const options = useContext(SchemaOptionsContext);
-  const ctx = useContext(CollectionManagerContext);
   const api = useAPIClient();
   const compile = useCompile();
   const { t } = useGCMTranslation();
   const [collectionData, setCollectionData] = useState<any>([]);
   const [collectionList, setCollectionList] = useState<any>([]);
   const [loading, setLoading] = useState(false);
-  const { refreshCM, collections } = useCollectionManager();
+  const { collections, getCollections } = useCollectionManager_deprecated();
+  const categoryCtx = useContext(CollectionCategoriesContext);
+  const categoryCtxRef = useRef<any>();
+  categoryCtxRef.current = categoryCtx;
+  const dm = useDataSourceManager();
   const currentAppInfo = useCurrentAppInfo();
+  const app = useApp();
   const {
     data: { database },
   } = currentAppInfo;
-  const categoryCtx = useContext(CollectionCategroriesContext);
   const scope = { ...options?.scope };
   const components = { ...options?.components };
-
   const saveGraphPositionAction = async (data) => {
     await api.resource('graphPositions').create({ values: data });
     await refreshPositions();
@@ -397,21 +424,25 @@ export const GraphDrawPage = React.memo(() => {
       refreshPositions();
     }
   };
-  const refreshGM = async (collections?) => {
-    const data = collections?.length > 0 ? collections : await refreshCM();
-    targetGraph.collections = data;
+  const reloadCallback = async (reloadFlag?) => {
+    const collections = getCollections();
+    if (!targetGraph) return;
+    targetGraph.collections = collections;
     targetGraph.updatePositionAction = updatePositionAction;
+    targetGraph.saveGraphPositionAction = saveGraphPositionAction;
     const currentNodes = targetGraph.getNodes();
-    setCollectionData(data);
-    setCollectionList(data);
-    if (!currentNodes.length) {
+    setCollectionData(collections);
+    setCollectionList(collections);
+    if (!currentNodes.length || reloadFlag) {
       if (!selectedCollections) {
-        renderInitGraphCollection(data);
+        renderInitGraphCollection(collections);
       }
     } else {
-      renderDiffGraphCollection(data);
+      renderDiffGraphCollection(collections);
     }
   };
+
+  const dataSource = useDataSource();
   const initGraphCollections = () => {
     targetGraph = new Graph({
       container: document.getElementById('container')!,
@@ -453,7 +484,6 @@ export const GraphDrawPage = React.memo(() => {
       },
       true,
     );
-
     register({
       shape: 'er-rect',
       width: NODE_WIDTH,
@@ -484,32 +514,30 @@ export const GraphDrawPage = React.memo(() => {
         refWidth: 100,
         refHeight: 100,
       },
-      component: React.forwardRef((props, ref) => {
+      component: (props) => {
         return (
           <CurrentAppInfoContext.Provider value={currentAppInfo}>
-            <APIClientProvider apiClient={api}>
-              <SchemaComponentOptions inherit scope={scope} components={components}>
-                <CollectionCategroriesProvider {...categoryCtx}>
-                  <CollectionManagerProvider
-                    collections={targetGraph?.collections}
-                    refreshCM={refreshGM}
-                    interfaces={ctx.interfaces}
-                  >
+            <DataSourceApplicationProvider dataSourceManager={dm} dataSource={dataSource?.key}>
+              <APIClientProvider apiClient={api}>
+                <SchemaComponentOptions inherit scope={scope} components={components}>
+                  <CollectionCategoriesContext.Provider value={categoryCtxRef.current}>
                     {/* TODO: 因为画布中的卡片是一次性注册进 Graph 的，这里的 theme 是存在闭包里的，因此当主题动态变更时，并不会触发卡片的重新渲染 */}
-                    <ConfigProvider theme={theme}>
+                    <ConfigProvider theme={theme as any}>
                       <div style={{ height: 'auto' }}>
                         <App>
-                          <Entity {...props} setTargetNode={setTargetNode} targetGraph={targetGraph} />
+                          <ApplicationContext.Provider value={app}>
+                            <Entity {...props} setTargetNode={setTargetNode} targetGraph={targetGraph} />
+                          </ApplicationContext.Provider>
                         </App>
                       </div>
                     </ConfigProvider>
-                  </CollectionManagerProvider>
-                </CollectionCategroriesProvider>
-              </SchemaComponentOptions>
-            </APIClientProvider>
+                  </CollectionCategoriesContext.Provider>
+                </SchemaComponentOptions>
+              </APIClientProvider>
+            </DataSourceApplicationProvider>
           </CurrentAppInfoContext.Provider>
         );
-      }),
+      },
     });
     targetGraph.use(
       new Scroller({
@@ -763,11 +791,11 @@ export const GraphDrawPage = React.memo(() => {
       const updateNode = targetGraph.getCellById(node.id);
       switch (status) {
         case 'add':
-          if (referenceNode.x > 4500) {
+          if (referenceNode?.x > 4500) {
             referenceNode = minBy(yNodes, 'x');
             position = { x: minX, y: referenceNode.y + 400 };
           } else {
-            position = { x: referenceNode.x + 350, y: referenceNode.y };
+            position = { x: referenceNode?.x + 350, y: referenceNode?.y };
           }
           targetNode = targetGraph.addNode({
             ...node,
@@ -1057,32 +1085,35 @@ export const GraphDrawPage = React.memo(() => {
   }, []);
 
   useEffect(() => {
+    dataSource.addReloadCallback(reloadCallback);
+
+    return () => {
+      dataSource.removeReloadCallback(reloadCallback);
+    };
+  }, []);
+  useEffect(() => {
     setLoading(true);
     refreshPositions()
       .then(async () => {
-        await refreshGM(collections);
+        if (selectedCollections && collectionList.length) {
+          const selectKeys = selectedCollections?.split(',');
+          const data = collectionList.filter((v) => selectKeys.includes(v.name));
+          renderInitGraphCollection(data, false);
+          handelResetLayout(true);
+          targetGraph.selectedCollections = selectedCollections;
+        } else {
+          !selectedCollections && reloadCallback(true);
+        }
         setLoading(false);
       })
       .catch((err) => {
         setLoading(false);
         throw err;
       });
-  }, []);
-
-  useEffect(() => {
-    if (selectedCollections && collectionList.length) {
-      const selectKeys = selectedCollections?.split(',');
-      const data = collectionList.filter((v) => selectKeys.includes(v.name));
-      renderInitGraphCollection(data, false);
-      handelResetLayout(true);
-      targetGraph.selectedCollections = selectedCollections;
-    } else {
-      !selectedCollections && renderInitGraphCollection(collections, false);
-    }
     return () => {
       cleanGraphContainer();
     };
-  }, [searchParams, collectionList]);
+  }, [searchParams]);
 
   const loadCollections = async () => {
     return targetGraph.collections?.map((collection: any) => ({
@@ -1094,7 +1125,7 @@ export const GraphDrawPage = React.memo(() => {
     <Layout>
       <div className={styles.graphCollectionContainerClass}>
         <Spin spinning={loading}>
-          <CollectionManagerProvider collections={targetGraph?.collections} refreshCM={refreshGM}>
+          <DataSourceApplicationProvider dataSourceManager={dm}>
             <CollapsedContext.Provider value={{ collectionList, handleSearchCollection }}>
               <div className={cx(styles.collectionListClass)}>
                 <SchemaComponent
@@ -1174,7 +1205,7 @@ export const GraphDrawPage = React.memo(() => {
                                 type: 'void',
                                 'x-component': 'Action',
                                 'x-component-props': {
-                                  component: forwardRef(() => {
+                                  component: () => {
                                     return (
                                       <Tooltip title={t('Auto layout')} getPopupContainer={getPopupContainer}>
                                         <Button
@@ -1186,7 +1217,7 @@ export const GraphDrawPage = React.memo(() => {
                                         </Button>
                                       </Tooltip>
                                     );
-                                  }),
+                                  },
                                   useAction: () => {
                                     return {
                                       run() {},
@@ -1243,7 +1274,7 @@ export const GraphDrawPage = React.memo(() => {
                 />
               </div>
             </CollapsedContext.Provider>
-          </CollectionManagerProvider>
+          </DataSourceApplicationProvider>
           <div id="container" style={{ width: '100vw' }}></div>
           <div
             id="graph-minimap"

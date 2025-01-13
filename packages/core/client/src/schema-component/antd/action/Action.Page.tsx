@@ -1,78 +1,59 @@
-import { css } from '@emotion/css';
-import { observer, RecursionField, SchemaExpressionScopeContext, useField, useFieldSchema } from '@formily/react';
-import React, { useContext } from 'react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { RecursionField, observer, useFieldSchema } from '@formily/react';
+import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useActionContext } from '.';
-import { ComposedActionDrawer } from './types';
+import { BackButtonUsedInSubPage } from '../page/BackButtonUsedInSubPage';
+import { TabsContextProvider, useTabsContext } from '../tabs/context';
+import { useActionPageStyle } from './Action.Page.style';
+import { usePopupOrSubpagesContainerDOM } from './hooks/usePopupSlotDOM';
+import { useZIndexContext, zIndexContext } from './zIndexContext';
 
-const useScope = (key: string) => {
-  const scope = useContext(SchemaExpressionScopeContext);
-  return scope[key];
-};
+export function ActionPage({ level }) {
+  const filedSchema = useFieldSchema();
+  const ctx = useActionContext();
+  const { getContainerDOM } = usePopupOrSubpagesContainerDOM();
+  const { styles } = useActionPageStyle();
+  const tabContext = useTabsContext();
+  const parentZIndex = useZIndexContext();
 
-export const ActionPage: ComposedActionDrawer = observer(
-  (props: any) => {
-    const { footerNodeName = 'Action.Page.Footer', ...others } = props;
-    const { containerRefKey, visible, setVisible } = useActionContext();
-    const containerRef = useScope(containerRefKey);
-    const schema = useFieldSchema();
-    const field = useField();
-    const footerSchema = schema.reduceProperties((buf, s) => {
-      if (s['x-component'] === footerNodeName) {
-        return s;
-      }
-      return buf;
-    });
-    return (
-      <>
-        {containerRef?.current &&
-          visible &&
-          createPortal(
-            <div data-testid="action-page" className="nb-action-page">
-              <RecursionField
-                basePath={field.address}
-                schema={schema}
-                onlyRenderProperties
-                filterProperties={(s) => {
-                  return s['x-component'] !== footerNodeName;
-                }}
-              />
-              {footerSchema && (
-                <div
-                  className={css`
-                    display: flex;
-                    /* justify-content: flex-end; */
-                    /* flex-direction: row-reverse; */
-                    width: 100%;
-                    .ant-btn {
-                      margin-right: 8px;
-                    }
-                  `}
-                >
-                  <RecursionField
-                    basePath={field.address}
-                    schema={schema}
-                    onlyRenderProperties
-                    filterProperties={(s) => {
-                      return s['x-component'] === footerNodeName;
-                    }}
-                  />
-                </div>
-              )}
-            </div>,
-            containerRef?.current,
-          )}
-      </>
-    );
-  },
-  { displayName: 'ActionPage' },
-);
+  const style = useMemo(() => {
+    return {
+      zIndex: parentZIndex + (level || 0),
+    };
+  }, [parentZIndex, level]);
+
+  if (!ctx.visible) {
+    return null;
+  }
+
+  const actionPageNode = (
+    <div className={styles.container} style={style}>
+      <TabsContextProvider {...tabContext} tabBarExtraContent={<BackButtonUsedInSubPage />}>
+        <zIndexContext.Provider value={style.zIndex}>
+          <RecursionField schema={filedSchema} onlyRenderProperties />
+        </zIndexContext.Provider>
+      </TabsContextProvider>
+    </div>
+  );
+
+  const container = getContainerDOM();
+
+  return createPortal(actionPageNode, container || document.body);
+}
 
 ActionPage.Footer = observer(
   () => {
-    const field = useField();
-    const schema = useFieldSchema();
-    return <RecursionField basePath={field.address} schema={schema} onlyRenderProperties />;
+    // TODO: Implement in the future if needed
+    return null;
   },
   { displayName: 'ActionPage.Footer' },
 );

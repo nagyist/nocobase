@@ -1,8 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { observer, useForm } from '@formily/react';
 import { Select } from 'antd';
 import React from 'react';
 
-import { useCollectionManager, useCompile } from '@nocobase/client';
+import { parseCollectionName, useCollectionManager_deprecated, useCompile } from '@nocobase/client';
 
 function defaultFilter() {
   return true;
@@ -12,9 +21,10 @@ export const FieldsSelect = observer(
   (props: any) => {
     const { filter = defaultFilter, ...others } = props;
     const compile = useCompile();
-    const { getCollectionFields } = useCollectionManager();
+    const { getCollectionFields } = useCollectionManager_deprecated();
     const { values } = useForm();
-    const fields = getCollectionFields(values?.collection);
+    const [dataSourceName, collectionName] = parseCollectionName(values?.collection);
+    const fields = getCollectionFields(collectionName, dataSourceName);
 
     return (
       <Select

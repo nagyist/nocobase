@@ -1,35 +1,58 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database } from '@nocobase/database';
-import { MockServer, mockServer } from '@nocobase/test';
-import PluginUiSchema from '../server';
+import { createMockServer, MockServer } from '@nocobase/test';
 
 describe('action test', () => {
   let app: MockServer;
   let db: Database;
 
   beforeEach(async () => {
-    app = mockServer({
+    app = await createMockServer({
       registerActions: true,
+      plugins: ['ui-schema-storage'],
     });
-
     db = app.db;
-
-    await db.clean({ drop: true });
-
-    app.plugin(PluginUiSchema, { name: 'ui-schema-storage' });
-
-    await app.load();
-    await db.sync({
-      force: false,
-      alter: {
-        drop: false,
-      },
-    });
-
-    await app.start();
   });
 
   afterEach(async () => {
     await app.destroy();
+  });
+
+  test('get parent property', async () => {
+    await app
+      .agent()
+      .resource('uiSchemas')
+      .insert({
+        values: {
+          'x-uid': 'n1',
+          name: 'a',
+          type: 'object',
+          properties: {
+            b: {
+              'x-uid': 'n2',
+              type: 'object',
+              properties: {
+                c: { 'x-uid': 'n3' },
+              },
+            },
+            d: { 'x-uid': 'n4' },
+          },
+        },
+      });
+
+    const response = await app.agent().resource('uiSchemas').getParentProperty({
+      filterByTk: 'n2',
+    });
+
+    expect(response.body.data['x-uid']).toEqual('n1');
   });
 
   test('insert action', async () => {
@@ -225,6 +248,65 @@ describe('action test', () => {
     expect(data.properties.b['properties']['c']['title']).toEqual('c-title');
   });
 
+  test('initializeActionContext', async () => {
+    await app
+      .agent()
+      .resource('uiSchemas')
+      .insert({
+        values: {
+          'x-uid': 'n1',
+          name: 'a',
+          type: 'object',
+          properties: {
+            b: {
+              'x-uid': 'n2',
+              type: 'object',
+              properties: {
+                c: { 'x-uid': 'n3' },
+              },
+            },
+            d: { 'x-uid': 'n4' },
+          },
+        },
+      });
+
+    let response = await app
+      .agent()
+      .resource('uiSchemas')
+      .initializeActionContext({
+        values: {
+          'x-uid': 'n1',
+          'x-action-context': {
+            field1: 'field1',
+            field2: 'field2',
+          },
+          properties: {
+            b: {
+              properties: {
+                c: {
+                  title: 'c-title',
+                },
+              },
+            },
+          },
+        },
+      });
+
+    expect(response.statusCode).toEqual(200);
+    response = await app.agent().resource('uiSchemas').getJsonSchema({
+      resourceIndex: 'n1',
+    });
+
+    const { data } = response.body;
+
+    // only update the x-action-context
+    expect(data.properties.b['properties']['c']['title']).toBe(undefined);
+    expect(data['x-action-context']).toEqual({
+      field1: 'field1',
+      field2: 'field2',
+    });
+  });
+
   test('insert adjacent', async () => {
     await app
       .agent()
@@ -269,7 +351,7 @@ describe('action test', () => {
   });
 
   test('insert adjacent with bit schema', async () => {
-    const schema = require('./fixtures/data').default;
+    const schema = (await import('./fixtures/data')).default;
 
     await app
       .agent()
@@ -295,5 +377,46 @@ describe('action test', () => {
     });
 
     expect(response.statusCode).toEqual(200);
+  });
+
+  test('save as template', async () => {
+    await app
+      .agent()
+      .resource('uiSchemas')
+      .insert({
+        values: {
+          'x-uid': 'n1',
+          name: 'a',
+          type: 'object',
+          properties: {
+            b: {
+              'x-uid': 'n2',
+              type: 'object',
+              properties: {
+                c: { 'x-uid': 'n3' },
+              },
+            },
+            d: { 'x-uid': 'n4' },
+          },
+        },
+      });
+
+    const response = await app
+      .agent()
+      .resource('uiSchemas')
+      .saveAsTemplate({
+        filterByTk: 'n1',
+        values: {
+          key: 'yiod22qkyhl',
+          dataSourceKey: 'main',
+          name: 'test',
+          uid: 'n1',
+        },
+      });
+
+    expect(response.statusCode).toEqual(200);
+
+    const template = await app.db.getRepository('uiSchemaTemplates').findOne({});
+    expect(template.uid).toEqual('n1');
   });
 });

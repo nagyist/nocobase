@@ -1,4 +1,13 @@
-import { expect, test } from '@nocobase/test/client';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { expect, test } from '@nocobase/test/e2e';
 
 test('single page', async ({ page, mockPage }) => {
   const pageTitle1 = 'page1';
@@ -11,8 +20,7 @@ test('single page', async ({ page, mockPage }) => {
   await page.getByRole('menu').getByText(pageTitle1).hover();
   await page.getByLabel(pageTitle1).getByLabel('designer-schema-settings').hover();
   await page.getByRole('menuitem', { name: 'Move to' }).click();
-  await page.getByRole('dialog').click();
-  await page.getByLabel('Search').click();
+  await page.getByLabel('block-item-TreeSelect-Target').locator('.ant-select').click();
   await page.locator('.ant-select-dropdown').getByText(pageTitle2).click();
   await page.getByRole('button', { name: 'OK', exact: true }).click();
   const page1 = await page.getByRole('menu').getByText(pageTitle1).boundingBox();

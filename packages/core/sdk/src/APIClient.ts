@@ -1,6 +1,14 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, RawAxiosRequestHeaders } from 'axios';
 import qs from 'qs';
-import getSubAppName from './getSubAppName';
 
 export interface ActionParams {
   filterByTk?: any;
@@ -23,13 +31,29 @@ export type IResource = {
 export class Auth {
   protected api: APIClient;
 
-  protected KEYS = {
-    locale: 'NOCOBASE_LOCALE',
-    role: 'NOCOBASE_ROLE',
-    token: 'NOCOBASE_TOKEN',
-    authenticator: 'NOCOBASE_AUTH',
-    theme: 'NOCOBASE_THEME',
-  };
+  get storagePrefix() {
+    return this.api.storagePrefix;
+  }
+
+  get KEYS() {
+    const defaults = {
+      locale: this.storagePrefix + 'LOCALE',
+      role: this.storagePrefix + 'ROLE',
+      token: this.storagePrefix + 'TOKEN',
+      authenticator: this.storagePrefix + 'AUTH',
+      theme: this.storagePrefix + 'THEME',
+    };
+
+    if (this.api['app']) {
+      const appName = this.api['app']?.getName?.();
+      if (appName) {
+        defaults['role'] = `${appName.toUpperCase()}_` + defaults['role'];
+        defaults['locale'] = `${appName.toUpperCase()}_` + defaults['locale'];
+      }
+    }
+
+    return defaults;
+  }
 
   protected options = {
     locale: null,
@@ -40,20 +64,7 @@ export class Auth {
 
   constructor(api: APIClient) {
     this.api = api;
-    this.initKeys();
     this.api.axios.interceptors.request.use(this.middleware.bind(this));
-  }
-
-  initKeys() {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    const appName = getSubAppName();
-    if (!appName) {
-      return;
-    }
-    this.KEYS['role'] = `${appName.toUpperCase()}_` + this.KEYS['role'];
-    this.KEYS['locale'] = `${appName.toUpperCase()}_` + this.KEYS['locale'];
   }
 
   get locale() {
@@ -88,6 +99,9 @@ export class Auth {
     this.setAuthenticator(value);
   }
 
+  /**
+   * @internal
+   */
   getOption(key: string) {
     if (!this.KEYS[key]) {
       return;
@@ -95,6 +109,9 @@ export class Auth {
     return this.api.storage.getItem(this.KEYS[key]);
   }
 
+  /**
+   * @internal
+   */
   setOption(key: string, value?: string) {
     if (!this.KEYS[key]) {
       return;
@@ -103,34 +120,66 @@ export class Auth {
     return this.api.storage.setItem(this.KEYS[key], value || '');
   }
 
+  /**
+   * @internal
+   * use {@link Auth#locale} instead
+   */
   getLocale() {
     return this.getOption('locale');
   }
 
+  /**
+   * @internal
+   * use {@link Auth#locale} instead
+   */
   setLocale(locale: string) {
     this.setOption('locale', locale);
   }
 
+  /**
+   * @internal
+   * use {@link Auth#role} instead
+   */
   getRole() {
     return this.getOption('role');
   }
 
+  /**
+   * @internal
+   * use {@link Auth#role} instead
+   */
   setRole(role: string) {
     this.setOption('role', role);
   }
 
+  /**
+   * @internal
+   * use {@link Auth#token} instead
+   */
   getToken() {
     return this.getOption('token');
   }
 
+  /**
+   * @internal
+   * use {@link Auth#token} instead
+   */
   setToken(token: string) {
     this.setOption('token', token);
   }
 
+  /**
+   * @internal
+   * use {@link Auth#authenticator} instead
+   */
   getAuthenticator() {
     return this.getOption('authenticator');
   }
 
+  /**
+   * @internal
+   * use {@link Auth#authenticator} instead
+   */
   setAuthenticator(authenticator: string) {
     this.setOption('authenticator', authenticator);
   }
@@ -218,23 +267,46 @@ export class MemoryStorage extends Storage {
 
 interface ExtendedOptions {
   authClass?: any;
+  storageType?: 'localStorage' | 'sessionStorage' | 'memory';
   storageClass?: any;
+  storagePrefix?: string;
 }
 
 export type APIClientOptions = AxiosInstance | (AxiosRequestConfig & ExtendedOptions);
 
 export class APIClient {
+  options?: APIClientOptions;
   axios: AxiosInstance;
   auth: Auth;
   storage: Storage;
+  storagePrefix = 'NOCOBASE_';
 
-  constructor(instance?: APIClientOptions) {
-    if (typeof instance === 'function') {
-      this.axios = instance;
+  getHeaders() {
+    const headers = {};
+    if (this.auth.locale) {
+      headers['X-Locale'] = this.auth.locale;
+    }
+    if (this.auth.role) {
+      headers['X-Role'] = this.auth.role;
+    }
+    if (this.auth.authenticator) {
+      headers['X-Authenticator'] = this.auth.authenticator;
+    }
+    if (this.auth.token) {
+      headers['Authorization'] = `Bearer ${this.auth.token}`;
+    }
+    return headers;
+  }
+
+  constructor(options?: APIClientOptions) {
+    this.options = options;
+    if (typeof options === 'function') {
+      this.axios = options;
     } else {
-      const { authClass, storageClass, ...others } = instance || {};
+      const { authClass, storageType, storageClass, storagePrefix = 'NOCOBASE_', ...others } = options || {};
+      this.storagePrefix = storagePrefix;
       this.axios = axios.create(others);
-      this.initStorage(storageClass);
+      this.initStorage(storageClass, storageType);
       if (authClass) {
         this.auth = new authClass(this);
       }
@@ -248,14 +320,20 @@ export class APIClient {
     this.interceptors();
   }
 
-  private initStorage(storage?: any) {
+  private initStorage(storage?: any, storageType = 'localStorage') {
     if (storage) {
       this.storage = new storage(this);
-    } else if (typeof localStorage !== 'undefined') {
-      this.storage = localStorage;
-    } else {
-      this.storage = new MemoryStorage();
+      return;
     }
+    if (storageType === 'localStorage' && typeof localStorage !== 'undefined') {
+      this.storage = localStorage;
+      return;
+    }
+    if (storageType === 'sessionStorage' && typeof sessionStorage !== 'undefined') {
+      this.storage = sessionStorage;
+      return;
+    }
+    this.storage = new MemoryStorage();
   }
 
   interceptors() {
@@ -271,19 +349,23 @@ export class APIClient {
   }
 
   request<T = any, R = AxiosResponse<T>, D = any>(config: AxiosRequestConfig<D> | ResourceActionOptions): Promise<R> {
-    const { resource, resourceOf, action, params } = config as any;
+    const { resource, resourceOf, action, params, headers } = config as any;
     if (resource) {
-      return this.resource(resource, resourceOf)[action](params);
+      return this.resource(resource, resourceOf, headers)[action](params);
     }
     return this.axios.request<T, R, D>(config);
   }
 
-  resource(name: string, of?: any): IResource {
+  resource(name: string, of?: any, headers?: RawAxiosRequestHeaders, cancel?: boolean): IResource {
     const target = {};
     const handler = {
       get: (_: any, actionName: string) => {
-        let url = name.split('.').join(`/${of || '_'}/`);
-        url += `:${actionName}`;
+        if (cancel) {
+          return;
+        }
+
+        let url = name.split('.').join(`/${encodeURIComponent(of) || '_'}/`);
+        url += `:${actionName.toString()}`;
         const config: AxiosRequestConfig = { url };
         if (['get', 'list'].includes(actionName)) {
           config['method'] = 'get';
@@ -309,6 +391,7 @@ export class APIClient {
           return await this.request({
             ...config,
             ...opts,
+            headers,
           });
         };
       },

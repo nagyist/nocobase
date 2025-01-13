@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { ISchema, observer, useField, useFieldSchema } from '@formily/react';
 import { error } from '@nocobase/utils/client';
@@ -5,15 +14,17 @@ import { Select } from 'antd';
 import _ from 'lodash';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { GeneralSchemaDesigner, SchemaSettingsDataScope, SchemaSettingsItem } from '../..';
-import { mergeFilter, useFormBlockContext } from '../../../block-provider';
-import { useCollectionManager } from '../../../collection-manager';
+import { GeneralSchemaDesigner, SchemaSettingsItem } from '../..';
+import { useFormBlockContext } from '../../../block-provider/FormBlockProvider';
+import { useCollectionManager_deprecated } from '../../../collection-manager';
+import { mergeFilter } from '../../../filter-provider/utils';
 import { removeNullCondition, useCompile, useDesignable } from '../../../schema-component';
 import { ITemplate } from '../../../schema-component/antd/form-v2/Templates';
+import { SchemaSettingsDataScope } from '../../SchemaSettingsDataScope';
 
 export const Designer = observer(
   () => {
-    const { getCollectionFields, getCollectionField, getCollection, isTitleField } = useCollectionManager();
+    const { getCollectionFields, getCollectionField, getCollection, isTitleField } = useCollectionManager_deprecated();
     const field = useField<Field>();
     const fieldSchema = useFieldSchema();
     const { t } = useTranslation();

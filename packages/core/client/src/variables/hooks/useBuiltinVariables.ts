@@ -1,27 +1,47 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { dayjs } from '@nocobase/utils/client';
 import { useMemo } from 'react';
-import { useAPIClient } from '../../api-client';
-import { getDateRanges } from '../../schema-component/antd/date-picker/util';
-import { useCurrentUserContext } from '../../user';
+import { DEFAULT_DATA_SOURCE_KEY } from '../../data-source/data-source/DataSourceManager';
+import { useCurrentUserVariable, useDatetimeVariable } from '../../schema-settings';
+import { useAPITokenVariable } from '../../schema-settings/VariableInput/hooks/useAPITokenVariable';
+import { useCurrentRoleVariable } from '../../schema-settings/VariableInput/hooks/useRoleVariable';
+import { useURLSearchParamsVariable } from '../../schema-settings/VariableInput/hooks/useURLSearchParamsVariable';
 import { VariableOption } from '../types';
 
+/**
+ * 相当于全局的变量
+ * @returns
+ */
 const useBuiltInVariables = () => {
-  const data = useCurrentUserContext();
-  const apiClient = useAPIClient();
-
-  const currentUser = data?.data?.data;
-  const dateVars = getDateRanges();
+  const { currentUserCtx } = useCurrentUserVariable();
+  const { currentRoleCtx } = useCurrentRoleVariable();
+  const { apiTokenCtx } = useAPITokenVariable();
+  const { datetimeCtx } = useDatetimeVariable();
+  const { urlSearchParamsCtx, name: urlSearchParamsName, defaultValue } = useURLSearchParamsVariable();
   const builtinVariables: VariableOption[] = useMemo(() => {
     return [
       {
         name: '$user',
-        ctx: currentUser,
+        ctx: currentUserCtx as any,
         collectionName: 'users',
+        dataSource: DEFAULT_DATA_SOURCE_KEY as string,
       },
       {
         name: '$nRole',
-        ctx: apiClient.auth?.role,
+        ctx: currentRoleCtx as any,
         collectionName: 'roles',
+      },
+      {
+        name: '$nToken',
+        ctx: apiTokenCtx as any,
       },
       /**
        * @deprecated
@@ -29,12 +49,13 @@ const useBuiltInVariables = () => {
        */
       {
         name: 'currentUser',
-        ctx: currentUser,
+        ctx: currentUserCtx,
         collectionName: 'users',
+        dataSource: DEFAULT_DATA_SOURCE_KEY as string,
       },
       {
         name: '$nDate',
-        ctx: dateVars,
+        ctx: datetimeCtx,
       },
       /**
        * @deprecated
@@ -42,7 +63,7 @@ const useBuiltInVariables = () => {
        */
       {
         name: '$date',
-        ctx: dateVars,
+        ctx: datetimeCtx,
       },
       /**
        * @deprecated
@@ -62,8 +83,13 @@ const useBuiltInVariables = () => {
         name: 'currentTime',
         ctx: () => dayjs().toISOString(),
       },
+      {
+        name: urlSearchParamsName,
+        ctx: urlSearchParamsCtx,
+        defaultValue,
+      },
     ];
-  }, [currentUser]);
+  }, [currentRoleCtx, currentUserCtx, datetimeCtx, defaultValue, urlSearchParamsCtx, urlSearchParamsName]);
 
   return { builtinVariables };
 };

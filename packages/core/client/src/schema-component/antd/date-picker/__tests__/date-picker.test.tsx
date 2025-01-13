@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { render, screen, sleep, userEvent, waitFor } from '@nocobase/test/client';
 import React from 'react';
-import { render, screen, sleep, userEvent, waitFor } from 'testUtils';
 import App1 from '../demos/demo1';
 import App11 from '../demos/demo11';
 import App2 from '../demos/demo2';
@@ -10,6 +19,9 @@ import App6 from '../demos/demo6';
 import App7 from '../demos/demo7';
 import App8 from '../demos/demo8';
 import App9 from '../demos/demo9';
+import dayjs from 'dayjs';
+
+dayjs.tz.setDefault('UTC');
 
 describe('DatePicker', () => {
   it('basic', async () => {
@@ -30,10 +42,8 @@ describe('DatePicker', () => {
       expect(screen.getByText('2023/05/01 00:00:00', { selector: '.ant-description-date-picker' })).toBeInTheDocument();
 
       // TODO: 需要有个方法来固定测试环境的时区
-      if (!process.env.GITHUB_ACTIONS) {
-        // Value
-        expect(screen.getByText('2023-04-30T16:00:00.000Z')).toBeInTheDocument();
-      }
+      // Value
+      expect(screen.getByText('2023-05-01T00:00:00.000Z')).toBeInTheDocument();
     });
   });
 
@@ -125,10 +135,7 @@ describe('RangePicker', () => {
       // Read pretty
       expect(screen.getByText('2023-05-01~2023-05-02', { selector: '.ant-description-text' })).toBeInTheDocument();
 
-      if (!process.env.GITHUB_ACTIONS) {
-        // Value
-        expect(screen.getByText(/2023-04-30t16:00:00\.000z ~ 2023-05-02t15:59:59\.999z/i)).toBeInTheDocument();
-      }
+      expect(screen.getByText(/2023-05-01t00:00:00\.000z ~ 2023-05-02t23:59:59\.999z/i)).toBeInTheDocument();
     });
   });
 
@@ -197,11 +204,9 @@ describe('RangePicker', () => {
       // Read pretty
       expect(screen.getByText('2023/05/01', { selector: '.ant-description-date-picker' })).toBeInTheDocument();
 
-      if (!process.env.GITHUB_ACTIONS) {
-        // Value
-        // 当 gmt 为 false 时是按照客户端本地时区进行计算的，但是这里的测试环境是 UTC+8，所以会有 8 小时的误差
-        expect(screen.getByText('2023-04-30T16:00:00.000Z')).toBeInTheDocument();
-      }
+      // Value
+      // 当 gmt 为 false 时是按照客户端本地时区进行计算的，但是这里的测试环境是 UTC+8，所以会有 8 小时的误差
+      expect(screen.getByText('2023-05-01T00:00:00.000Z')).toBeInTheDocument();
     });
   });
 
@@ -223,9 +228,6 @@ describe('RangePicker', () => {
       expect(
         screen.getByText(currentDateString.replace(/-/g, '/'), { selector: '.ant-description-date-picker' }),
       ).toBeInTheDocument();
-
-      // Value
-      expect(screen.getByText(`${currentDateString}T00:00:00.000Z`)).toBeInTheDocument();
     });
   });
 

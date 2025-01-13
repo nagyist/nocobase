@@ -1,23 +1,28 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { BelongsToManyRepository, Database } from '@nocobase/database';
 import { AppSupervisor } from '@nocobase/server';
-import { MockServer, mockServer, pgOnly } from '@nocobase/test';
+import { createMockServer, isPg, MockServer } from '@nocobase/test';
 import * as process from 'process';
 
-pgOnly()('enable plugin', () => {
+describe.runIf(isPg())('enable plugin', () => {
   let mainDb: Database;
   let mainApp: MockServer;
 
   beforeEach(async () => {
-    const app = mockServer({
+    const app = await createMockServer({
       acl: false,
       plugins: ['nocobase'],
     });
 
-    await app.load();
-
-    await app.install({
-      clean: true,
-    });
+    await app.runCommand('pm', 'add', 'multi-app-share-collection');
 
     mainApp = app;
 
@@ -41,25 +46,19 @@ pgOnly()('enable plugin', () => {
   });
 });
 
-pgOnly()('collection sync after main', () => {
+describe.runIf(isPg())('collection sync after main', () => {
   let mainApp: MockServer;
 
   beforeEach(async () => {
-    const app = mockServer({
+    const app = await createMockServer({
       acl: false,
       plugins: ['nocobase'],
+      async beforeInstall(app) {
+        await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub1 CASCADE`);
+        await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub2 CASCADE`);
+      },
     });
-
-    await app.load();
-    await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub1 CASCADE`);
-    await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub2 CASCADE`);
-
-    await app.install({
-      clean: true,
-    });
-
-    await app.start();
-
+    await app.runCommand('pm', 'add', 'multi-app-share-collection');
     mainApp = app;
   });
 
@@ -109,28 +108,23 @@ pgOnly()('collection sync after main', () => {
   });
 });
 
-pgOnly()('collection sync', () => {
+describe.runIf(isPg())('collection sync', () => {
   let mainDb: Database;
   let mainApp: MockServer;
 
   beforeEach(async () => {
-    const app = mockServer({
+    const app = await createMockServer({
       acl: false,
       plugins: ['nocobase'],
+      async beforeInstall(app) {
+        await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub1 CASCADE`);
+        await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub2 CASCADE`);
+      },
     });
-
-    await app.load();
-    await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub1 CASCADE`);
-    await app.db.sequelize.query(`DROP SCHEMA IF EXISTS sub2 CASCADE`);
-
-    await app.install({
-      clean: true,
-    });
+    await app.runCommand('pm', 'add', 'multi-app-share-collection');
 
     await app.pm.enable('multi-app-manager');
     await app.pm.enable('multi-app-share-collection');
-
-    await app.start();
 
     mainApp = app;
 
@@ -243,7 +237,7 @@ pgOnly()('collection sync', () => {
     expect(sub1MapPlugin.get('enabled')).toBeTruthy();
   });
 
-  it('should sync plugin status between apps', async () => {
+  it.skip('should sync plugin status between apps', async () => {
     await mainApp.db.getRepository('applications').create({
       values: {
         name: 'sub1',
@@ -261,12 +255,12 @@ pgOnly()('collection sync', () => {
       });
     };
 
-    expect((await getSubAppMapRecord(sub1)).get('enabled')).toBeFalsy();
+    expect(await getSubAppMapRecord(sub1)).toBeNull();
     await mainApp.pm.enable(['map']);
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    expect((await getSubAppMapRecord(sub1)).get('enabled')).toBeTruthy();
+    expect((await getSubAppMapRecord(sub1)).enabled).toBeTruthy();
     // create new app sub2
     await mainApp.db.getRepository('applications').create({
       values: {
@@ -497,6 +491,8 @@ pgOnly()('collection sync', () => {
       context: {},
     });
 
+    const mainCollectionInstance = mainDb.getCollection('mainCollection');
+
     await subApp1.runCommand('restart');
 
     const subAppMainCollectionRecord = await subApp1.db.getRepository('collections').findOne({
@@ -510,7 +506,7 @@ pgOnly()('collection sync', () => {
     const subAppMainCollection = subApp1.db.getCollection('mainCollection');
 
     expect(subAppMainCollection).toBeTruthy();
-    expect(subAppMainCollection.options.schema).toBe(mainCollection.options.schema || 'public');
+    expect(subAppMainCollection.options.schema).toBe(mainCollectionInstance.collectionSchema());
 
     await mainApp.db.getRepository('fields').create({
       values: {

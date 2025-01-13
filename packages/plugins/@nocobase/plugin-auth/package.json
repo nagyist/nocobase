@@ -1,7 +1,9 @@
 {
   "name": "@nocobase/plugin-auth",
-  "version": "0.17.0-alpha.6",
+  "version": "1.4.23",
   "main": "./dist/server/index.js",
+  "homepage": "https://docs.nocobase.com/handbook/auth",
+  "homepage.zh-CN": "https://docs-cn.nocobase.com/handbook/auth",
   "devDependencies": {
     "@ant-design/icons": "5.x",
     "@formily/react": "2.x",
@@ -13,15 +15,19 @@
     "react-i18next": "^11.15.1"
   },
   "peerDependencies": {
-    "@nocobase/actions": "0.x",
-    "@nocobase/auth": "0.x",
-    "@nocobase/client": "0.x",
-    "@nocobase/database": "0.x",
-    "@nocobase/server": "0.x",
-    "@nocobase/test": "0.x"
+    "@nocobase/actions": "1.x",
+    "@nocobase/auth": "1.x",
+    "@nocobase/client": "1.x",
+    "@nocobase/database": "1.x",
+    "@nocobase/server": "1.x",
+    "@nocobase/test": "1.x"
   },
   "displayName": "Authentication",
   "displayName.zh-CN": "用户认证",
-  "description": "Basic authentication and authenticator management",
-  "description.zh-CN": "提供基础认证功能和扩展认证器管理功能"
+  "description": "User authentication management, including password, SMS, and support for Single Sign-On (SSO) protocols, with extensibility.",
+  "description.zh-CN": "用户认证管理，包括基础的密码认证、短信认证、SSO 协议的认证等，可扩展。",
+  "gitHead": "d0b4efe4be55f8c79a98a331d99d9f8cf99021a1",
+  "keywords": [
+    "Authentication"
+  ]
 }

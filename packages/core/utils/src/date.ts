@@ -1,14 +1,33 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import _ from 'lodash';
 import { dayjs } from './dayjs';
 
 export interface Str2momentOptions {
   gmt?: boolean;
   picker?: 'year' | 'month' | 'week' | 'quarter';
-  utcOffset?: any;
+  utcOffset?: number;
   utc?: boolean;
 }
 
-export const getDefaultFormat = (props: any) => {
+export type Str2momentValue = string | string[] | dayjs.Dayjs | dayjs.Dayjs[];
+
+export interface GetDefaultFormatProps {
+  format?: string;
+  dateFormat?: string;
+  timeFormat?: string;
+  picker?: 'year' | 'month' | 'week' | 'quarter';
+  showTime?: boolean;
+}
+
+export const getDefaultFormat = (props: GetDefaultFormatProps) => {
   if (props.format) {
     return props.format;
   }
@@ -25,7 +44,7 @@ export const getDefaultFormat = (props: any) => {
   } else if (props['picker'] === 'year') {
     return 'YYYY';
   } else if (props['picker'] === 'week') {
-    return 'YYYY-wo';
+    return 'YYYY[W]W';
   }
   return props['showTime'] ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD';
 };
@@ -49,34 +68,49 @@ export const toLocal = (value: dayjs.Dayjs) => {
   }
 };
 
+const convertQuarterToFirstDay = (quarterStr) => {
+  if (dayjs(quarterStr).isValid()) {
+    const year = parseInt(quarterStr.slice(0, 4)); // 提取年份
+    const quarter = parseInt(quarterStr.slice(-1)); // 提取季度数字
+    return dayjs().quarter(quarter).year(year);
+  }
+  return null;
+};
+
 const toMoment = (val: any, options?: Str2momentOptions) => {
   if (!val) {
     return;
   }
-  const offset = options.utcOffset || -1 * new Date().getTimezoneOffset();
+  const offset = options.utcOffset !== undefined ? options.utcOffset : -1 * new Date().getTimezoneOffset();
   const { gmt, picker, utc = true } = options;
+  if (dayjs(val).isValid()) {
+    if (!utc) {
+      return dayjs(val);
+    }
 
-  if (!utc) {
-    return dayjs(val);
+    if (dayjs.isDayjs(val)) {
+      return val.utcOffset(offsetFromString(offset));
+    }
+    if (gmt) {
+      return dayjs(val).utcOffset(0);
+    }
+    return dayjs(val).utcOffset(offsetFromString(offset));
+  } else {
+    return convertQuarterToFirstDay(val);
   }
-
-  if (dayjs.isDayjs(val)) {
-    return val.utcOffset(offsetFromString(offset));
-  }
-  if (gmt || picker) {
-    return dayjs(val).utcOffset(0);
-  }
-  return dayjs(val).utcOffset(offsetFromString(offset));
 };
 
-export const str2moment = (value?: string | string[], options: Str2momentOptions = {}): any => {
+export const str2moment = (
+  value?: string | string[] | dayjs.Dayjs | dayjs.Dayjs[],
+  options: Str2momentOptions = {},
+): any => {
   return Array.isArray(value)
     ? value.map((val) => {
         return toMoment(val, options);
       })
     : value
-    ? toMoment(value, options)
-    : value;
+      ? toMoment(value, options)
+      : value;
 };
 
 const toStringByPicker = (value, picker) => {
@@ -176,3 +210,28 @@ function absFloor(number) {
     return Math.floor(number);
   }
 }
+
+export const getPickerFormat = (picker) => {
+  switch (picker) {
+    case 'week':
+      return 'YYYY[W]W';
+    case 'month':
+      return 'YYYY-MM';
+    case 'quarter':
+      return 'YYYY[Q]Q';
+    case 'year':
+      return 'YYYY';
+    default:
+      return 'YYYY-MM-DD';
+  }
+};
+
+export const getDateTimeFormat = (picker, format, showTime, timeFormat) => {
+  if (picker === 'date') {
+    if (showTime) {
+      return `${format} ${timeFormat || 'HH:mm:ss'}`;
+    }
+    return format;
+  }
+  return format;
+};

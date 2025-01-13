@@ -1,24 +1,49 @@
-<!-- Note -->
-<!-- This is a template for submitting a new feature. 
-Use the bug fix template if you're submitting a bug fix pull request by adding `template=bug_fix.md` to your pull request URL. -->
+<!--
+First of all, thank you for your contribution! 
+For bug fixes or other non-feature modifications, please base your branch on the main branch.
+For new features or API modifications, please make sure your branch is based on the next branch. 
+Thank you!
+-->
 
-# Description (需求描述)
-<!-- Describe the new feature or modification to an existing feature clearly and consciously. -->
+### This is a ...
+- [ ] New feature
+- [ ] Improvement
+- [ ] Bug fix
+- [ ] Others
 
-# Motivation (需求背景)
-<!-- Explain the reason for adding or modifying this feature. -->
+### Motivation
+<!-- Please explain the reason of the changes made in this PR. -->
 
-# Key changes (关键改动）
-<!-- Provide a technically detailed description of the key changes made. -->
-- Frontend (前端)
-- Backend (后端)
+### Description 
+<!-- 
+Please describe the key changes made in this PR clearly and concisely, 
+mention any potential risks, 
+and provide some testing suggestions. 
+-->
 
-# Test plan (测试计划)
-## Suggestions (测试建议)
-<!-- Provide any suggestions or recommendations for improvements in the testing plan. -->
+### Related issues
 
-## Underlying risk (潜在风险)
-<!-- Identify any potential risks or issues that may arise from the new feature or modification. -->
+### Showcase
+<!-- Including any screenshots of the changes. -->
 
-# Showcase (结果展示）
-<!-- Including any screenshots of the new feature or modification. -->
+### Changelog
+
+| Language   | Changelog |
+| ---------- | --------- |
+| 🇺🇸 English |           |
+| 🇨🇳 Chinese |           |
+
+### Docs
+
+| Language   | Link |
+| ---------- | --------- |
+| 🇺🇸 English |  <!-- [Title](link) -->    |
+| 🇨🇳 Chinese |  <!-- [标题](link) -->  |
+
+### Checklists
+- [ ] All changes have been self-tested and work as expected
+- [ ] Test cases are updated/provided or not needed
+- [ ] Doc is updated/provided or not needed
+- [ ] Component demo is updated/provided or not needed
+- [ ] Changelog is provided or not needed
+- [ ] Request a code review if it is necessary

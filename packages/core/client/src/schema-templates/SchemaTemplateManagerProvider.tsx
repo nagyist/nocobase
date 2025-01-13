@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema, useFieldSchema } from '@formily/react';
 import { uid } from '@formily/shared';
 import { cloneDeep } from 'lodash';
@@ -6,10 +15,12 @@ import { useLocation } from 'react-router-dom';
 import { useAPIClient, useRequest } from '../api-client';
 import { Plugin } from '../application/Plugin';
 import { useAppSpin } from '../application/hooks/useAppSpin';
-import { useCollectionManager } from '../collection-manager';
+import { useCollectionManager_deprecated } from '../collection-manager';
 import { BlockTemplate } from './BlockTemplate';
+import { DEFAULT_DATA_SOURCE_KEY } from '../data-source';
 
 export const SchemaTemplateManagerContext = createContext<any>({});
+SchemaTemplateManagerContext.displayName = 'SchemaTemplateManagerContext';
 
 export const SchemaTemplateManagerProvider: React.FC<any> = (props) => {
   const { templates, refresh } = props;
@@ -37,7 +48,7 @@ export const useSchemaTemplate = () => {
 };
 
 export const useSchemaTemplateManager = () => {
-  const { getInheritCollections } = useCollectionManager();
+  const { getInheritCollections } = useCollectionManager_deprecated();
   const { refresh, templates = [] } = useContext(SchemaTemplateManagerContext);
   const api = useAPIClient();
   return {
@@ -103,10 +114,14 @@ export const useSchemaTemplateManager = () => {
     getTemplateById(key) {
       return templates?.find((template) => template.key === key);
     },
-    getTemplatesByCollection(collectionName: string, resourceName: string = null) {
-      const parentCollections = getInheritCollections(collectionName);
+    getTemplatesByCollection(dataSource: string, collectionName: string) {
+      const parentCollections = getInheritCollections(collectionName, dataSource);
       const totalCollections = parentCollections.concat([collectionName]);
-      const items = templates?.filter?.((template) => totalCollections.includes(template.collectionName));
+      const items = templates?.filter?.(
+        (template) =>
+          (template.dataSourceKey || DEFAULT_DATA_SOURCE_KEY) === dataSource &&
+          totalCollections.includes(template.collectionName),
+      );
       return items || [];
     },
     getTemplatesByComponentName(componentName: string): Array<any> {
@@ -116,14 +131,14 @@ export const useSchemaTemplateManager = () => {
   };
 };
 
-const Internal = (props) => {
+export const RemoteSchemaTemplateManagerProvider = (props) => {
   const api = useAPIClient();
   const { render } = useAppSpin();
   const options = {
     resource: 'uiSchemaTemplates',
     action: 'list',
     params: {
-      appends: ['collection'],
+      // appends: ['collection'],
       paginate: false,
     },
   };
@@ -147,19 +162,10 @@ const Internal = (props) => {
   );
 };
 
-export const RemoteSchemaTemplateManagerProvider: React.FC<{ children?: ReactNode }> = (props) => {
-  const location = useLocation();
-  if (location.pathname.startsWith('/admin')) {
-    return <Internal {...props} />;
-  }
-  return <>{props.children}</>;
-};
-
 export class RemoteSchemaTemplateManagerPlugin extends Plugin {
   async load() {
     this.addRoutes();
     this.addComponents();
-    this.app.use(RemoteSchemaTemplateManagerProvider);
   }
 
   addComponents() {
@@ -169,10 +175,6 @@ export class RemoteSchemaTemplateManagerPlugin extends Plugin {
   }
 
   addRoutes() {
-    this.app.router.add('admin.plugins.block-templates', {
-      path: '/admin/plugins/block-templates',
-      Component: 'BlockTemplatePage',
-    });
     this.app.router.add('admin.plugins.block-templates-key', {
       path: '/admin/plugins/block-templates/:key',
       Component: 'BlockTemplateDetails',

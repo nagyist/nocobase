@@ -1,7 +1,33 @@
-import { Schema, useFieldSchema } from '@formily/react';
-import { useCollection, useCollectionManager } from '../..';
-import { SchemaInitializerItemType, useSchemaInitializer } from '../../application';
-import { SchemaInitializer } from '../../application/schema-initializer/SchemaInitializer';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { Schema } from '@formily/react';
+import { useCallback } from 'react';
+import {
+  useActionAvailable,
+  useCollection,
+  useCollectionManager_deprecated,
+  useCreateAssociationDetailsBlock,
+  useCreateAssociationDetailsWithoutPagination,
+  useCreateAssociationFormBlock,
+  useCreateAssociationGridCardBlock,
+  useCreateAssociationListBlock,
+  useCreateAssociationTableBlock,
+  useCreateEditFormBlock,
+  useCreateFormBlock,
+  useCreateTableBlock,
+} from '../..';
+import { CompatibleSchemaInitializer } from '../../application/schema-initializer/CompatibleSchemaInitializer';
+import { useCreateDetailsBlock } from '../../modules/blocks/data-blocks/details-multi/DetailsBlockInitializer';
+import { useCreateSingleDetailsSchema } from '../../modules/blocks/data-blocks/details-single/RecordReadPrettyFormBlockInitializer';
+import { useCreateGridCardBlock } from '../../modules/blocks/data-blocks/grid-card/GridCardBlockInitializer';
+import { useCreateListBlock } from '../../modules/blocks/data-blocks/list/ListBlockInitializer';
 import { gridRowColWrap } from '../utils';
 
 const recursiveParent = (schema: Schema) => {
@@ -14,247 +40,275 @@ const recursiveParent = (schema: Schema) => {
   }
 };
 
-const useRelationFields = () => {
-  const fieldSchema = useFieldSchema();
-  const { getCollectionFields } = useCollectionManager();
-  const collection = useCollection();
-  let fields = [];
-
-  if (fieldSchema['x-initializer']) {
-    fields = collection.fields;
-  } else {
-    const collection = recursiveParent(fieldSchema.parent);
-    if (collection) {
-      fields = getCollectionFields(collection);
-    }
-  }
-
-  const relationFields = fields
-    .filter((field) => ['linkTo', 'subTable', 'o2m', 'm2m', 'obo', 'oho', 'o2o', 'm2o'].includes(field.interface))
-    .map((field) => {
-      if (['hasOne', 'belongsTo'].includes(field.type)) {
-        return {
-          name: field.name,
-          type: 'subMenu',
-          title: field?.uiSchema?.title || field.name,
-          children: [
-            {
-              name: `${field.name}_details`,
-              type: 'item',
-              title: '{{t("Details")}}',
-              field,
-              Component: 'RecordReadPrettyAssociationFormBlockInitializer',
-            },
-            // {
-            //   name: `${field.name}_form`,
-            //   type: 'item',
-            //   title: '{{t("Form")}}',
-            //   field,
-            //   component: 'RecordAssociationFormBlockInitializer',
-            // },
-          ],
-        };
-      }
-
-      if (['hasMany', 'belongsToMany'].includes(field.type)) {
-        return {
-          name: field.name,
-          type: 'subMenu',
-          title: field?.uiSchema?.title || field.name,
-          children: [
-            {
-              name: `${field.name}_table`,
-              type: 'item',
-              title: '{{t("Table")}}',
-              field,
-              Component: 'RecordAssociationBlockInitializer',
-            },
-            {
-              name: `${field.name}_details`,
-              type: 'item',
-              title: '{{t("Details")}}',
-              field,
-              Component: 'RecordAssociationDetailsBlockInitializer',
-            },
-            {
-              name: `${field.name}_list`,
-              type: 'item',
-              title: '{{t("List")}}',
-              field,
-              Component: 'RecordAssociationListBlockInitializer',
-            },
-            {
-              name: `${field.name}_grid_card`,
-              type: 'item',
-              title: '{{t("Grid Card")}}',
-              field,
-              Component: 'RecordAssociationGridCardBlockInitializer',
-            },
-            {
-              name: `${field.name}_form`,
-              type: 'item',
-              title: '{{t("Form")}}',
-              field,
-              Component: 'RecordAssociationFormBlockInitializer',
-            },
-            {
-              name: `${field.name}_calendar`,
-              type: 'item',
-              title: '{{t("Calendar")}}',
-              field,
-              Component: 'RecordAssociationCalendarBlockInitializer',
-            },
-          ],
-        };
-      }
-
-      return {
-        name: field.name,
-        type: 'item',
-        field,
-        title: field?.uiSchema?.title || field.name,
-        Component: 'RecordAssociationBlockInitializer',
-      };
-    }) as any;
-
-  return relationFields;
-};
-
-const useDetailCollections = (props) => {
-  const { actionInitializers, childrenCollections, collection } = props;
-  const detailCollections = [
-    {
-      name: collection.name,
-      type: 'item',
-      title: collection?.title || collection.name,
-      Component: 'RecordReadPrettyFormBlockInitializer',
-      icon: false,
-      targetCollection: collection,
-      actionInitializers,
-    },
-  ].concat(
-    childrenCollections.map((c) => {
-      return {
-        name: c.name,
-        type: 'item',
-        title: c?.title || c.name,
-        Component: 'RecordReadPrettyFormBlockInitializer',
-        icon: false,
-        targetCollection: c,
-        actionInitializers,
-      };
-    }),
-  ) as SchemaInitializerItemType[];
-  return detailCollections;
-};
-
-const useFormCollections = (props) => {
-  const { actionInitializers, childrenCollections, collection } = props;
-  const formCollections = [
-    {
-      name: collection.name,
-      type: 'item',
-      title: collection?.title || collection.name,
-      Component: 'RecordFormBlockInitializer',
-      icon: false,
-      targetCollection: collection,
-      actionInitializers,
-    },
-  ].concat(
-    childrenCollections.map((c) => {
-      return {
-        name: c.name,
-        type: 'item',
-        title: c?.title || c.name,
-        Component: 'RecordFormBlockInitializer',
-        icon: false,
-        targetCollection: c,
-        actionInitializers,
-      };
-    }),
-  ) as SchemaInitializerItemType[];
-
-  return formCollections;
+export const canMakeAssociationBlock = (field) => {
+  return ['linkTo', 'subTable', 'o2m', 'm2m', 'obo', 'oho', 'o2o', 'm2o'].includes(field.interface);
 };
 
 function useRecordBlocks() {
-  const { options } = useSchemaInitializer();
-  const { actionInitializers } = options;
   const collection = useCollection();
-  const { getChildrenCollections } = useCollectionManager();
-  const formChildrenCollections = getChildrenCollections(collection.name);
-  const hasFormChildCollection = formChildrenCollections?.length > 0;
-  const detailChildrenCollections = getChildrenCollections(collection.name, true);
-  const hasDetailChildCollection = detailChildrenCollections?.length > 0;
-  const modifyFlag = (collection.template !== 'view' || collection?.writableView) && collection.template !== 'sql';
-  const detailChildren = useDetailCollections({
-    ...options,
-    childrenCollections: detailChildrenCollections,
-    collection,
-  });
-  const formChildren = useFormCollections({
-    ...options,
-    childrenCollections: formChildrenCollections,
-    collection,
-  });
+  const { getChildrenCollections } = useCollectionManager_deprecated();
+  const collectionsWithView = getChildrenCollections(collection?.name, true, collection?.dataSource).filter(
+    (v) => v?.filterTargetKey,
+  );
 
-  const res = [];
-  if (hasDetailChildCollection) {
-    res.push({
-      name: 'details',
-      type: 'subMenu',
-      title: '{{t("Details")}}',
-      children: detailChildren,
-    });
-  } else {
-    res.push({
+  const res: any[] = [
+    {
       name: 'details',
       title: '{{t("Details")}}',
-      Component: 'RecordReadPrettyFormBlockInitializer',
-      actionInitializers,
-    });
-  }
+      Component: 'DetailsBlockInitializer',
+      collectionName: collection?.name,
+      dataSource: collection?.dataSource,
+      useComponentProps() {
+        const currentCollection = useCollection();
+        const { createSingleDetailsSchema, templateWrap } = useCreateSingleDetailsSchema();
+        const { createAssociationDetailsBlock } = useCreateAssociationDetailsBlock();
+        const {
+          createAssociationDetailsWithoutPagination,
+          templateWrap: templateWrapOfAssociationDetailsWithoutPagination,
+        } = useCreateAssociationDetailsWithoutPagination();
+        const { createDetailsBlock } = useCreateDetailsBlock();
+        const collectionsNeedToDisplay = [currentCollection, ...collectionsWithView];
+        const createBlockSchema = useCallback(
+          ({ item, fromOthersInPopup }) => {
+            if (fromOthersInPopup) {
+              return createDetailsBlock({ item });
+            }
+            if (item.associationField) {
+              if (['hasOne', 'belongsTo'].includes(item.associationField.type)) {
+                return createAssociationDetailsWithoutPagination({ item });
+              }
+              return createAssociationDetailsBlock({ item });
+            }
+            return createSingleDetailsSchema({ item });
+          },
+          [
+            createAssociationDetailsBlock,
+            createAssociationDetailsWithoutPagination,
+            createDetailsBlock,
+            createSingleDetailsSchema,
+          ],
+        );
+        return {
+          filterCollections({ collection, associationField }) {
+            if (collection) {
+              return collectionsNeedToDisplay.some((c) => c.name === collection.name);
+            }
+            if (associationField) {
+              return true;
+            }
+            return false;
+          },
+          onlyCurrentDataSource: true,
+          hideSearch: true,
+          componentType: `ReadPrettyFormItem`,
+          createBlockSchema,
+          templateWrap: useCallback(
+            (templateSchema, { item }) => {
+              if (item.associationField) {
+                if (['hasOne', 'belongsTo'].includes(item.associationField.type)) {
+                  return templateWrapOfAssociationDetailsWithoutPagination(templateSchema, { item });
+                }
+                return templateSchema;
+              }
+              return templateWrap(templateSchema, { item });
+            },
+            [templateWrap, templateWrapOfAssociationDetailsWithoutPagination],
+          ),
+          showAssociationFields: true,
+        };
+      },
+    },
+    {
+      name: 'editForm',
+      title: '{{t("Form (Edit)")}}',
+      Component: 'FormBlockInitializer',
+      collectionName: collection?.name,
+      dataSource: collection?.dataSource,
+      useComponentProps() {
+        const currentCollection = useCollection();
+        const { createEditFormBlock, templateWrap: templateWrapEdit } = useCreateEditFormBlock();
+        const collectionsNeedToDisplay = [currentCollection, ...collectionsWithView];
 
-  if (hasFormChildCollection) {
-    res.push({
-      name: 'form',
-      type: 'subMenu',
-      title: '{{t("Form")}}',
-      children: formChildren,
-    });
-  } else {
-    modifyFlag &&
-      res.push({
-        name: 'form',
-        title: '{{t("Form")}}',
-        Component: 'RecordFormBlockInitializer',
-      });
-  }
+        return {
+          filterCollections({ collection }) {
+            if (collection) {
+              return collectionsNeedToDisplay.some((c) => c.name === collection.name);
+            }
+            return false;
+          },
+          onlyCurrentDataSource: true,
+          hideSearch: true,
+          hideOtherRecordsInPopup: true,
+          componentType: `FormItem`,
+          createBlockSchema: createEditFormBlock,
+          templateWrap: templateWrapEdit,
+          showAssociationFields: true,
+        };
+      },
+      useVisible: () => useActionAvailable('update'),
+    },
+    {
+      name: 'createForm',
+      title: '{{t("Form (Add new)")}}',
+      Component: 'FormBlockInitializer',
+      collectionName: collection?.name,
+      dataSource: collection?.dataSource,
+      useComponentProps() {
+        const { createAssociationFormBlock, templateWrap } = useCreateAssociationFormBlock();
+        const { createFormBlock, templateWrap: templateWrapCollection } = useCreateFormBlock();
+        return {
+          filterCollections({ collection, associationField }) {
+            if (associationField) {
+              return ['hasMany', 'belongsToMany'].includes(associationField.type);
+            }
+            return false;
+          },
+          onlyCurrentDataSource: true,
+          hideSearch: true,
+          componentType: `FormItem`,
+          createBlockSchema: ({ item, fromOthersInPopup }) => {
+            if (fromOthersInPopup) {
+              return createFormBlock({ item, fromOthersInPopup });
+            }
+            createAssociationFormBlock({ item });
+          },
+          templateWrap: (templateSchema, { item, fromOthersInPopup }) => {
+            if (fromOthersInPopup) {
+              return templateWrapCollection(templateSchema, { item, fromOthersInPopup });
+            }
+            return templateWrap(templateSchema, { item });
+          },
+          showAssociationFields: true,
+        };
+      },
+    },
+    {
+      name: 'table',
+      title: '{{t("Table")}}',
+      Component: 'TableBlockInitializer',
+      useComponentProps() {
+        const { createAssociationTableBlock } = useCreateAssociationTableBlock();
+        const { createTableBlock } = useCreateTableBlock();
+
+        return {
+          hideSearch: true,
+          onlyCurrentDataSource: true,
+          filterCollections({ associationField }) {
+            if (associationField) {
+              return ['hasMany', 'belongsToMany'].includes(associationField.type);
+            }
+            return false;
+          },
+          createBlockSchema: ({ item, fromOthersInPopup }) => {
+            if (fromOthersInPopup) {
+              return createTableBlock({ item });
+            }
+            createAssociationTableBlock({ item });
+          },
+          showAssociationFields: true,
+        };
+      },
+    },
+    {
+      name: 'list',
+      title: '{{t("List")}}',
+      Component: 'ListBlockInitializer',
+      useComponentProps() {
+        const { createAssociationListBlock } = useCreateAssociationListBlock();
+        const { createListBlock } = useCreateListBlock();
+
+        return {
+          hideSearch: true,
+          onlyCurrentDataSource: true,
+          filterCollections({ associationField }) {
+            if (associationField) {
+              return ['hasMany', 'belongsToMany'].includes(associationField.type);
+            }
+            return false;
+          },
+          createBlockSchema: ({ item, fromOthersInPopup }) => {
+            if (fromOthersInPopup) {
+              return createListBlock({ item });
+            }
+            createAssociationListBlock({ item });
+          },
+          showAssociationFields: true,
+        };
+      },
+    },
+    {
+      name: 'gridCard',
+      title: '{{t("Grid Card")}}',
+      Component: 'GridCardBlockInitializer',
+      useComponentProps() {
+        const { createAssociationGridCardBlock } = useCreateAssociationGridCardBlock();
+        const { createGridCardBlock } = useCreateGridCardBlock();
+
+        return {
+          hideSearch: true,
+          onlyCurrentDataSource: true,
+          filterCollections({ associationField }) {
+            if (associationField) {
+              return ['hasMany', 'belongsToMany'].includes(associationField.type);
+            }
+            return false;
+          },
+          createBlockSchema: ({ item, fromOthersInPopup }) => {
+            if (fromOthersInPopup) {
+              return createGridCardBlock({ item });
+            }
+            createAssociationGridCardBlock({ item });
+          },
+          showAssociationFields: true,
+        };
+      },
+    },
+  ];
 
   return res;
 }
 
-export const recordBlockInitializers = new SchemaInitializer({
-  name: 'RecordBlockInitializers',
+const commonOptions = {
   wrap: gridRowColWrap,
   title: '{{t("Add block")}}',
   icon: 'PlusOutlined',
   items: [
     {
       type: 'itemGroup',
-      name: 'currentRecordBlocks',
-      title: '{{t("Current record blocks")}}',
+      name: 'dataBlocks',
+      title: '{{t("Data blocks")}}',
       useChildren: useRecordBlocks,
     },
     {
+      name: 'filterBlocks',
+      title: '{{t("Filter blocks")}}',
       type: 'itemGroup',
-      name: 'relationshipBlocks',
-      title: '{{t("Relationship blocks")}}',
-      useChildren: useRelationFields,
-      useVisible() {
-        const res = useRelationFields();
-        return res.length > 0;
-      },
+      children: [
+        {
+          name: 'filterForm',
+          title: '{{t("Form")}}',
+          Component: 'FilterFormBlockInitializer',
+          useComponentProps() {
+            return {
+              filterCollections({ collection }) {
+                return true;
+              },
+            };
+          },
+        },
+        {
+          name: 'filterCollapse',
+          title: '{{t("Collapse")}}',
+          Component: 'FilterCollapseBlockInitializer',
+          useComponentProps() {
+            return {
+              filterCollections({ collection }) {
+                return true;
+              },
+            };
+          },
+        },
+      ],
     },
     {
       type: 'itemGroup',
@@ -269,4 +323,21 @@ export const recordBlockInitializers = new SchemaInitializer({
       ],
     },
   ],
+};
+
+/**
+ * @deprecated
+ * use `recordBlockInitializers` instead
+ */
+export const recordBlockInitializers_deprecated = new CompatibleSchemaInitializer({
+  name: 'RecordBlockInitializers',
+  ...commonOptions,
 });
+
+export const recordBlockInitializers = new CompatibleSchemaInitializer(
+  {
+    name: 'popup:common:addBlock',
+    ...commonOptions,
+  },
+  recordBlockInitializers_deprecated,
+);

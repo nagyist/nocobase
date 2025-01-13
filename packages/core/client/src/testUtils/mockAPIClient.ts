@@ -1,9 +1,23 @@
-import MockAdapter from 'axios-mock-adapter';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { APIClient } from '../api-client';
 
-export const mockAPIClient = () => {
-  const apiClient = new APIClient();
-  const mockRequest = new MockAdapter(apiClient.axios);
+class MockAPIClient extends APIClient {
+  mockAdapter() {
+    const MockAdapter = require('axios-mock-adapter');
+    return new MockAdapter(this.axios);
+  }
+}
 
+export const mockAPIClient = () => {
+  const apiClient = new MockAPIClient();
+  const mockRequest = apiClient.mockAdapter();
   return { apiClient, mockRequest };
 };

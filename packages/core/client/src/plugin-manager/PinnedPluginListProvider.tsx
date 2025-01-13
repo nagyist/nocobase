@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
 import { SchemaOptionsContext } from '@formily/react';
 import { get } from 'lodash';
@@ -18,7 +27,7 @@ export const PinnedPluginListProvider: React.FC<{ items: any }> = (props) => {
 export const PinnedPluginList = () => {
   const { allowAll, snippets } = useACLRoleContext();
   const getSnippetsAllow = (aclKey) => {
-    return allowAll || snippets?.includes(aclKey);
+    return allowAll || aclKey === '*' || snippets?.includes(aclKey);
   };
   const ctx = useContext(PinnedPluginListContext);
   const { components } = useContext(SchemaOptionsContext);
@@ -31,10 +40,14 @@ export const PinnedPluginList = () => {
           width: 46px;
           border-radius: 0;
           background: none;
-          color: rgba(255, 255, 255, 0.65) !important;
+          color: rgba(255, 255, 255, 0.65);
           &:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.1) !important;
           }
+        }
+
+        .ant-btn-default {
+          box-shadow: none;
         }
       `}
       style={{ display: 'inline-block' }}

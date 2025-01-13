@@ -1,24 +1,39 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { observer, useField, useFieldSchema } from '@formily/react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useCollectionManager } from '../../../collection-manager';
+import { useCollectionManager } from '../../../data-source/collection';
+import { markRecordAsNew } from '../../../data-source/collection-record/isNewRecord';
+import { useSchemaComponentContext } from '../../hooks';
 import { AssociationFieldContext } from './context';
 
 export const AssociationFieldProvider = observer(
   (props) => {
     const field = useField<Field>();
-    const { getCollectionJoinField, getCollection } = useCollectionManager();
+    const cm = useCollectionManager();
     const fieldSchema = useFieldSchema();
+
+    // 这里有点奇怪，在 Table 切换显示的组件时，这个组件并不会触发重新渲染，所以增加这个 Hooks 让其重新渲染
+    useSchemaComponentContext();
+
     const allowMultiple = fieldSchema['x-component-props']?.multiple !== false;
     const allowDissociate = fieldSchema['x-component-props']?.allowDissociate !== false;
 
     const collectionField = useMemo(
-      () => getCollectionJoinField(fieldSchema['x-collection-field']),
+      () => cm.getCollectionField(fieldSchema['x-collection-field']),
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [fieldSchema['x-collection-field'], fieldSchema.name],
     );
     const isFileCollection = useMemo(
-      () => getCollection(collectionField?.target)?.template === 'file',
+      () => cm.getCollection(collectionField?.target)?.template === 'file',
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [fieldSchema['x-collection-field']],
     );
@@ -28,9 +43,7 @@ export const AssociationFieldProvider = observer(
       [fieldSchema['x-component-props']?.mode],
     );
 
-    const fieldValue = useMemo(() => JSON.stringify(field.value), [field.value]);
-
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(!field.readPretty);
 
     useEffect(() => {
       setLoading(true);
@@ -55,10 +68,13 @@ export const AssociationFieldProvider = observer(
         }
       }
       if (field.value !== null && field.value !== undefined) {
-        // Nester 子表单时，如果没数据初始化一个 [null] 的占位
+        // Nester 子表单时，如果没数据初始化一个 [{}] 的占位
         if (['Nester', 'PopoverNester'].includes(currentMode) && Array.isArray(field.value)) {
-          if (field.value.length === 0 && ['belongsToMany', 'hasMany'].includes(collectionField.type)) {
-            field.value = [{}];
+          if (
+            field.value.length === 0 &&
+            ['belongsToMany', 'hasMany', 'belongsToArray'].includes(collectionField.type)
+          ) {
+            field.value = [markRecordAsNew({})];
           }
         }
         setLoading(false);
@@ -67,16 +83,15 @@ export const AssociationFieldProvider = observer(
       if (['Nester'].includes(currentMode)) {
         if (['belongsTo', 'hasOne'].includes(collectionField.type)) {
           field.value = {};
-        } else if (['belongsToMany', 'hasMany'].includes(collectionField.type)) {
-          field.value = [{}];
+        } else if (['belongsToMany', 'hasMany', 'belongsToArray'].includes(collectionField.type)) {
+          field.value = [markRecordAsNew({})];
         }
       }
       if (currentMode === 'SubTable') {
         field.value = [];
       }
       setLoading(false);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMode, collectionField, fieldValue]);
+    }, [currentMode, collectionField, field]);
 
     if (loading) {
       return null;
@@ -84,7 +99,7 @@ export const AssociationFieldProvider = observer(
 
     return collectionField ? (
       <AssociationFieldContext.Provider
-        value={{ options: collectionField, field, allowMultiple, allowDissociate, currentMode }}
+        value={{ options: collectionField, field, fieldSchema, allowMultiple, allowDissociate, currentMode }}
       >
         {props.children}
       </AssociationFieldContext.Provider>

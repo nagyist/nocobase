@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import type { Dispatch, SetStateAction } from 'react';
-import { CollectionFieldOptions } from '../collection-manager';
+import { CollectionFieldOptions_deprecated } from '../collection-manager';
 
 export interface VariablesContextType {
   /**
@@ -25,11 +34,31 @@ export interface VariablesContextType {
    * @returns 变量解析后的值
    *
    * ```ts
-   * const value = await parseVariable('{{ $user.name }}');
+   * const { value } = await parseVariable('{{ $user.name }}');
    * console.log(value); // test
    * ```
    */
-  parseVariable: (str: string, localVariable?: VariableOption | VariableOption[]) => Promise<any>;
+  parseVariable: (
+    str: string,
+    localVariable?: VariableOption | VariableOption[],
+    options?: {
+      /** 第一次请求时，需要包含的关系字段 */
+      appends?: string[];
+      /** do not request when the association field is empty */
+      doNotRequest?: boolean;
+      /**
+       * The operator related to the current field, provided when parsing the default value of the field
+       */
+      fieldOperator?: string | void;
+    },
+  ) => Promise<{
+    value: any;
+    /**
+     * 当前变量所对应的数据表的名称，如果为空，则表示当前变量是一个普通类型的变量（字符串、数字等）
+     */
+    collectionName?: string;
+    dataSource?: string;
+  }>;
   /**
    * 注册变量
    * @param variableOption 新变量的配置
@@ -56,8 +85,9 @@ export interface VariablesContextType {
   getCollectionField: (
     variableString: string,
     localVariables?: VariableOption | VariableOption[],
-  ) => Promise<CollectionFieldOptions>;
+  ) => Promise<CollectionFieldOptions_deprecated>;
   removeVariable: (variableName: string) => void;
+  filterVariables?: (params) => boolean; //自定义过滤变量
 }
 
 export interface VariableOption {
@@ -70,4 +100,13 @@ export interface VariableOption {
   };
   /** 变量所对应的数据表的名称 */
   collectionName?: string;
+  /** 数据表所对应的数据源 */
+  dataSource?: string;
+  /**
+   * @default null
+   * 表示当变量解析出来的值是一个 undefined 时，最终应该返回的值。
+   * 默认是 null，这样可以保证数据范围中的 filter 条件不会被清除掉，
+   * 如果想让数据范围中的 filter 条件被清除掉，可以设置 defaultValue 为 undefined。
+   */
+  defaultValue?: any;
 }

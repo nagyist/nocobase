@@ -1,11 +1,37 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Command } from 'commander';
 
 export class AppCommand extends Command {
   private _handleByIPCServer = false;
+  public _preload = false;
 
   ipc() {
     this._handleByIPCServer = true;
     return this;
+  }
+
+  auth() {
+    this['_authenticate'] = true;
+    return this;
+  }
+
+  preload() {
+    this['_authenticate'] = true;
+    this._preload = true;
+    return this;
+  }
+
+  hasCommand(name: string) {
+    const names = this.commands.map((c) => c.name());
+    return names.includes(name);
   }
 
   isHandleByIPCServer() {

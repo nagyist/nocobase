@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Schema, SchemaExpressionScopeContext, SchemaOptionsContext } from '@formily/react';
 import { isValidElement, useContext } from 'react';
 
@@ -9,6 +18,11 @@ interface Props {
 }
 
 const compileCache = {};
+
+const hasVariable = (source: string) => {
+  const reg = /{{.*?}}/g;
+  return reg.test(source);
+};
 
 export const useCompile = ({ noCache }: Props = { noCache: false }) => {
   const options = useContext(SchemaOptionsContext);
@@ -25,13 +39,13 @@ export const useCompile = ({ noCache }: Props = { noCache: false }) => {
 
     // source is Component Object, for example: { 'x-component': "Cascader", type: "array", title: "所属地区(行政区划)" }
     if (source && typeof source === 'object' && !isValidElement(source)) {
-      shouldCompile = true;
       cacheKey = JSON.stringify(source);
+      shouldCompile = hasVariable(cacheKey);
     }
 
     // source is Array, for example: [{ 'title': "{{ ('Admin')}}", name: 'admin' }, { 'title': "{{ ('Root')}}", name: 'root' }]
     if (Array.isArray(source)) {
-      shouldCompile = true;
+      shouldCompile = hasVariable(JSON.stringify(source));
     }
 
     if (shouldCompile) {

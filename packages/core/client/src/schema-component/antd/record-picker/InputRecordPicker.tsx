@@ -1,5 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayField } from '@formily/core';
 import { RecursionField, useField, useFieldSchema } from '@formily/react';
+import { toArr } from '@formily/shared';
 import { Select } from 'antd';
 import { differenceBy, unionBy } from 'lodash';
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -7,15 +17,16 @@ import {
   TableSelectorParamsProvider,
   useTableSelectorProps as useTsp,
 } from '../../../block-provider/TableSelectorProvider';
-import { CollectionProvider, useCollection } from '../../../collection-manager';
+import { CollectionProvider_deprecated, useCollection_deprecated } from '../../../collection-manager';
 import { FormProvider, SchemaComponentOptions } from '../../core';
 import { useCompile } from '../../hooks';
 import { ActionContextProvider, useActionContext } from '../action';
-import { FileSelector } from '../preview';
+import { Upload } from '../upload';
 import { useFieldNames } from './useFieldNames';
 import { getLabelFormatValue, useLabelUiSchema } from './util';
 
 export const RecordPickerContext = createContext(null);
+RecordPickerContext.displayName = 'RecordPickerContext';
 
 function flatData(data) {
   const newArr = [];
@@ -87,7 +98,7 @@ const usePickActionProps = () => {
 const useAssociation = (props) => {
   const fieldSchema = useFieldSchema();
   const { association } = props;
-  const { getField } = useCollection();
+  const { getField } = useCollection_deprecated();
   if (association) {
     return association;
   }
@@ -137,32 +148,24 @@ export const InputRecordPicker: React.FC<any> = (props: IRecordPickerProps) => {
     return Array.isArray(value) ? value?.map((v) => v[fieldNames.value]) : value?.[fieldNames.value];
   };
 
-  const handleSelect = () => {
-    setVisible(true);
-    setSelectedRows([]);
-  };
-
-  const handleRemove = (file) => {
-    const newOptions = options.filter((option) => option.id !== file.id);
-    setOptions(newOptions);
-    if (newOptions.length === 0) {
-      return onChange(null);
-    }
-    onChange(newOptions);
-  };
+  // const handleRemove = (file) => {
+  //   const newOptions = options.filter((option) => option.id !== file.id);
+  //   setOptions(newOptions);
+  //   if (newOptions.length === 0) {
+  //     return onChange(null);
+  //   }
+  //   onChange(newOptions);
+  // };
 
   return (
     <div>
       {showFilePicker ? (
-        <FileSelector
+        <Upload.Attachment
           value={options}
           multiple={multiple}
-          quickUpload={quickUpload}
-          selectFile={selectFile}
           action={`${collectionField?.target}:create`}
-          onSelect={handleSelect}
-          onRemove={handleRemove}
-          onChange={(changed) => {
+          onChange={(files) => {
+            let changed = toArr(files);
             if (changed.every((file) => file.status !== 'uploading')) {
               changed = changed.filter((file) => file.status === 'done').map((file) => file.response.data);
               if (multiple) {
@@ -269,7 +272,7 @@ const Drawer: React.FunctionComponent<{
   };
   return (
     <RecordPickerProvider {...recordPickerProps}>
-      <CollectionProvider allowNull name={collectionField?.target}>
+      <CollectionProvider_deprecated allowNull name={collectionField?.target}>
         <ActionContextProvider openMode="drawer" visible={visible} setVisible={setVisible}>
           <FormProvider>
             <TableSelectorParamsProvider params={{ filter: getFilter() }}>
@@ -285,7 +288,7 @@ const Drawer: React.FunctionComponent<{
             </TableSelectorParamsProvider>
           </FormProvider>
         </ActionContextProvider>
-      </CollectionProvider>
+      </CollectionProvider_deprecated>
     </RecordPickerProvider>
   );
 };

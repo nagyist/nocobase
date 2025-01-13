@@ -1,10 +1,24 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayField } from '@formily/core';
 import { ISchema, Schema, useForm } from '@formily/react';
-import { CollectionFieldOptions, useACLRoleContext, useCollectionManager } from '@nocobase/client';
-import { useContext } from 'react';
+import {
+  CollectionFieldOptions,
+  DEFAULT_DATA_SOURCE_KEY,
+  useACLRoleContext,
+  useDataSourceManager,
+} from '@nocobase/client';
+import { useContext, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChartConfigContext } from '../configure';
-import formatters from '../block/formatters';
+import formatters from '../configure/formatters';
 import { useChartsTranslation } from '../locale';
 import { ChartRendererContext } from '../renderer';
 import { getField, getSelectedFields, parseField, processData } from '../utils';
@@ -22,19 +36,25 @@ export type FieldOption = {
   targetFields?: FieldOption[];
 };
 
+export const useChartDataSource = (dataSource?: string) => {
+  const { current } = useContext(ChartConfigContext);
+  const { dataSource: currentDataSource, collection } = current || {};
+  dataSource = dataSource || currentDataSource || DEFAULT_DATA_SOURCE_KEY;
+  const dm = useDataSourceManager();
+  const ds = dm.getDataSource(dataSource);
+  const fim = dm.collectionFieldInterfaceManager;
+  const cm = ds?.collectionManager;
+  return { cm, fim, collection };
+};
+
 export const useFields = (
-  collection?: string,
+  collectionFields: CollectionFieldOptions[],
 ): (CollectionFieldOptions & {
   key: string;
   label: string;
   value: string;
 })[] => {
-  const { current } = useContext(ChartConfigContext);
-  if (!collection) {
-    collection = current?.collection || '';
-  }
-  const { getCollectionFields } = useCollectionManager();
-  const fields = (getCollectionFields(collection) || [])
+  const fields = (collectionFields || [])
     .filter((field) => {
       return field.interface;
     })
@@ -47,47 +67,52 @@ export const useFields = (
   return fields;
 };
 
-export const useFieldsWithAssociation = (collection?: string) => {
-  const { getCollectionFields, getInterface } = useCollectionManager();
+export const useFieldsWithAssociation = (dataSource?: string, collection?: string) => {
   const { t } = useTranslation();
-  const fields = useFields(collection);
-  return fields.map((field) => {
-    const filterable = getInterface(field.interface)?.filterable;
-    const label = Schema.compile(field.uiSchema?.title || field.name, { t });
-    if (!(filterable && (filterable?.nested || filterable?.children?.length))) {
-      return { ...field, label };
-    }
-    let targetFields = [];
-    if (filterable?.nested) {
-      const nestedFields = (getCollectionFields(field.target) || [])
-        .filter((targetField) => {
-          return targetField.interface;
-        })
-        .map((targetField) => ({
-          ...targetField,
-          key: `${field.name}.${targetField.name}`,
-          label: `${label} / ${Schema.compile(targetField.uiSchema?.title || targetField.name, { t })}`,
-          value: `${field.name}.${targetField.name}`,
-        }));
-      targetFields = [...targetFields, ...nestedFields];
-    }
+  const { cm, fim, collection: _collection } = useChartDataSource(dataSource);
+  const collectionFields = cm.getCollectionFields(collection || _collection);
+  const fields = useFields(collectionFields);
+  return useMemo(
+    () =>
+      fields.map((field) => {
+        const filterable = fim.getFieldInterface(field.interface)?.filterable;
+        const label = Schema.compile(field.uiSchema?.title || field.name, { t });
+        if (!(filterable && (filterable?.nested || filterable?.children?.length))) {
+          return { ...field, label };
+        }
+        let targetFields = [];
+        if (filterable?.nested) {
+          const nestedFields = (cm.getCollectionFields(field.target) || [])
+            .filter((targetField) => {
+              return targetField.interface;
+            })
+            .map((targetField) => ({
+              ...targetField,
+              key: `${field.name}.${targetField.name}`,
+              label: `${label} / ${Schema.compile(targetField.uiSchema?.title || targetField.name, { t })}`,
+              value: `${field.name}.${targetField.name}`,
+            }));
+          targetFields = [...targetFields, ...nestedFields];
+        }
 
-    if (filterable?.children?.length) {
-      const children = filterable.children.map((child: any) => ({
-        ...child,
-        key: `${field.name}.${child.name}`,
-        label: `${label} / ${Schema.compile(child.schema?.title || child.title || child.name, { t })}`,
-        value: `${field.name}.${child.name}`,
-      }));
-      targetFields = [...targetFields, ...children];
-    }
+        if (filterable?.children?.length) {
+          const children = filterable.children.map((child: any) => ({
+            ...child,
+            key: `${field.name}.${child.name}`,
+            label: `${label} / ${Schema.compile(child.schema?.title || child.title || child.name, { t })}`,
+            value: `${field.name}.${child.name}`,
+          }));
+          targetFields = [...targetFields, ...children];
+        }
 
-    return {
-      ...field,
-      label,
-      targetFields,
-    };
-  });
+        return {
+          ...field,
+          label,
+          targetFields,
+        };
+      }),
+    [fields],
+  );
 };
 
 export const useChartFields = (fields: FieldOption[]) => (field: any) => {
@@ -106,6 +131,9 @@ export const useFormatters = (fields: FieldOption[]) => (field: any) => {
   const fieldInterface = getField(fields, selectedField)?.interface;
   switch (fieldInterface) {
     case 'datetime':
+    case 'datetimeTz':
+    case 'unixTimestamp':
+    case 'datetimeNoTz':
     case 'createdAt':
     case 'updatedAt':
       options = formatters.datetime;
@@ -124,22 +152,25 @@ export const useFormatters = (fields: FieldOption[]) => (field: any) => {
 
 export const useCollectionOptions = () => {
   const { t } = useTranslation();
-  const { collections } = useCollectionManager();
-  const { allowAll, parseAction } = useACLRoleContext();
-  const options = collections
-    .filter((collection: { name: string }) => {
-      if (allowAll) {
-        return true;
-      }
+  const dm = useDataSourceManager();
+  const { parseAction } = useACLRoleContext();
+  const allCollections = dm.getAllCollections({
+    filterCollection: (collection) => {
       const params = parseAction(`${collection.name}:list`);
       return params;
-    })
-    .map((collection: { name: string; title: string }) => ({
-      label: collection.title,
-      value: collection.name,
-      key: collection.name,
+    },
+  });
+  const options = allCollections
+    .filter(({ key, isDBInstance }) => key === DEFAULT_DATA_SOURCE_KEY || isDBInstance)
+    .map(({ key, displayName, collections }) => ({
+      value: key,
+      label: displayName,
+      children: collections.map((collection) => ({
+        value: collection.name,
+        label: collection.title,
+      })),
     }));
-  return Schema.compile(options, { t });
+  return useMemo(() => Schema.compile(options, { t }), [options]);
 };
 
 export const useOrderFieldsOptions = (defaultOptions: any[], fields: FieldOption[]) => (field: any) => {
@@ -194,11 +225,124 @@ export const useOrderReaction = (defaultOptions: any[], fields: FieldOption[]) =
   field.setValue(newOrders);
 };
 
-export const useData = (data?: any[], collection?: string) => {
+export const useData = (data?: any[], dataSource?: string, collection?: string) => {
   const { t } = useChartsTranslation();
   const { service, query } = useContext(ChartRendererContext);
-  const fields = useFieldsWithAssociation(collection);
+  const fields = useFieldsWithAssociation(dataSource, collection);
   const form = useForm();
   const selectedFields = getSelectedFields(fields, form?.values?.query || query);
   return processData(selectedFields, service?.data || data || [], { t });
+};
+
+export const useCollectionFieldsOptions = (dataSource: string, collectionName: string, maxDepth = 2, excludes = []) => {
+  const { cm, fim, collection } = useChartDataSource(dataSource);
+  const collectionFields = cm.getCollectionFields(collectionName || collection);
+  const fields = collectionFields.filter((v) => !excludes.includes(v.interface));
+
+  const field2option = (field, depth, prefix?) => {
+    if (!field.interface) {
+      return;
+    }
+    const fieldInterface = fim.getFieldInterface(field.interface);
+    if (!fieldInterface?.filterable) {
+      return;
+    }
+    const { nested, children } = fieldInterface.filterable;
+    const value = prefix ? `${prefix}.${field.name}` : field.name;
+    const option = {
+      ...field,
+      name: field.name,
+      title: field?.uiSchema?.title || field.name,
+      schema: field?.uiSchema,
+      key: value,
+    };
+    if (field.target && depth > maxDepth) {
+      return;
+    }
+    if (depth > maxDepth) {
+      return option;
+    }
+    if (children?.length) {
+      option['children'] = children.map((v) => {
+        return {
+          ...v,
+          key: `${field.name}.${v.name}`,
+        };
+      });
+    }
+    if (nested) {
+      const targetFields = cm.getCollectionFields(field.target).filter((v) => !excludes.includes(v.interface));
+      const options = getOptions(targetFields, depth + 1, field.name).filter(Boolean);
+      option['children'] = option['children'] || [];
+      option['children'].push(...options);
+    }
+    return option;
+  };
+  const getOptions = (fields, depth, prefix?) => {
+    const options = [];
+    fields.forEach((field) => {
+      const option = field2option(field, depth, prefix);
+      if (option) {
+        options.push(option);
+      }
+    });
+    return options;
+  };
+  const options = getOptions(fields, 1);
+  return options;
+};
+
+export const useCollectionFilterOptions = (dataSource: string, collection: string) => {
+  const { cm, fim, collection: _collection } = useChartDataSource(dataSource);
+  return useMemo(() => {
+    const fields = cm.getCollectionFields(collection || _collection);
+    const field2option = (field, depth) => {
+      if (!field.interface) {
+        return;
+      }
+      const fieldInterface = fim.getFieldInterface(field.interface);
+      if (!fieldInterface?.filterable) {
+        return;
+      }
+      const { nested, children, operators } = fieldInterface.filterable;
+      const option = {
+        name: field.name,
+        title: field?.uiSchema?.title || field.name,
+        schema: field?.uiSchema,
+        operators:
+          operators?.filter?.((operator) => {
+            return !operator?.visible || operator.visible(field);
+          }) || [],
+        interface: field.interface,
+      };
+      if (field.target && depth > 2) {
+        return;
+      }
+      if (depth > 2) {
+        return option;
+      }
+      if (children?.length) {
+        option['children'] = children;
+      }
+      if (nested) {
+        const targetFields = cm.getCollectionFields(field.target);
+        const options = getOptions(targetFields, depth + 1).filter(Boolean);
+        option['children'] = option['children'] || [];
+        option['children'].push(...options);
+      }
+      return option;
+    };
+    const getOptions = (fields, depth) => {
+      const options = [];
+      fields.forEach((field) => {
+        const option = field2option(field, depth);
+        if (option) {
+          options.push(option);
+        }
+      });
+      return options;
+    };
+    const options = getOptions(fields, 1);
+    return options;
+  }, [collection, cm, fim]);
 };

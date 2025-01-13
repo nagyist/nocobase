@@ -1,17 +1,25 @@
-import { IField } from '@nocobase/client';
-import { generateNTemplate } from '../locale';
-import { commonSchema } from './schema';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export const polygon: IField = {
-  name: 'polygon',
-  type: 'object',
-  group: 'map',
-  order: 4,
-  title: generateNTemplate('Polygon'),
-  description: generateNTemplate('Polygon'),
-  availableTypes: ['polygon'],
-  sortable: true,
-  default: {
+import { generateNTemplate } from '../locale';
+import { CommonSchema } from './schema';
+
+export class PolygonFieldInterface extends CommonSchema {
+  name = 'polygon';
+  type = 'object';
+  group = 'map';
+  order = 4;
+  title = generateNTemplate('Polygon');
+  description = generateNTemplate('Polygon');
+  availableTypes = ['polygon', 'json'];
+  sortable = true;
+  default = {
     type: 'polygon',
     uiSchema: {
       type: 'void',
@@ -19,6 +27,5 @@ export const polygon: IField = {
       'x-component-designer': 'Map.Designer',
       'x-component-props': {},
     },
-  },
-  ...commonSchema,
-};
+  };
+}

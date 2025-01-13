@@ -1,9 +1,18 @@
-import lodash from 'lodash';
-import { Association, HasOne, Includeable, Model, ModelStatic, Op, Transaction } from 'sequelize';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import lodash, { flatten } from 'lodash';
+import { Association, HasOne, HasOneOptions, Includeable, Model, ModelStatic, Op, Transaction } from 'sequelize';
 import Database from '../database';
 import { appendChildCollectionNameAfterRepositoryFind } from '../listeners/append-child-collection-name-after-repository-find';
 import { OptionsParser } from '../options-parser';
-import { AdjacencyListRepository } from '../repositories/tree-repository/adjacency-list-repository';
+import { Collection } from '../collection';
 
 interface EagerLoadingNode {
   model: ModelStatic<any>;
@@ -44,6 +53,33 @@ const EagerLoadingNodeProto = {
       this.inspectInheritAttribute = true;
     }
   },
+};
+
+const queryParentSQL = (options: {
+  db: Database;
+  nodeIds: any[];
+  collection: Collection;
+  foreignKey: string;
+  targetKey: string;
+}) => {
+  const { collection, db, nodeIds } = options;
+  const tableName = collection.quotedTableName();
+  const { foreignKey, targetKey } = options;
+  const foreignKeyField = collection.model.rawAttributes[foreignKey].field;
+  const targetKeyField = collection.model.rawAttributes[targetKey].field;
+
+  const queryInterface = db.sequelize.getQueryInterface();
+  const q = queryInterface.quoteIdentifier.bind(queryInterface);
+  return `WITH RECURSIVE cte AS (
+      SELECT ${q(targetKeyField)}, ${q(foreignKeyField)}
+      FROM ${tableName}
+      WHERE ${q(targetKeyField)} IN (${nodeIds.join(',')})
+      UNION ALL
+      SELECT t.${q(targetKeyField)}, t.${q(foreignKeyField)}
+      FROM ${tableName} AS t
+      INNER JOIN cte ON t.${q(targetKeyField)} = cte.${q(foreignKeyField)}
+      )
+      SELECT ${q(targetKeyField)} AS ${q(targetKey)}, ${q(foreignKeyField)} AS ${q(foreignKey)} FROM cte`;
 };
 
 export class EagerLoadingTree {
@@ -97,6 +133,12 @@ export class EagerLoadingTree {
         const association = lodash.isString(include.association)
           ? eagerLoadingTreeParent.model.associations[include.association]
           : include.association;
+
+        if (!association) {
+          throw new Error(
+            `Association "${include.association}" not found in model "${eagerLoadingTreeParent.model.name}"`,
+          );
+        }
 
         const associationType = association.associationType;
 
@@ -174,13 +216,26 @@ export class EagerLoadingTree {
           );
         });
 
-        const belongsToAssociationsOnly = includeForFilter.every((include) => {
-          const association = node.model.associations[include.association];
-          if (!association) {
-            return false;
+        const isBelongsToAssociationOnly = (includes, model) => {
+          for (const include of includes) {
+            const association = model.associations[include.association];
+            if (!association) {
+              return false;
+            }
+
+            if (association.associationType != 'BelongsTo') {
+              return false;
+            }
+
+            if (!isBelongsToAssociationOnly(include.include || [], association.target)) {
+              return false;
+            }
           }
-          return association.associationType == 'BelongsTo';
-        });
+
+          return true;
+        };
+
+        const belongsToAssociationsOnly = isBelongsToAssociationOnly(includeForFilter, node.model);
 
         if (belongsToAssociationsOnly) {
           instances = await node.model.findAll({
@@ -196,6 +251,16 @@ export class EagerLoadingTree {
           if (!primaryKeyField) {
             throw new Error(`Model ${node.model.name} does not have primary key`);
           }
+
+          includeForFilter.forEach((include: { association: string }, index: number) => {
+            const association = node.model.associations[include.association];
+            if (association?.associationType == 'BelongsToArray') {
+              includeForFilter[index] = {
+                ...include,
+                ...association.generateInclude(),
+              };
+            }
+          });
 
           // find all ids
           const ids = (
@@ -228,21 +293,39 @@ export class EagerLoadingTree {
 
         // clear filter association value
         const associations = node.model.associations;
-        for (const association of Object.keys(associations)) {
+        for (const [name, association] of Object.entries(associations)) {
+          // if ((association as any).associationType === 'belongsToArray') {
+          //   continue;
+          // }
           for (const instance of instances) {
-            delete instance[association];
-            delete instance.dataValues[association];
+            delete instance[name];
+            delete instance.dataValues[name];
           }
         }
       } else if (ids.length > 0) {
         const association = node.association;
         const associationType = association.associationType;
 
+        let params: any = {};
+
+        const otherFindOptions = lodash.pick(node.includeOption, ['sort']) || {};
+
+        const collection = this.db.modelCollection.get(node.model);
+
+        if (collection && !lodash.isEmpty(otherFindOptions)) {
+          const parser = new OptionsParser(otherFindOptions, {
+            collection,
+          });
+
+          params = parser.toSequelizeParams();
+        }
+
         if (associationType == 'HasOne' || associationType == 'HasMany') {
           const foreignKey = association.foreignKey;
           const foreignKeyValues = node.parent.instances.map((instance) => instance.get(association.sourceKey));
 
           let where: any = { [foreignKey]: foreignKeyValues };
+
           if (node.where) {
             where = {
               [Op.and]: [where, node.where],
@@ -252,7 +335,31 @@ export class EagerLoadingTree {
           const findOptions = {
             where,
             attributes: node.attributes,
-            order: orderOption(association),
+            order: params.order || orderOption(association),
+            transaction,
+          };
+
+          instances = await node.model.findAll(findOptions);
+        }
+
+        if (associationType === 'BelongsToArray') {
+          const targetKey = association.targetKey;
+          const targetKeyValues = node.parent.instances.map((instance) => {
+            return instance.get(association.foreignKey);
+          });
+
+          let where: any = { [targetKey]: Array.from(new Set(flatten(targetKeyValues))) };
+
+          if (node.where) {
+            where = {
+              [Op.and]: [where, node.where],
+            };
+          }
+
+          const findOptions = {
+            where,
+            attributes: node.attributes,
+            order: params.order || orderOption(association),
             transaction,
           };
 
@@ -276,7 +383,7 @@ export class EagerLoadingTree {
           // load parent instances recursively
           if (node.includeOption.recursively && instances.length > 0) {
             const targetKey = association.targetKey;
-            const sql = AdjacencyListRepository.queryParentSQL({
+            const sql = queryParentSQL({
               db: this.db,
               collection,
               foreignKey,
@@ -318,11 +425,15 @@ export class EagerLoadingTree {
         if (associationType == 'BelongsToMany') {
           const foreignKeyValues = node.parent.instances.map((instance) => instance.get(association.sourceKey));
 
-          const pivotAssoc = new HasOne(association.target, association.through.model, {
+          const hasOneOptions: HasOneOptions = {
             as: '_pivot_',
             foreignKey: association.otherKey,
             sourceKey: association.targetKey,
-          });
+          };
+          if (association.through.scope) {
+            hasOneOptions.scope = association.through.scope;
+          }
+          const pivotAssoc = new HasOne(association.target, association.through.model, hasOneOptions);
 
           instances = await node.model.findAll({
             transaction,
@@ -335,7 +446,7 @@ export class EagerLoadingTree {
                 },
               },
             ],
-            order: orderOption(association),
+            order: params.order || orderOption(association),
           });
         }
       }
@@ -357,6 +468,10 @@ export class EagerLoadingTree {
 
         const setParentAccessor = (parentInstance) => {
           const key = association.as;
+
+          if (!key) {
+            return;
+          }
 
           const children = parentInstance.getDataValue(association.as);
 
@@ -394,6 +509,23 @@ export class EagerLoadingTree {
               }
             }
           }
+        }
+
+        if (associationType === 'BelongsToArray') {
+          const { foreignKey, targetKey } = association;
+
+          const instanceMap = node.instances.reduce((mp: { [targetKey: string]: Model }, instance: Model) => {
+            mp[instance.get(targetKey)] = instance;
+            return mp;
+          }, {});
+
+          node.parent.instances.forEach((parentInstance: Model) => {
+            const targetKeys = parentInstance.getDataValue(foreignKey);
+            parentInstance.setDataValue(
+              association.as,
+              targetKeys?.map((targetKey: any) => instanceMap[targetKey]).filter(Boolean),
+            );
+          });
         }
 
         if (associationType == 'BelongsTo') {

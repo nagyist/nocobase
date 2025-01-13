@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database, mockDatabase } from '@nocobase/database';
 import { ViewFieldInference } from '../../view/view-inference';
 
@@ -34,7 +43,7 @@ describe('view inference', function () {
 
     await db.sync();
 
-    const viewName = 'user_posts';
+    const viewName = 'test_view';
 
     const dropViewSQL = `DROP VIEW IF EXISTS ${viewName}`;
     await db.sequelize.query(dropViewSQL);
@@ -118,7 +127,13 @@ describe('view inference', function () {
     });
 
     const createdAt = UserCollection.model.rawAttributes['createdAt'].field;
-    expect(inferredFields[createdAt]['type']).toBe('date');
+    expect(inferredFields[createdAt]['field']).toBeDefined();
+
+    if (db.isMySQLCompatibleDialect()) {
+      expect(inferredFields[createdAt]['type']).toBe('datetimeNoTz');
+    } else {
+      expect(inferredFields[createdAt]['type']).toBe('datetimeTz');
+    }
 
     if (db.options.dialect == 'sqlite') {
       expect(inferredFields['name']).toMatchObject({

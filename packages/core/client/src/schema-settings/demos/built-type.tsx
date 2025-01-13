@@ -117,6 +117,17 @@ const mySchemaSetting = new SchemaSettings({
         },
       },
     },
+    {
+      name: 'demo10', // 唯一标识
+      type: 'item', // 文本类型
+      componentProps: {
+        title: 'Disabled title',
+        onClick() {
+          alert('Disabled');
+        },
+        disabled: true,
+      },
+    },
   ],
 });
 

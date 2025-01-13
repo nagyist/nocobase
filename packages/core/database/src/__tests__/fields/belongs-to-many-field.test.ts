@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { mockDatabase } from '../';
 import { Database } from '../../database';
 import { IdentifierError } from '../../errors/identifier-error';
@@ -7,10 +16,62 @@ describe('belongs to many field', () => {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
   });
 
   afterEach(async () => {
     await db.close();
+  });
+
+  it('should check belongs to many association keys', async () => {
+    const PostTag = db.collection({
+      name: 'postsTags',
+      fields: [
+        {
+          type: 'bigInt',
+          name: 'id',
+          primaryKey: true,
+        },
+        {
+          type: 'text',
+          name: 'postId',
+        },
+        {
+          type: 'text',
+          name: 'tagId',
+        },
+      ],
+    });
+
+    await db.sync();
+
+    const Post = db.collection({
+      name: 'posts',
+      fields: [{ type: 'string', name: 'name' }],
+    });
+
+    const Tag = db.collection({
+      name: 'tags',
+      fields: [{ type: 'string', name: 'name' }],
+    });
+
+    let error;
+
+    try {
+      Post.setField('tags', {
+        type: 'belongsToMany',
+        through: 'postsTags',
+        target: 'tags',
+        foreignKey: 'postId',
+        otherKey: 'tagId',
+      });
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error).toBeDefined();
+
+    console.log(error.message);
   });
 
   it('should define belongs to many when change alias name', async () => {

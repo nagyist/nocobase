@@ -1,21 +1,49 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database } from '@nocobase/database';
-import { MockServer, mockServer } from '@nocobase/test';
+import { createMockServer, MockServer } from '@nocobase/test';
+
 describe('create with exception', () => {
   let app: MockServer;
   beforeEach(async () => {
-    app = mockServer({
+    app = await createMockServer({
       acl: false,
       plugins: ['error-handler'],
     });
-    // app.plugin(PluginErrorHandler, { name: 'error-handler' });
-    await app.loadAndInstall({ clean: true });
-    await app.start();
   });
 
   afterEach(async () => {
     await app.destroy();
   });
 
+  it('should render error with cause property', async () => {
+    app.use(
+      (ctx, next) => {
+        ctx.throw(
+          400,
+          new Error('wrapped error', {
+            cause: new Error('original error'),
+          }),
+        );
+      },
+      { after: 'dataSource' },
+    );
+
+    const response = await app.agent().resource('users').create({
+      values: {},
+    });
+
+    expect(response.statusCode).toEqual(400);
+
+    expect(response.body.errors[0].message).contains('original error');
+  });
   it('should handle not null error', async () => {
     const collection = app.collection({
       name: 'users',
@@ -84,13 +112,7 @@ describe('create with exception', () => {
 
     expect(response.statusCode).toEqual(400);
 
-    expect(response.body).toEqual({
-      errors: [
-        {
-          message: 'name must be unique',
-        },
-      ],
-    });
+    expect(response.body['errors'][0]['message']).toBe('name already exists');
   });
 
   it('should render error with field title', async () => {
@@ -146,7 +168,7 @@ describe('create with exception', () => {
           const db: Database = ctx.db;
 
           const sql = `INSERT INTO ${userCollection.model.tableName} (name)
-                   VALUES (:name)`;
+                       VALUES (:name)`;
 
           await db.sequelize.query(sql, {
             replacements: { name: ctx.action.params.values.name },

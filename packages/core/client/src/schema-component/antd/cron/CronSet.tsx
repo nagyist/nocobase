@@ -1,18 +1,28 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { connect, mapReadPretty, useFieldSchema } from '@formily/react';
 import { Select, SelectProps } from 'antd';
 import React, { useEffect, useMemo, useState } from 'react';
-import { useCollection } from '../../../collection-manager';
+import { useCollection_deprecated } from '../../../collection-manager';
+import { useCollection } from '../../../data-source/collection/CollectionProvider';
 import { useCompile } from '../../hooks';
 import { EllipsisWithTooltip } from '../input';
 import Cron from './Cron';
 
-interface CronSetProps extends SelectProps {
+export interface CronSetProps extends SelectProps {
   onChange: (v: string) => void;
 }
 
 const CronSetInternal = (props: CronSetProps) => {
   const { onChange, value } = props;
-  const { getField } = useCollection();
+  const { getField } = useCollection_deprecated();
   const fieldSchema = useFieldSchema();
   const uiSchemaOptions = getField(fieldSchema?.name)?.uiSchema.enum;
   const compile = useCompile();
@@ -83,12 +93,17 @@ const CronSetInternal = (props: CronSetProps) => {
   );
 };
 
-const ReadPretty = (props: CronSetProps) => {
+export interface CronReadPrettyProps {
+  value?: string;
+  options?: SelectProps['options'];
+}
+
+const ReadPretty = (props: CronReadPrettyProps) => {
   const { value } = props;
   const compile = useCompile();
   const fieldSchema = useFieldSchema();
-  const { getField } = useCollection();
-  const uiSchemaOptions = getField(fieldSchema?.name)?.uiSchema.enum;
+  const collection = useCollection();
+  const uiSchemaOptions = collection?.getField(fieldSchema?.name)?.uiSchema.enum;
 
   const options = useMemo(() => {
     return (props.options || []).concat((uiSchemaOptions as any[]) || []);

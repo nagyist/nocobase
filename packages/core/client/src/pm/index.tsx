@@ -1,18 +1,25 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React from 'react';
-import { Plugin } from '../application/Plugin';
-import { PluginManagerLink, SettingsCenterDropdown } from './PluginManagerLink';
-import { AdminSettingsLayout } from './PluginSetting';
-import { PluginManager } from './PluginManager';
 import { ACLPane } from '../acl/ACLShortcut';
-import { CollectionManagerPane } from '../collection-manager';
+import { ADMIN_SETTINGS_PATH } from '../application';
+import { Plugin } from '../application/Plugin';
 import { BlockTemplatesPane } from '../schema-templates';
 import { SystemSettingsPane } from '../system-settings';
-import { ADMIN_SETTINGS_PATH } from '../application';
-import { Outlet } from 'react-router-dom';
+import { PluginManager } from './PluginManager';
+import { PluginManagerLink, SettingsCenterDropdown } from './PluginManagerLink';
+import { AdminSettingsLayout } from './PluginSetting';
 
+export * from './PluginManager';
 export * from './PluginManagerLink';
 export * from './PluginSetting';
-export * from './PluginManager';
 
 export class PMPlugin extends Plugin {
   async load() {
@@ -22,12 +29,12 @@ export class PMPlugin extends Plugin {
   }
 
   addSettings() {
-    this.app.pluginSettingsManager.add('acl', {
-      title: '{{t("ACL")}}',
-      icon: 'LockOutlined',
-      Component: ACLPane,
-      aclSnippet: 'pm.acl.roles',
-    });
+    // this.app.pluginSettingsManager.add('acl', {
+    //   title: '{{t("Access control")}}',
+    //   icon: 'LockOutlined',
+    //   Component: ACLPane,
+    //   aclSnippet: 'pm.acl.roles',
+    // });
     this.app.pluginSettingsManager.add('ui-schema-storage', {
       title: '{{t("Block templates")}}',
       icon: 'LayoutOutlined',
@@ -39,16 +46,6 @@ export class PMPlugin extends Plugin {
       title: '{{t("System settings")}}',
       Component: SystemSettingsPane,
       aclSnippet: 'pm.system-settings.system-settings',
-    });
-
-    this.app.pluginSettingsManager.add('collection-manager', {
-      icon: 'DatabaseOutlined',
-      title: '{{t("Collection manager")}}',
-    });
-
-    this.app.pluginSettingsManager.add('collection-manager.collections', {
-      title: '{{t("Collections & Fields")}}',
-      Component: CollectionManagerPane,
     });
   }
 

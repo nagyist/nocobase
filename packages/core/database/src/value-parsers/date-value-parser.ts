@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { moment2str } from '@nocobase/utils';
 import dayjs from 'dayjs';
 import { getJsDateFromExcel } from 'excel-date-to-js';
@@ -11,6 +20,14 @@ function isNumeric(str: any) {
 
 export class DateValueParser extends BaseValueParser {
   async setValue(value: any) {
+    if (typeof value === 'string') {
+      const match = /^(\d{4})[-/]?(\d{2})[-/]?(\d{2})$/.exec(value);
+      if (match) {
+        const m = dayjs(`${match[1]}-${match[2]}-${match[3]} 00:00:00.000`);
+        this.value = m.toISOString();
+        return;
+      }
+    }
     if (dayjs.isDayjs(value)) {
       this.value = value;
     } else if (isDate(value)) {

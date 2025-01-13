@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayTable } from '@formily/antd-v5';
 import { ISchema } from '@formily/react';
 import { uid } from '@formily/shared';
@@ -6,9 +15,10 @@ import set from 'lodash/set';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAPIClient, useRequest } from '../../api-client';
+import { useCollectionParentRecordData } from '../../data-source';
 import { RecordProvider, useRecord } from '../../record-provider';
 import { ActionContextProvider, SchemaComponent, useCompile } from '../../schema-component';
-import { useCollectionManager } from '../hooks';
+import { useCollectionManager_deprecated } from '../hooks';
 import { IField } from '../interfaces/types';
 import * as components from './components';
 
@@ -69,12 +79,13 @@ const getSchema = (schema: IField, record: any, compile, getContainer): ISchema 
 
 export const ViewCollectionField = (props) => {
   const record = useRecord();
-  return <ViewFieldAction item={record} {...props} />;
+  const parentRecordData = useCollectionParentRecordData();
+  return <ViewFieldAction item={record} parentItem={parentRecordData} {...props} />;
 };
 
 export const ViewFieldAction = (props) => {
-  const { scope, getContainer, item: record, children } = props;
-  const { getInterface, collections } = useCollectionManager();
+  const { scope, getContainer, item: record, parentItem: parentRecord, children } = props;
+  const { getInterface, collections } = useCollectionManager_deprecated();
   const [visible, setVisible] = useState(false);
   const [schema, setSchema] = useState({});
   const api = useAPIClient();
@@ -90,7 +101,7 @@ export const ViewFieldAction = (props) => {
     });
   }, []);
   return (
-    <RecordProvider record={record}>
+    <RecordProvider record={record} parent={parentRecord}>
       <ActionContextProvider value={{ visible, setVisible }}>
         <a
           onClick={async () => {

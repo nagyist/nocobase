@@ -1,4 +1,5 @@
-import React from 'react';
+import { Field } from '@formily/core';
+import { observer, useField, useFieldSchema } from '@formily/react';
 import {
   Application,
   Plugin,
@@ -7,9 +8,8 @@ import {
   useDesignable,
   useSchemaInitializerRender,
 } from '@nocobase/client';
-import { observer, useField, useFieldSchema } from '@formily/react';
-import { Field } from '@formily/core';
 import { Button } from 'antd';
+import React from 'react';
 
 const Hello = observer(() => {
   const field = useField<Field>();
@@ -38,16 +38,19 @@ const MyInitializerComponent = () => {
 };
 
 const myInitializer = new SchemaInitializer({
-  name: 'MyInitializer',
+  name: 'myInitializer',
   popover: false,
   Component: MyInitializerComponent,
 });
 
-const AddBlockButton = observer(() => {
-  const fieldSchema = useFieldSchema();
-  const { render } = useSchemaInitializerRender(fieldSchema['x-initializer']);
-  return render();
-});
+const AddBlockButton = observer(
+  () => {
+    const fieldSchema = useFieldSchema();
+    const { render } = useSchemaInitializerRender(fieldSchema['x-initializer']);
+    return render();
+  },
+  { displayName: 'AddBlockButton' },
+);
 
 const Page = observer(
   (props) => {
@@ -70,7 +73,7 @@ const Root = () => {
           type: 'void',
           name: 'page',
           'x-component': 'Page',
-          'x-initializer': 'MyInitializer',
+          'x-initializer': 'myInitializer',
           properties: {
             hello1: {
               type: 'void',

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 const chalk = require('chalk');
 const { existsSync } = require('fs');
 const { join, resolve } = require('path');
@@ -29,9 +38,10 @@ async function getProjectVersion() {
 
 class PluginGenerator extends Generator {
   constructor(options) {
-    const { context = {}, ...opts } = options;
+    const { log, context = {}, ...opts } = options;
     super(opts);
     this.context = context;
+    this.log = log || console.log;
   }
 
   async getContext() {
@@ -51,20 +61,19 @@ class PluginGenerator extends Generator {
     const { name } = this.context;
     const target = resolve(process.cwd(), 'packages/plugins/', name);
     if (existsSync(target)) {
-      console.log(chalk.red(`[${name}] plugin already exists.`));
+      this.log(chalk.red(`[${name}] plugin already exists.`));
       return;
     }
-    console.log('Creating plugin');
+    this.log('Creating plugin');
     this.copyDirectory({
       target,
       context: await this.getContext(),
       path: join(__dirname, '../templates/plugin'),
     });
-    console.log('');
+    this.log('');
     genTsConfigPaths();
-    execa.sync('yarn', ['install'], { shell: true, stdio: 'inherit' });
-    // execa.sync('yarn', ['build', `plugins/${name}`], { shell: true, stdio: 'inherit' });
-    console.log(`The plugin folder is in ${chalk.green(`packages/plugins/${name}`)}`);
+    execa.sync('yarn', ['postinstall'], { shell: true, stdio: 'inherit' });
+    this.log(`The plugin folder is in ${chalk.green(`packages/plugins/${name}`)}`);
   }
 }
 

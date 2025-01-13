@@ -1,25 +1,37 @@
-import { Database } from '@nocobase/database';
-import { MockServer, mockServer } from '@nocobase/test';
-import { parseBuilder, parseFieldAndAssociations, queryData } from '../actions/query';
-import ChartsV2Plugin from '../plugin';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { Database, Repository } from '@nocobase/database';
+import { MockServer, createMockServer } from '@nocobase/test';
 import compose from 'koa-compose';
+import { parseFieldAndAssociations, queryData } from '../actions/query';
+import { createQueryParser } from '../query-parser';
 
 describe('api', () => {
   let app: MockServer;
   let db: Database;
+  let repo: Repository;
 
   beforeAll(async () => {
-    app = mockServer({
+    app = await createMockServer({
       acl: true,
-      plugins: ['users', 'auth'],
+      plugins: ['users', 'auth', 'data-visualization'],
     });
-    app.plugin(ChartsV2Plugin);
-    await app.loadAndInstall({ clean: true });
     db = app.db;
 
     db.collection({
       name: 'chart_test',
       fields: [
+        {
+          type: 'bigInt',
+          name: 'id',
+        },
         {
           type: 'double',
           name: 'price',
@@ -39,11 +51,11 @@ describe('api', () => {
       ],
     });
     await db.sync();
-    const repo = db.getRepository('chart_test');
+    repo = db.getRepository('chart_test');
     await repo.create({
       values: [
-        { price: 1, count: 1, title: 'title1', createdAt: '2023-02-02' },
-        { price: 2, count: 2, title: 'title2', createdAt: '2023-01-01' },
+        { id: 1, price: 1, count: 1, title: 'title1', createdAt: '2023-02-02' },
+        { id: 2, price: 2, count: 2, title: 'title2', createdAt: '2023-01-01' },
       ],
     });
   });
@@ -54,6 +66,7 @@ describe('api', () => {
 
   test('query', async () => {
     const ctx = {
+      app,
       db,
       action: {
         params: {
@@ -79,12 +92,14 @@ describe('api', () => {
         },
       },
     } as any;
-    await compose([parseFieldAndAssociations, parseBuilder, queryData])(ctx, async () => {});
+    const queryParser = createQueryParser(db);
+    await compose([parseFieldAndAssociations, queryParser.parse(), queryData])(ctx, async () => {});
     expect(ctx.action.params.values.data).toBeDefined();
   });
 
   test('query with sort', async () => {
     const ctx = {
+      app,
       db,
       action: {
         params: {
@@ -112,7 +127,8 @@ describe('api', () => {
         },
       },
     } as any;
-    await compose([parseFieldAndAssociations, parseBuilder, queryData])(ctx, async () => {});
+    const queryParser = createQueryParser(db);
+    await compose([parseFieldAndAssociations, queryParser.parse(), queryData])(ctx, async () => {});
     expect(ctx.action.params.values.data).toBeDefined();
     expect(ctx.action.params.values.data).toMatchObject([{ createdAt: '2023-01' }, { createdAt: '2023-02' }]);
   });

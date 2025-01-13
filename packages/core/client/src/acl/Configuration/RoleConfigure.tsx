@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { onFieldChange } from '@formily/core';
 import { connect } from '@formily/react';
 import { Checkbox } from 'antd';
@@ -98,14 +107,14 @@ export const RoleConfigure = () => {
             'x-decorator': 'FormItem',
             'x-component': 'SnippetCheckboxGroup',
           },
-          'strategy.actions': {
-            title: t('Global action permissions'),
-            description: t(
-              'All collections use general action permissions by default; permission configured individually will override the default one.',
-            ),
-            'x-component': 'StrategyActions',
-            'x-decorator': 'FormItem',
-          },
+          // 'strategy.actions': {
+          //   title: t('Global action permissions'),
+          //   description: t(
+          //     'All collections use general action permissions by default; permission configured individually will override the default one.',
+          //   ),
+          //   'x-component': 'StrategyActions',
+          //   'x-decorator': 'FormItem',
+          // },
           allowNewMenu: {
             title: t('Menu permissions'),
             'x-decorator': 'FormItem',

@@ -1,39 +1,34 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { Cache } from '@nocobase/cache';
 import { Model } from '@nocobase/database';
 import { InstallOptions, Plugin } from '@nocobase/server';
 import { resolve } from 'path';
-import { namespace, presetAuthenticator, presetAuthType } from '../preset';
+import { namespace, presetAuthType, presetAuthenticator } from '../preset';
 import authActions from './actions/auth';
 import authenticatorsActions from './actions/authenticators';
 import { BasicAuth } from './basic-auth';
-import { enUS, zhCN } from './locale';
 import { AuthModel } from './model/authenticator';
-import { TokenBlacklistService } from './token-blacklist';
-import { Cache } from '@nocobase/cache';
 import { Storer } from './storer';
+import { TokenBlacklistService } from './token-blacklist';
+import { tval } from '@nocobase/utils';
 
-export class AuthPlugin extends Plugin {
+export class PluginAuthServer extends Plugin {
   cache: Cache;
 
   afterAdd() {}
   async beforeLoad() {
-    this.app.i18n.addResources('zh-CN', namespace, zhCN);
-    this.app.i18n.addResources('en-US', namespace, enUS);
-
     this.app.db.registerModels({ AuthModel });
   }
 
   async load() {
-    // Set up database
-    await this.db.import({
-      directory: resolve(__dirname, 'collections'),
-    });
-    this.db.addMigrations({
-      namespace: 'auth',
-      directory: resolve(__dirname, 'migrations'),
-      context: {
-        plugin: this,
-      },
-    });
     this.cache = await this.app.cacheManager.createCache({
       name: 'auth',
       prefix: 'auth',
@@ -54,14 +49,47 @@ export class AuthPlugin extends Plugin {
 
     this.app.authManager.registerTypes(presetAuthType, {
       auth: BasicAuth,
-      title: 'Password',
+      title: tval('Password', { ns: namespace }),
+      getPublicOptions: (options) => {
+        const usersCollection = this.db.getCollection('users');
+        let signupForm = options?.public?.signupForm || [];
+        signupForm = signupForm.filter((item: { show: boolean }) => item.show);
+        if (
+          !(
+            signupForm.length &&
+            signupForm.some(
+              (item: { field: string; show: boolean; required: boolean }) =>
+                ['username', 'email'].includes(item.field) && item.show && item.required,
+            )
+          )
+        ) {
+          // At least one of the username or email fields is required
+          signupForm.unshift({ field: 'username', show: true, required: true });
+        }
+        signupForm = signupForm
+          .filter((field: { show: boolean }) => field.show)
+          .map((item: { field: string; required: boolean }) => {
+            const field = usersCollection.getField(item.field);
+            return {
+              ...item,
+              uiSchema: {
+                ...field.options?.uiSchema,
+                required: item.required,
+              },
+            };
+          });
+        return {
+          ...options?.public,
+          signupForm,
+        };
+      },
     });
     // Register actions
     Object.entries(authActions).forEach(
-      ([action, handler]) => this.app.resourcer.getResource('auth')?.addAction(action, handler),
+      ([action, handler]) => this.app.resourceManager.getResource('auth')?.addAction(action, handler),
     );
     Object.entries(authenticatorsActions).forEach(([action, handler]) =>
-      this.app.resourcer.registerAction(`authenticators:${action}`, handler),
+      this.app.resourceManager.registerActionHandler(`authenticators:${action}`, handler),
     );
     // Set up ACL
     ['check', 'signIn', 'signUp'].forEach((action) => this.app.acl.allow('auth', action));
@@ -80,6 +108,9 @@ export class AuthPlugin extends Plugin {
     this.app.db.on('users.afterDestroy', async (user: Model) => {
       const cache = this.app.cache as Cache;
       await cache.del(`auth:${user.id}`);
+    });
+    this.app.on('cache:del:auth', async ({ userId }) => {
+      await this.cache.del(`auth:${userId}`);
     });
   }
 
@@ -107,4 +138,4 @@ export class AuthPlugin extends Plugin {
   async remove() {}
 }
 
-export default AuthPlugin;
+export default PluginAuthServer;

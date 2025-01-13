@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { getValuesByPath } from '../getValuesByPath';
 
 describe('getValuesByPath', () => {
@@ -78,6 +87,14 @@ describe('getValuesByPath', () => {
       a: { b: 1 },
     };
     const result = getValuesByPath(obj, 'a.c', null);
+    expect(result).toEqual(null);
+  });
+
+  it('when return is null', () => {
+    const obj = {
+      a: { b: null },
+    };
+    const result = getValuesByPath(obj, 'a.b');
     expect(result).toEqual(null);
   });
 

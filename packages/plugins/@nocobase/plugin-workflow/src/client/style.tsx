@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { createStyles } from '@nocobase/client';
 
 const useStyles = createStyles(({ css, token }) => {
@@ -87,6 +96,9 @@ const useStyles = createStyles(({ css, token }) => {
     `,
 
     workflowVersionDropdownClass: css`
+      max-height: 80vh;
+      overflow-y: auto;
+
       .ant-dropdown-menu-item {
         .ant-dropdown-menu-title-content {
           strong {
@@ -200,8 +212,7 @@ const useStyles = createStyles(({ css, token }) => {
         align-items: center;
         justify-content: center;
         width: 0;
-        height: 4em;
-        padding: 1em 0;
+        height: 6em;
         border-left: 1px dashed ${token.colorBgLayout};
 
         .anticon {
@@ -252,8 +263,8 @@ const useStyles = createStyles(({ css, token }) => {
       .workflow-node-remove-button {
         display: none;
         position: absolute;
-        right: 0.5em;
-        top: 0.5em;
+        right: 0;
+        top: 0;
         color: ${token.colorText};
 
         &[disabled] {
@@ -301,19 +312,24 @@ const useStyles = createStyles(({ css, token }) => {
     nodeJobButtonClass: css`
       display: flex;
       position: absolute;
-      top: calc(1em - 1px);
-      right: 1em;
+      top: 0;
+      right: 0;
       justify-content: center;
       align-items: center;
       color: ${token.colorTextLightSolid};
     `,
 
     nodeHeaderClass: css`
-      position: relative;
+      display: flex;
+      margin-bottom: 0.5em;
+
+      .workflow-node-actions {
+        position: relative;
+      }
     `,
 
     nodeMetaClass: css`
-      margin-bottom: 0.5em;
+      flex-grow: 1;
 
       .workflow-node-id {
         color: ${token.colorTextDescription};
@@ -341,8 +357,7 @@ const useStyles = createStyles(({ css, token }) => {
     `,
 
     nodeJobResultClass: css`
-      padding: 1em;
-      background-color: ${token.colorBgContainer};
+      background-color: #f3f3f3;
     `,
 
     addButtonClass: css`

@@ -1,10 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+export * from './AntdSchemaComponentProvider';
+export { genStyleHook } from './__builtins__';
 export * from './action';
 export * from './appends-tree-select';
 export * from './association-field';
 export * from './association-select';
 export * from './auto-complete';
 export * from './block-item';
-export * from './calendar';
 export * from './card-item';
 export * from './cascader';
 export * from './checkbox';
@@ -21,13 +31,11 @@ export * from './form-dialog';
 export * from './form-item';
 export * from './form-v2';
 export * from './g2plot';
-export * from './gantt';
 export * from './grid';
 export * from './grid-card';
 export * from './icon-picker';
 export * from './input';
 export * from './input-number';
-export * from './kanban';
 export * from './list';
 export * from './markdown';
 export * from './menu';
@@ -51,5 +59,10 @@ export * from './time-picker';
 export * from './tree-select';
 export * from './upload';
 export * from './variable';
+export * from './unix-timestamp';
+export * from './nanoid-input';
+export * from './error-fallback';
+export * from './expiresRadio';
+export * from './divider';
 
 import './index.less';

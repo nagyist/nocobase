@@ -1,10 +1,18 @@
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export default {
-  namespace: 'users.users',
-  duplicator: {
-    dumpable: 'optional',
-    with: 'rolesUsers',
+import { defineCollection } from '@nocobase/database';
+
+export default defineCollection({
+  origin: '@nocobase/plugin-users',
+  dumpRules: {
+    group: 'user',
   },
   name: 'users',
   title: '{{t("Users")}}',
@@ -13,6 +21,7 @@ export default {
   createdBy: true,
   updatedBy: true,
   logging: true,
+  shared: true,
   fields: [
     {
       name: 'id',
@@ -60,7 +69,7 @@ export default {
       },
     },
     {
-      interface: 'phone',
+      interface: 'input',
       type: 'string',
       name: 'phone',
       unique: true,
@@ -68,7 +77,6 @@ export default {
         type: 'string',
         title: '{{t("Phone")}}',
         'x-component': 'Input',
-        'x-validator': 'phone',
         required: true,
       },
     },
@@ -82,6 +90,10 @@ export default {
         title: '{{t("Password")}}',
         'x-component': 'Password',
       },
+    },
+    {
+      name: 'passwordChangeTz',
+      type: 'bigInt',
     },
     {
       type: 'string',
@@ -98,5 +110,35 @@ export default {
       name: 'systemSettings',
       defaultValue: {},
     },
+    {
+      uiSchema: {
+        'x-component-props': {
+          dateFormat: 'YYYY-MM-DD',
+        },
+        type: 'datetime',
+        title: '{{t("Created at")}}',
+        'x-component': 'DatePicker',
+        'x-read-pretty': true,
+      },
+      name: 'createdAt',
+      type: 'date',
+      field: 'createdAt',
+      interface: 'createdAt',
+    },
+    {
+      uiSchema: {
+        'x-component-props': {
+          dateFormat: 'YYYY-MM-DD',
+        },
+        type: 'datetime',
+        title: '{{t("Last updated at")}}',
+        'x-component': 'DatePicker',
+        'x-read-pretty': true,
+      },
+      name: 'updatedAt',
+      type: 'date',
+      field: 'updatedAt',
+      interface: 'updatedAt',
+    },
   ],
-} as CollectionOptions;
+});

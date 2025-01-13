@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Registry } from '@nocobase/utils';
 import WorkflowPlugin, { Processor, JOB_STATUS, Instruction } from '@nocobase/plugin-workflow';
 
@@ -85,25 +94,30 @@ function getMode(mode) {
 export default class extends Instruction {
   formTypes = new Registry<FormHandler>();
 
-  constructor(public plugin: WorkflowPlugin) {
-    super(plugin);
+  constructor(public workflow: WorkflowPlugin) {
+    super(workflow);
 
     initFormTypes(this);
   }
 
   async run(node, prevJob, processor: Processor) {
     const { mode, ...config } = node.config as ManualConfig;
-    const assignees = [...new Set(processor.getParsedValue(config.assignees, node.id) || [])];
+    const assignees = [...new Set(processor.getParsedValue(config.assignees, node.id).flat().filter(Boolean))];
 
     const job = await processor.saveJob({
-      status: JOB_STATUS.PENDING,
+      status: assignees.length ? JOB_STATUS.PENDING : JOB_STATUS.RESOLVED,
       result: mode ? [] : null,
       nodeId: node.id,
+      nodeKey: node.key,
       upstreamId: prevJob?.id ?? null,
     });
 
+    if (!assignees.length) {
+      return job;
+    }
+
     // NOTE: batch create users jobs
-    const UserJobModel = processor.options.plugin.db.getModel('users_jobs');
+    const UserJobModel = this.workflow.app.db.getModel('users_jobs');
     await UserJobModel.bulkCreate(
       assignees.map((userId) => ({
         userId,
@@ -114,7 +128,7 @@ export default class extends Instruction {
         status: JOB_STATUS.PENDING,
       })),
       {
-        transaction: processor.transaction,
+        // transaction: processor.transaction,
       },
     );
 
@@ -123,15 +137,16 @@ export default class extends Instruction {
 
   async resume(node, job, processor: Processor) {
     // NOTE: check all users jobs related if all done then continue as parallel
-    const { assignees = [], mode } = node.config as ManualConfig;
+    const { mode } = node.config as ManualConfig;
+    const assignees = [...new Set(processor.getParsedValue(node.config.assignees, node.id).flat().filter(Boolean))];
 
-    const UserJobModel = processor.options.plugin.db.getModel('users_jobs');
+    const UserJobModel = this.workflow.app.db.getModel('users_jobs');
     const distribution = await UserJobModel.count({
       where: {
         jobId: job.id,
       },
       group: ['status'],
-      transaction: processor.transaction,
+      // transaction: processor.transaction,
     });
 
     const submitted = distribution.reduce(

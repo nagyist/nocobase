@@ -40,6 +40,20 @@ const schema = {
   },
 };
 
+const collection = {
+  name: 'posts',
+  fields: [
+    {
+      name: 'input',
+      type: 'attachment',
+    },
+    {
+      name: 'read',
+      type: 'attachment',
+    },
+  ],
+};
+
 export default () => {
   return (
     <APIClientProvider apiClient={apiClient}>

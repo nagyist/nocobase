@@ -1,11 +1,19 @@
-import { App, Card, Divider, Popconfirm, Space, Switch, Typography, message } from 'antd';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { DeleteOutlined, LoadingOutlined, ReadOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
+import { css } from '@emotion/css';
+import { App, Card, Divider, Modal, Popconfirm, Result, Space, Switch, Typography } from 'antd';
 import classnames from 'classnames';
 import React, { FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-
-import { DeleteOutlined, ReadOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
-import { css } from '@emotion/css';
 import { useAPIClient } from '../api-client';
 import { useApp } from '../application';
 import { PluginDetail } from './PluginDetail';
@@ -20,14 +28,25 @@ interface IPluginInfo extends IPluginCard {
 function PluginInfo(props: IPluginInfo) {
   const { data, onClick } = props;
   const app = useApp();
-  const { name, displayName, isCompatible, packageName, updatable, builtIn, enabled, description, type, error } = data;
+  const {
+    name,
+    displayName,
+    isCompatible,
+    packageName,
+    updatable,
+    builtIn,
+    enabled,
+    removable,
+    description,
+    error,
+    homepage,
+  } = data;
   const { styles, theme } = useStyles();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const api = useAPIClient();
   const { modal } = App.useApp();
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const [enabledVal, setEnabledVal] = useState(enabled);
   const reload = () => window.location.reload();
   const title = displayName || name || packageName;
   return (
@@ -78,7 +97,15 @@ function PluginInfo(props: IPluginInfo) {
         `}
         actions={[
           <Space split={<Divider type="vertical" />} key={'1'}>
-            <a key={'5'}>
+            <a
+              key={'5'}
+              href={homepage}
+              target="_blank"
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              rel="noreferrer"
+            >
               <ReadOutlined /> {t('Docs')}
             </a>
             {updatable && (
@@ -92,30 +119,58 @@ function PluginInfo(props: IPluginInfo) {
                 <ReloadOutlined /> {t('Update')}
               </a>
             )}
-            {enabled ? (
-              app.pluginSettingsManager.has(name) && (
-                <a
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(app.pluginSettingsManager.getRoutePath(name));
-                  }}
-                >
-                  <SettingOutlined /> {t('Settings')}
-                </a>
-              )
-            ) : (
+            {enabled && app.pluginSettingsManager.has(name) && (
+              <a
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(app.pluginSettingsManager.getRoutePath(name));
+                }}
+              >
+                <SettingOutlined /> {t('Settings')}
+              </a>
+            )}
+            {removable && (
               <Popconfirm
                 key={'delete'}
                 disabled={builtIn}
                 title={t('Are you sure to delete this plugin?')}
                 onConfirm={async (e) => {
                   e.stopPropagation();
-                  api.request({
+                  await api.request({
                     url: `pm:remove`,
                     params: {
                       filterByTk: name,
                     },
                   });
+                  Modal.info({
+                    icon: null,
+                    width: 520,
+                    content: (
+                      <Result
+                        icon={<LoadingOutlined />}
+                        title={t('Plugin removing')}
+                        subTitle={t('Plugin is removing, please wait...')}
+                      />
+                    ),
+                    footer: null,
+                  });
+                  function __health_check() {
+                    api
+                      .silent()
+                      .request({
+                        url: `__health_check`,
+                        method: 'get',
+                      })
+                      .then((response) => {
+                        if (response?.data === 'ok') {
+                          window.location.reload();
+                        }
+                      })
+                      .catch((error) => {
+                        // console.error('Health check failed:', error);
+                      });
+                  }
+                  setInterval(__health_check, 1000);
                 }}
                 onCancel={(e) => e.stopPropagation()}
                 okText={t('Yes')}
@@ -140,17 +195,44 @@ function PluginInfo(props: IPluginInfo) {
             onChange={async (checked, e) => {
               e.stopPropagation();
               if (!isCompatible && checked) {
-                message.error(t("Dependencies check failed, can't enable."));
+                modal.confirm({
+                  title: t('Plugin dependency version mismatch'),
+                  content: t(
+                    'The current dependency version of the plugin does not match the version of the application and may not work properly. Are you sure you want to continue enabling the plugin?',
+                  ),
+                  onOk: async () => {
+                    await api.request({
+                      url: `pm:enable`,
+                      params: {
+                        filterByTk: name,
+                      },
+                    });
+                  },
+                });
                 return;
               }
-              await api.request({
-                url: `pm:${checked ? 'enable' : 'disable'}`,
-                params: {
-                  filterByTk: name,
-                },
-              });
+              if (!checked) {
+                modal.confirm({
+                  title: t('Are you sure to disable this plugin?'),
+                  onOk: async () => {
+                    await api.request({
+                      url: `pm:disable`,
+                      params: {
+                        filterByTk: name,
+                      },
+                    });
+                  },
+                });
+              } else {
+                await api.request({
+                  url: `pm:enable`,
+                  params: {
+                    filterByTk: name,
+                  },
+                });
+              }
             }}
-            checked={enabledVal}
+            checked={!!enabled}
           ></Switch>,
         ].filter(Boolean)}
       >
@@ -171,34 +253,6 @@ function PluginInfo(props: IPluginInfo) {
             )
           }
         />
-        {/* {!isCompatible && !error && (
-          <Button style={{ padding: 0 }} type="link">
-            <Typography.Text type="danger">{t('Dependencies check failed')}</Typography.Text>
-          </Button>
-        )} */}
-        {/*
-          <Col span={8}>
-            <Space direction="vertical" align="end" style={{ display: 'flex', marginTop: -10 }}>
-              {type && (
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowUploadForm(true);
-                  }}
-                  ghost
-                  type="primary"
-                >
-                  {t('Update plugin')}
-                </Button>
-              )}
-
-              {!error && (
-                <Button style={{ padding: 0 }} type="link">
-                  {t('More details')}
-                </Button>
-              )}
-            </Space>
-          </Col> */}
       </Card>
     </>
   );

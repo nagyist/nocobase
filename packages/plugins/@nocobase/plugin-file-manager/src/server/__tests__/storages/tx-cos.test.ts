@@ -1,7 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import path from 'path';
 import { MockServer } from '@nocobase/test';
-import txStorage from '../../storages/tx-cos';
-import { FILE_FIELD_NAME } from '../../constants';
+import TXCOSStorage from '../../storages/tx-cos';
+import { FILE_FIELD_NAME } from '../../../constants';
 import { getApp, requestFile } from '..';
 import { Database } from '@nocobase/database';
 
@@ -12,6 +21,7 @@ describe('storage:tx-cos', () => {
   let agent;
   let db: Database;
   let storage;
+  const txStorage = new TXCOSStorage();
 
   beforeEach(async () => {
     app = await getApp();

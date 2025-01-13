@@ -1,15 +1,23 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Cache } from '@nocobase/cache';
 import { InstallOptions, Plugin } from '@nocobase/server';
 import { query } from './actions/query';
-import { resolve } from 'path';
 
-export class DataVisualizationPlugin extends Plugin {
+export class PluginDataVisualizationServer extends Plugin {
   cache: Cache;
 
   afterAdd() {}
 
   beforeLoad() {
-    this.app.resource({
+    this.app.resourceManager.define({
       name: 'charts',
       actions: {
         query,
@@ -19,14 +27,6 @@ export class DataVisualizationPlugin extends Plugin {
   }
 
   async load() {
-    this.db.addMigrations({
-      namespace: 'data-visulization',
-      directory: resolve(__dirname, 'migrations'),
-      context: {
-        plugin: this,
-      },
-    });
-
     this.cache = await this.app.cacheManager.createCache({
       name: 'data-visualization',
       store: 'memory',
@@ -44,4 +44,4 @@ export class DataVisualizationPlugin extends Plugin {
   async remove() {}
 }
 
-export default DataVisualizationPlugin;
+export default PluginDataVisualizationServer;

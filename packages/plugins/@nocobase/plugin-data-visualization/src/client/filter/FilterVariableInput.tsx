@@ -1,31 +1,36 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import {
   SchemaComponent,
-  Variable,
   VariableInput,
   VariableScopeProvider,
   getShouldChange,
-  useDateVariable,
-  useUserVariable,
+  CollectionProvider,
 } from '@nocobase/client';
-import React, { useEffect, useMemo } from 'react';
 import { useMemoizedFn } from 'ahooks';
+import React, { useEffect } from 'react';
+import { useGeneralVariableOptions } from '../hooks';
 
 export const ChartFilterVariableInput: React.FC<any> = (props) => {
   const { value, onChange, fieldSchema } = props;
-  const userVariable = useUserVariable({
-    collectionField: { uiSchema: fieldSchema },
-    uiSchema: fieldSchema,
-  });
-  const dateVariable = useDateVariable({
-    operator: fieldSchema['x-component-props']?.['filter-operator'],
-    schema: fieldSchema,
-    noDisabled: true,
-  });
-  const options = useMemo(() => [userVariable, dateVariable].filter(Boolean), [dateVariable, userVariable]);
+  const collectionField = fieldSchema?.['x-collection-field'] || '';
+  const [collection] = collectionField.split('.');
+  const options = useGeneralVariableOptions(fieldSchema, fieldSchema['x-component-props']?.['filter-operator']);
   const schema = {
     ...fieldSchema,
     'x-component': fieldSchema['x-component'] || 'Input',
-    'x-decorator': '',
+    'x-decorator': 'CollectionProvider',
+    'x-decorator-props': {
+      name: collection,
+      allowNull: !collection,
+    },
     title: '',
     name: 'value',
     default: '',
@@ -42,7 +47,7 @@ export const ChartFilterVariableInput: React.FC<any> = (props) => {
     <VariableScopeProvider scope={options}>
       <VariableInput
         {...componentProps}
-        renderSchemaComponent={() => <SchemaComponent schema={schema} />}
+        renderSchemaComponent={() => <SchemaComponent schema={schema} components={{ CollectionProvider }} />}
         fieldNames={{}}
         value={value?.value}
         scope={options}

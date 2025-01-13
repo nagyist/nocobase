@@ -1,6 +1,15 @@
-import { Database, Model } from '@nocobase/database';
-import { MockServer, mockServer } from '@nocobase/test';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { BaseAuth } from '@nocobase/auth';
+import { Database, Model } from '@nocobase/database';
+import { MockServer, createMockServer } from '@nocobase/test';
 
 describe('auth', () => {
   let auth: BaseAuth;
@@ -9,10 +18,9 @@ describe('auth', () => {
   let user: Model;
 
   beforeEach(async () => {
-    app = mockServer({
+    app = await createMockServer({
       plugins: ['users', 'auth'],
     });
-    await app.quickstart({ clean: true });
     db = app.db;
 
     user = await db.getRepository('users').create({

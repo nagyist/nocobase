@@ -1,13 +1,26 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayField } from '@formily/core';
 import { Schema, useField, useFieldSchema } from '@formily/react';
+import _ from 'lodash';
 import uniq from 'lodash/uniq';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useCollectionManager } from '../collection-manager';
+import { useCollectionManager_deprecated } from '../collection-manager';
+import { useCollectionParentRecordData } from '../data-source/collection-record/CollectionRecordProvider';
 import { isInFilterFormBlock } from '../filter-provider';
+import { mergeFilter } from '../filter-provider/utils';
+import { withDynamicSchemaProps } from '../hoc/withDynamicSchemaProps';
 import { RecordProvider, useRecord } from '../record-provider';
 import { SchemaComponentOptions } from '../schema-component';
-import { BlockProvider, RenderChildrenWithAssociationFilter, useBlockRequestContext } from './BlockProvider';
-import { mergeFilter } from './SharedFilterProvider';
+import { BlockProvider, useBlockRequestContext } from './BlockProvider';
+import { useParsedFilter } from './hooks';
 
 type Params = {
   filter?: any;
@@ -16,8 +29,13 @@ type Params = {
   sort?: any;
 };
 
+/**
+ * @internal
+ */
 export const TableSelectorContext = createContext<any>({});
+TableSelectorContext.displayName = 'TableSelectorContext';
 const TableSelectorParamsContext = createContext<Params>({}); // 用于传递参数
+TableSelectorParamsContext.displayName = 'TableSelectorParamsContext';
 
 type TableSelectorProviderProps = {
   params: Record<string, any>;
@@ -43,15 +61,16 @@ export const TableSelectorParamsProvider = ({ params, children }: { params: Para
 };
 
 const InternalTableSelectorProvider = (props) => {
-  const { params, rowKey, extraFilter } = props;
+  const { params, rowKey, extraFilter, expandFlag: propsExpandFlag = false } = props;
   const field = useField();
   const { resource, service } = useBlockRequestContext();
-  const [expandFlag, setExpandFlag] = useState(false);
+  const [expandFlag, setExpandFlag] = useState(propsExpandFlag);
+  const parentRecordData = useCollectionParentRecordData();
   // if (service.loading) {
   //   return <Spin />;
   // }
   return (
-    <RecordProvider record={{}}>
+    <RecordProvider record={{}} parent={parentRecordData}>
       <TableSelectorContext.Provider
         value={{
           field,
@@ -66,14 +85,14 @@ const InternalTableSelectorProvider = (props) => {
           },
         }}
       >
-        <RenderChildrenWithAssociationFilter {...props} />
+        {props.children}
       </TableSelectorContext.Provider>
     </RecordProvider>
   );
 };
 
 const useAssociationNames2 = (collection) => {
-  const { getCollectionFields } = useCollectionManager();
+  const { getCollectionFields } = useCollectionManager_deprecated();
   const names = getCollectionFields(collection)
     ?.filter((field) => field.target)
     .map((field) => field.name);
@@ -84,12 +103,12 @@ export const recursiveParent = (schema: Schema, component) => {
   return schema['x-component'] === component
     ? schema
     : schema.parent
-    ? recursiveParent(schema.parent, component)
-    : null;
+      ? recursiveParent(schema.parent, component)
+      : null;
 };
 
 const useAssociationNames = (collection) => {
-  const { getCollectionFields } = useCollectionManager();
+  const { getCollectionFields } = useCollectionManager_deprecated();
   const collectionFields = getCollectionFields(collection);
   const associationFields = new Set();
   for (const collectionField of collectionFields) {
@@ -135,28 +154,29 @@ const useAssociationNames = (collection) => {
   );
 };
 
-export const TableSelectorProvider = (props: TableSelectorProviderProps) => {
+export const TableSelectorProvider = withDynamicSchemaProps((props: TableSelectorProviderProps) => {
   const parentParams = useTableSelectorParams();
   const fieldSchema = useFieldSchema();
-  const { getCollectionJoinField, getCollectionFields } = useCollectionManager();
+  const { getCollectionJoinField, getCollectionFields } = useCollectionManager_deprecated();
   const record = useRecord();
-  const { getCollection } = useCollectionManager();
-  const collection = getCollection(props.collection);
+  const { getCollection } = useCollectionManager_deprecated();
   const { treeTable } = fieldSchema?.['x-decorator-props'] || {};
   const collectionFieldSchema = recursiveParent(fieldSchema, 'CollectionField');
   const collectionField = getCollectionJoinField(collectionFieldSchema?.['x-collection-field']);
+  const collection = getCollection(collectionField?.collectionName);
+  const primaryKey = collection?.getPrimaryKey();
   const appends = useAssociationNames(props.collection);
   let params = { ...props.params };
   if (props.dragSort) {
     params['sort'] = ['sort'];
   }
-  if (collectionField?.target === collectionField?.collectionName && collection?.tree && treeTable !== false) {
+  if (collectionField?.target === collectionField?.collectionName && collection?.tree && treeTable) {
     params['tree'] = true;
     if (collectionFieldSchema.name === 'parent') {
       params.filter = {
         ...(params.filter ?? {}),
-        id: record.id && {
-          $ne: record.id,
+        id: record[primaryKey] && {
+          $ne: record[primaryKey],
         },
       };
     }
@@ -237,6 +257,18 @@ export const TableSelectorProvider = (props: TableSelectorProviderProps) => {
     console.error(err);
   }
 
+  const { filter: parsedFilter, parseVariableLoading } = useParsedFilter({
+    filterOption: params?.filter,
+  });
+
+  if ((!_.isEmpty(params?.filter) && _.isEmpty(parsedFilter)) || parseVariableLoading) {
+    return null;
+  }
+
+  if (params?.filter) {
+    params.filter = parsedFilter;
+  }
+
   return (
     <SchemaComponentOptions scope={{ treeTable }}>
       <BlockProvider name="table-selector" {...props} params={params}>
@@ -244,7 +276,7 @@ export const TableSelectorProvider = (props: TableSelectorProviderProps) => {
       </BlockProvider>
     </SchemaComponentOptions>
   );
-};
+});
 
 export const useTableSelectorContext = () => {
   return useContext(TableSelectorContext);
@@ -253,32 +285,44 @@ export const useTableSelectorContext = () => {
 export const useTableSelectorProps = () => {
   const field = useField<ArrayField>();
   const ctx = useTableSelectorContext();
+  const fieldSchema = useFieldSchema();
+  const { getCollectionJoinField } = useCollectionManager_deprecated();
+  const collectionFieldSchema = recursiveParent(fieldSchema, 'CollectionField');
+  const collectionField = getCollectionJoinField(collectionFieldSchema?.['x-collection-field']);
   useEffect(() => {
     if (!ctx?.service?.loading) {
-      field.value = ctx?.service?.data?.data;
+      const data = ctx?.service?.data?.data.map((v) => {
+        return v;
+      });
+      field.value = data;
+      field?.setInitialValue?.(data);
       field.data = field.data || {};
-      field.data.selectedRowKeys = ctx?.field?.data?.selectedRowKeys;
+      field.data.selectedRowKeys = [];
       field.componentProps.pagination = field.componentProps.pagination || {};
       field.componentProps.pagination.pageSize = ctx?.service?.data?.meta?.pageSize;
       field.componentProps.pagination.total = ctx?.service?.data?.meta?.count;
       field.componentProps.pagination.current = ctx?.service?.data?.meta?.page;
     }
-  }, [ctx?.service?.loading]);
+  }, [
+    collectionField?.foreignKey,
+    ctx?.field?.data?.selectedRowKeys,
+    ctx?.service?.data?.data,
+    ctx?.service?.data?.meta?.count,
+    ctx?.service?.data?.meta?.page,
+    ctx?.service?.data?.meta?.pageSize,
+    ctx?.service?.loading,
+    field,
+  ]);
   return {
     loading: ctx?.service?.loading,
     showIndex: false,
     dragSort: false,
     rowKey: ctx.rowKey || 'id',
-    pagination:
-      ctx?.params?.paginate !== false
-        ? {
-            defaultCurrent: ctx?.params?.page || 1,
-            defaultPageSize: ctx?.params?.pageSize,
-          }
-        : false,
-    onRowSelectionChange(selectedRowKeys, selectedRows) {
+    pagination: fieldSchema?.['x-component-props']?.pagination === false ? false : field.componentProps.pagination,
+    onRowSelectionChange(selectedRowKeys, selectedRowData) {
       ctx.field.data = ctx?.field?.data || {};
       ctx.field.data.selectedRowKeys = selectedRowKeys;
+      ctx.field.data.selectedRowData = selectedRowData;
     },
     async onRowDragEnd({ from, to }) {
       await ctx.resource.move({

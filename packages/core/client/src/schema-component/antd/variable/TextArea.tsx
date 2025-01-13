@@ -1,19 +1,28 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css, cx } from '@emotion/css';
 import { useForm } from '@formily/react';
-import { Input } from 'antd';
-import { cloneDeep } from 'lodash';
+import { Space } from 'antd';
+import useInputStyle from 'antd/es/input/style';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { renderToString } from 'react-dom/server';
 import sanitizeHTML from 'sanitize-html';
 
 import { error } from '@nocobase/utils/client';
 
+import { isReactElement } from '@formily/shared';
 import { EllipsisWithTooltip } from '../..';
 import { VariableSelect } from './VariableSelect';
 import { useStyles } from './style';
 
 type RangeIndexes = [number, number, number, number];
-
-const VARIABLE_RE = /{{\s*([^{}]+)\s*}}/g;
 
 function pasteHTML(
   container: HTMLElement,
@@ -30,7 +39,7 @@ function pasteHTML(
   if (indexes) {
     const children = Array.from(container.childNodes);
     if (indexes[0] === -1) {
-      if (indexes[1]) {
+      if (indexes[1] && children[indexes[1] - 1]) {
         range.setStartAfter(children[indexes[1] - 1]);
       } else {
         range.setStart(container, 0);
@@ -40,7 +49,7 @@ function pasteHTML(
     }
 
     if (indexes[2] === -1) {
-      if (indexes[3]) {
+      if (indexes[3] && children[indexes[3] - 1]) {
         range.setEndAfter(children[indexes[3] - 1]);
       } else {
         range.setEnd(container, 0);
@@ -81,11 +90,11 @@ function pasteHTML(
   }
 }
 
-function getValue(el) {
+function getValue(el, delimiters = ['{{', '}}']) {
   const values: any[] = [];
   for (const node of el.childNodes) {
     if (node.nodeName === 'SPAN' && node['dataset']['variable']) {
-      values.push(`{{${node['dataset']['variable']}}}`);
+      values.push(`${delimiters[0]}${node['dataset']['variable']}${delimiters[1]}`);
     } else {
       values.push(node.textContent);
     }
@@ -93,20 +102,21 @@ function getValue(el) {
   return values.join('');
 }
 
-function renderHTML(exp: string, keyLabelMap) {
-  return exp.replace(VARIABLE_RE, (_, i) => {
+function renderHTML(exp: string, keyLabelMap, delimiters: [string, string] = ['{{', '}}']) {
+  const variableRegExp = new RegExp(`${delimiters[0]}\\s*([^{}]+)\\s*${delimiters[1]}`, 'g');
+  return exp.replace(variableRegExp, (_, i) => {
     const key = i.trim();
     return createVariableTagHTML(key, keyLabelMap) ?? '';
   });
 }
 
-function createOptionsValueLabelMap(options: any[]) {
+function createOptionsValueLabelMap(options: any[], fieldNames = { value: 'value', label: 'label' }) {
   const map = new Map<string, string[]>();
   for (const option of options) {
-    map.set(option.value, [option.label]);
+    map.set(option[fieldNames.value], [option[fieldNames.label]]);
     if (option.children) {
-      for (const [value, labels] of createOptionsValueLabelMap(option.children)) {
-        map.set(`${option.value}.${value}`, [option.label, ...labels]);
+      for (const [value, labels] of createOptionsValueLabelMap(option.children, fieldNames)) {
+        map.set(`${option[fieldNames.value]}.${value}`, [option[fieldNames.label], ...labels]);
       }
     }
   }
@@ -114,7 +124,17 @@ function createOptionsValueLabelMap(options: any[]) {
 }
 
 function createVariableTagHTML(variable, keyLabelMap) {
-  const labels = keyLabelMap.get(variable);
+  let labels = keyLabelMap.get(variable);
+
+  if (labels) {
+    labels = labels.map((label) => {
+      if (isReactElement(label)) {
+        return renderToString(label);
+      }
+      return label;
+    });
+  }
+
   return `<span class="ant-tag ant-tag-blue" contentEditable="false" data-variable="${variable}">${
     labels ? labels.join(' / ') : '...'
   }</span>`;
@@ -128,20 +148,20 @@ function getSingleEndRange(nodes: ChildNode[], index: number, offset: number): [
   if (index === -1) {
     let realIndex = offset;
     let collapseFlag = false;
-    if (realIndex && nodes[realIndex - 1].nodeName === '#text' && nodes[realIndex]?.nodeName === '#text') {
+    if (realIndex && nodes[realIndex - 1]?.nodeName === '#text' && nodes[realIndex]?.nodeName === '#text') {
       // set a flag for collapse
       collapseFlag = true;
     }
     let textOffset = 0;
     for (let i = offset - 1; i >= 0; i--) {
       if (collapseFlag) {
-        if (nodes[i].nodeName === '#text') {
+        if (nodes[i]?.nodeName === '#text') {
           textOffset += nodes[i].textContent!.length;
         } else {
           collapseFlag = false;
         }
       }
-      if (nodes[i].nodeName === '#text' && nodes[i + 1]?.nodeName === '#text') {
+      if (nodes[i]?.nodeName === '#text' && nodes[i + 1]?.nodeName === '#text') {
         realIndex -= 1;
       }
     }
@@ -152,8 +172,8 @@ function getSingleEndRange(nodes: ChildNode[], index: number, offset: number): [
     let textOffset = 0;
     for (let i = 0; i < index + 1; i++) {
       // console.log(i, realIndex, textOffset);
-      if (nodes[i].nodeName === '#text') {
-        if (i !== index && nodes[i + 1] && nodes[i + 1].nodeName !== '#text') {
+      if (nodes[i]?.nodeName === '#text') {
+        if (i !== index && nodes[i + 1] && nodes[i + 1]?.nodeName !== '#text') {
           realIndex += 1;
         }
         textOffset += i === index ? offset : nodes[i].textContent!.length;
@@ -187,33 +207,54 @@ function getCurrentRange(element: HTMLElement): RangeIndexes {
   return result;
 }
 
+const defaultFieldNames = { value: 'value', label: 'label' };
+
+function useVariablesFromValue(value: string, delimiters: [string, string] = ['{{', '}}']) {
+  const delimitersString = delimiters.join(' ');
+  return useMemo(() => {
+    if (!value?.trim()) {
+      return [];
+    }
+    const variableRegExp = new RegExp(`${delimiters[0]}\\s*([^{}]+)\\s*${delimiters[1]}`, 'g');
+    const matches = value.match(variableRegExp);
+    return matches?.map((m) => m.replace(variableRegExp, '$1')) ?? [];
+  }, [value, delimitersString]);
+}
+
 export function TextArea(props) {
   const { wrapSSR, hashId, componentCls } = useStyles();
-  const { value = '', scope, onChange, multiline = true, changeOnSelect } = props;
+  const { scope, onChange, changeOnSelect, style, fieldNames, delimiters = ['{{', '}}'] } = props;
+  const value = typeof props.value === 'string' ? props.value : props.value == null ? '' : props.value.toString();
+  const variables = useVariablesFromValue(value, delimiters);
   const inputRef = useRef<HTMLDivElement>(null);
   const [options, setOptions] = useState([]);
   const form = useForm();
-  const keyLabelMap = useMemo(() => createOptionsValueLabelMap(options), [options]);
+  const keyLabelMap = useMemo(
+    () => createOptionsValueLabelMap(options, fieldNames || defaultFieldNames),
+    [fieldNames, options],
+  );
   const [ime, setIME] = useState<boolean>(false);
   const [changed, setChanged] = useState(false);
-  const [html, setHtml] = useState(() => renderHTML(value ?? '', keyLabelMap));
+  const [html, setHtml] = useState(() => renderHTML(value ?? '', keyLabelMap, delimiters));
   // NOTE: e.g. [startElementIndex, startOffset, endElementIndex, endOffset]
   const [range, setRange] = useState<[number, number, number, number]>([-1, 0, -1, 0]);
+  useInputStyle('ant-input');
+  const delimitersString = delimiters.join(' ');
 
   useEffect(() => {
-    preloadOptions(scope, value)
+    preloadOptions(scope, variables)
       .then((preloaded) => {
         setOptions(preloaded);
       })
-      .catch((err) => console.error);
-  }, [scope, value]);
+      .catch(console.error);
+  }, [scope, JSON.stringify(variables)]);
 
   useEffect(() => {
-    setHtml(renderHTML(value ?? '', keyLabelMap));
+    setHtml(renderHTML(value ?? '', keyLabelMap, delimiters));
     if (!changed) {
       setRange([-1, 0, -1, 0]);
     }
-  }, [value, keyLabelMap]);
+  }, [value, keyLabelMap, delimitersString]);
 
   useEffect(() => {
     const { current } = inputRef;
@@ -283,9 +324,9 @@ export function TextArea(props) {
 
       setChanged(true);
       setRange(getCurrentRange(current));
-      onChange(getValue(current));
+      onChange(getValue(current, delimiters));
     },
-    [keyLabelMap, onChange, range],
+    [keyLabelMap, onChange, range, delimitersString],
   );
 
   const onInput = useCallback(
@@ -295,9 +336,9 @@ export function TextArea(props) {
       }
       setChanged(true);
       setRange(getCurrentRange(currentTarget));
-      onChange(getValue(currentTarget));
+      onChange(getValue(currentTarget, delimiters));
     },
-    [ime, onChange],
+    [ime, onChange, delimitersString],
   );
 
   const onBlur = useCallback(function ({ currentTarget }) {
@@ -308,14 +349,21 @@ export function TextArea(props) {
     if (ev.key === 'Enter') {
       ev.preventDefault();
     }
-    setIME(ev.keyCode === 229 && ![' ', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'Enter'].includes(ev.key));
-    // if (ev.key === 'Control') {
-    //   console.debug(getSelection().getRangeAt(0));
-    // }
-    // if (ev.key === 'Alt') {
-    //   console.debug(getCurrentRange(ev.currentTarget));
-    // }
   }, []);
+
+  const onCompositionStart = useCallback(function () {
+    setIME(true);
+  }, []);
+
+  const onCompositionEnd = useCallback(
+    ({ currentTarget }) => {
+      setIME(false);
+      setChanged(true);
+      setRange(getCurrentRange(currentTarget));
+      onChange(getValue(currentTarget, delimiters));
+    },
+    [onChange, delimitersString],
+  );
 
   const onPaste = useCallback(
     function (ev) {
@@ -345,31 +393,28 @@ export function TextArea(props) {
       setChanged(true);
       pasteHTML(ev.currentTarget, sanitizedHTML);
       setRange(getCurrentRange(ev.currentTarget));
-      onChange(getValue(ev.currentTarget));
+      onChange(getValue(ev.currentTarget, delimiters));
     },
-    [onChange],
+    [onChange, delimitersString],
   );
 
   const disabled = props.disabled || form.disabled;
-
   return wrapSSR(
-    <Input.Group
-      compact
+    <Space.Compact
       className={cx(
         componentCls,
         hashId,
         css`
-          &.ant-input-group.ant-input-group-compact {
-            display: flex;
-            .ant-input {
-              flex-grow: 1;
-              min-width: 200px;
-            }
-            .ant-input-disabled {
-              .ant-tag {
-                color: #bfbfbf;
-                border-color: #d9d9d9;
-              }
+          display: flex;
+          .ant-input {
+            flex-grow: 1;
+            min-width: 200px;
+            word-break: break-all;
+          }
+          .ant-input-disabled {
+            .ant-tag {
+              color: #bfbfbf;
+              border-color: #d9d9d9;
             }
           }
 
@@ -386,13 +431,23 @@ export function TextArea(props) {
         onBlur={onBlur}
         onKeyDown={onKeyDown}
         onPaste={onPaste}
+        onCompositionStart={onCompositionStart}
+        onCompositionEnd={onCompositionEnd}
+        placeholder={props.placeholder}
+        style={style}
         className={cx(
           hashId,
           'ant-input',
           { 'ant-input-disabled': disabled },
+          // NOTE: `pre-wrap` here for avoid the `&nbsp;` (\x160) issue when paste content, we need normal space (\x32).
           css`
             overflow: auto;
-            white-space: ${multiline ? 'normal' : 'nowrap'};
+            white-space: pre-wrap;
+
+            &[placeholder]:empty::before {
+              content: attr(placeholder);
+              color: #ccc;
+            }
 
             .ant-tag {
               display: inline;
@@ -409,26 +464,25 @@ export function TextArea(props) {
       />
       {!disabled ? (
         <VariableSelect
-          className=""
           options={options}
           setOptions={setOptions}
           onInsert={onInsert}
           changeOnSelect={changeOnSelect}
+          fieldNames={fieldNames || defaultFieldNames}
         />
       ) : null}
-    </Input.Group>,
+    </Space.Compact>,
   );
 }
 
-async function preloadOptions(scope, value) {
-  const options = cloneDeep(scope ?? []);
+async function preloadOptions(scope, variables: string[]) {
+  let options = [...(scope ?? [])];
+  const paths = variables.map((variable) => variable.split('.'));
+  options = options.filter((item) => {
+    return !item.deprecated || paths.find((p) => p[0] === item.value);
+  });
 
-  // 重置正则的匹配位置
-  VARIABLE_RE.lastIndex = 0;
-
-  for (let matcher; (matcher = VARIABLE_RE.exec(value ?? '')); ) {
-    const keys = matcher[1].split('.');
-
+  for (const keys of paths) {
     let prevOption = null;
 
     for (let i = 0; i < keys.length; i++) {
@@ -438,7 +492,7 @@ async function preloadOptions(scope, value) {
           prevOption = options.find((item) => item.value === key);
         } else {
           if (prevOption.loadChildren && !prevOption.children?.length) {
-            await prevOption.loadChildren(prevOption);
+            await prevOption.loadChildren(prevOption, key, keys);
           }
           prevOption = prevOption.children.find((item) => item.value === key);
         }
@@ -450,37 +504,39 @@ async function preloadOptions(scope, value) {
   return options;
 }
 
-TextArea.ReadPretty = function ReadPretty(props): JSX.Element {
-  const { value } = props;
-  const scope = typeof props.scope === 'function' ? props.scope() : props.scope;
+const textAreaReadPrettyClassName = css`
+  overflow: auto;
 
+  .ant-tag {
+    display: inline;
+    line-height: 19px;
+    margin: 0 0.25em;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+`;
+
+TextArea.ReadPretty = function ReadPretty(props): JSX.Element {
+  const { value, delimiters = ['{{', '}}'] } = props;
+  const scope = typeof props.scope === 'function' ? props.scope() : props.scope;
+  const { wrapSSR, hashId, componentCls } = useStyles();
   const [options, setOptions] = useState([]);
   const keyLabelMap = useMemo(() => createOptionsValueLabelMap(options), [options]);
-
+  const html = useMemo(() => renderHTML(value ?? '', keyLabelMap, delimiters), [delimiters, keyLabelMap, value]);
+  const variables = useVariablesFromValue(value, delimiters);
   useEffect(() => {
-    preloadOptions(scope, value)
+    preloadOptions(scope, variables)
       .then((preloaded) => {
         setOptions(preloaded);
       })
       .catch(error);
-  }, [scope, value]);
-  const html = renderHTML(value ?? '', keyLabelMap);
+  }, [scope, variables]);
 
-  const content = (
+  const content = wrapSSR(
     <span
       dangerouslySetInnerHTML={{ __html: html }}
-      className={css`
-        overflow: auto;
-
-        .ant-tag {
-          display: inline;
-          line-height: 19px;
-          margin: 0 0.25em;
-          padding: 2px 7px;
-          border-radius: 10px;
-        }
-      `}
-    />
+      className={cx(componentCls, hashId, textAreaReadPrettyClassName)}
+    />,
   );
 
   return (

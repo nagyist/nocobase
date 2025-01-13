@@ -1,26 +1,33 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { registerValidateFormats } from '@formily/core';
 import { i18n } from '../../i18n';
-import { defaultProps, operators, unique } from './properties';
-import { IField } from './types';
+import { defaultProps, operators, unique, autoIncrement, primaryKey } from './properties';
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
 
 registerValidateFormats({
   odd: /^-?\d*[13579]$/,
   even: /^-?\d*[02468]$/,
 });
 
-export const integer: IField = {
-  name: 'integer',
-  type: 'object',
-  group: 'basic',
-  order: 6,
-  title: '{{t("Integer")}}',
-  sortable: true,
-  default: {
+export class IntegerFieldInterface extends CollectionFieldInterface {
+  name = 'integer';
+  type = 'object';
+  group = 'basic';
+  order = 6;
+  title = '{{t("Integer")}}';
+  sortable = true;
+  default = {
     type: 'bigInt',
-    // name,
     uiSchema: {
       type: 'number',
-      // title,
       'x-component': 'InputNumber',
       'x-component-props': {
         stringMode: true,
@@ -28,18 +35,33 @@ export const integer: IField = {
       },
       'x-validator': 'integer',
     },
-  },
-  availableTypes: ['bigInt', 'integer'],
-  hasDefaultValue: true,
-  properties: {
+  };
+  availableTypes = ['bigInt', 'integer', 'sort'];
+  hasDefaultValue = true;
+  properties = {
     ...defaultProps,
-    unique,
-  },
-  filterable: {
+    layout: {
+      type: 'void',
+      title: '{{t("Index")}}',
+      'x-component': 'Space',
+      'x-decorator': 'FormItem',
+      'x-decorator-props': {
+        style: {
+          marginBottom: '0px',
+        },
+      },
+      properties: {
+        primaryKey,
+        unique,
+      },
+    },
+    autoIncrement,
+  };
+  filterable = {
     operators: operators.number,
-  },
-  titleUsable: true,
-  validateSchema(fieldSchema) {
+  };
+  titleUsable = true;
+  validateSchema = (fieldSchema) => {
     return {
       maximum: {
         type: 'number',
@@ -106,5 +128,5 @@ export const integer: IField = {
         },
       },
     };
-  },
-};
+  };
+}

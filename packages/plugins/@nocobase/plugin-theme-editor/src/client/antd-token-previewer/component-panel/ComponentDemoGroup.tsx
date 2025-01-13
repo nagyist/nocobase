@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ConfigProvider, Tooltip } from 'antd';
 import classNames from 'classnames';
 import type { FC } from 'react';
@@ -86,7 +95,7 @@ const ComponentDemoBlock: FC<ComponentDemoBlockProps> = ({
                     <div className="previewer-component-demo-group-item-relative-token">
                       <Tooltip title={demo.tokens.join(', ')}>
                         <span>
-                          {locale.demo.relatedTokens}: {demo.tokens.slice(0, 2).join(', ')}
+                          {locale.relatedTokens}: {demo.tokens.slice(0, 2).join(', ')}
                           {demo.tokens.length > 2 ? '...' : ''}
                         </span>
                       </Tooltip>

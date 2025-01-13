@@ -1,10 +1,23 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
 import { observer } from '@formily/react';
 import React from 'react';
-import { SortableItem, useDesigner } from '../..';
+import { SortableItem, useDesigner, useSchemaComponentContext } from '../..';
+import { useFlag } from '../../../flag-provider/hooks/useFlag';
 
-export const designerCss = css`
+export const designerCss = ({ margin = '-18px -16px', padding = '18px 16px' } = {}) => css`
   position: relative;
+  margin: ${margin};
+  padding: ${padding};
+
   &:hover {
     > .general-schema-designer {
       display: block;
@@ -20,10 +33,6 @@ export const designerCss = css`
     display: none;
     background: var(--colorBgSettingsHover) !important;
     border: 0 !important;
-    top: -16px !important;
-    bottom: -16px !important;
-    left: -16px !important;
-    right: -16px !important;
     pointer-events: none;
     > .general-schema-designer-icons {
       position: absolute;
@@ -44,10 +53,22 @@ export const designerCss = css`
 `;
 
 export const TableColumnActionBar = observer(
-  (props) => {
+  (props: any) => {
     const Designer = useDesigner();
+    const { isInSubTable } = useFlag() || {};
+    const { designable } = useSchemaComponentContext();
+
+    if (!designable || Designer.isNullComponent) {
+      return props.children;
+    }
+
     return (
-      <SortableItem className={designerCss}>
+      <SortableItem
+        className={designerCss({
+          margin: isInSubTable ? '-12px -8px' : '-18px -16px',
+          padding: isInSubTable ? '12px 8px' : '12px 16px',
+        })}
+      >
         <Designer />
         {props.children}
       </SortableItem>

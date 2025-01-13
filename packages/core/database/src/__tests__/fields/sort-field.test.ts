@@ -1,8 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database } from '../../database';
 import { mockDatabase } from '../';
 import { SortField } from '../../fields';
 
-describe('string field', () => {
+describe('sort field', () => {
   let db: Database;
 
   beforeEach(async () => {
@@ -28,7 +37,7 @@ describe('string field', () => {
         },
         {
           type: 'string',
-          name: 'scopeKey',
+          name: 'someField',
         },
       ],
     });
@@ -36,13 +45,19 @@ describe('string field', () => {
     await db.sync();
 
     await Test.repository.create({
-      values: {
-        name: 't1',
-        scopeKey: 'a',
-      },
+      values: [
+        {
+          name: 't1',
+          someField: 'a',
+        },
+        {
+          name: 't2',
+          someField: 'b',
+        },
+      ],
     });
 
-    Test.setField('scopeKeySort', { type: 'sort', scopeKey: 'scopeKey' });
+    Test.setField('scopeKeySort', { type: 'sort', scopeKey: 'someField' });
     await db.sync();
   });
 
@@ -88,6 +103,41 @@ describe('string field', () => {
     const end = Date.now();
     // log time cost as milliseconds
     console.log(end - begin);
+  });
+
+  it('should init sorted value with null scopeValue', async () => {
+    const Test = db.collection({
+      name: 'tests',
+      fields: [
+        {
+          type: 'string',
+          name: 'name',
+        },
+        {
+          type: 'string',
+          name: 'group',
+        },
+      ],
+    });
+
+    await db.sync();
+
+    await Test.repository.create({
+      values: [
+        {
+          group: null,
+          name: 'r5',
+        },
+        {
+          group: null,
+          name: 'r6',
+        },
+      ],
+    });
+
+    Test.setField('sort', { type: 'sort', scopeKey: 'group' });
+
+    await db.sync();
   });
 
   it('should init sorted value with scopeKey', async () => {

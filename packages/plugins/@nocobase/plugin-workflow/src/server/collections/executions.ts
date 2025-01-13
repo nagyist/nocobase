@@ -1,22 +1,33 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { CollectionOptions } from '@nocobase/database';
 
 export default {
-  namespace: 'workflow.executionLogs',
-  duplicator: 'optional',
+  dumpRules: {
+    group: 'log',
+  },
   name: 'executions',
+  shared: true,
   fields: [
     {
       type: 'belongsTo',
       name: 'workflow',
     },
     {
-      type: 'uid',
+      type: 'string',
       name: 'key',
     },
     {
-      type: 'boolean',
-      name: 'useTransaction',
-      defaultValue: false,
+      type: 'string',
+      name: 'eventKey',
+      unique: true,
     },
     {
       type: 'hasMany',

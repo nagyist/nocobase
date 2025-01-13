@@ -1,15 +1,30 @@
-import { ArrayField, createForm } from '@formily/core';
-import { FormContext, useField, useFieldSchema } from '@formily/react';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { useCollectionManager } from '../collection-manager';
-import { useFilterBlock } from '../filter-provider/FilterProvider';
-import { useRecord } from '../record-provider';
-import { FixedBlockWrapper, SchemaComponentOptions, removeNullCondition } from '../schema-component';
-import { BlockProvider, RenderChildrenWithAssociationFilter, useBlockRequestContext } from './BlockProvider';
-import { mergeFilter } from './SharedFilterProvider';
-import { findFilterTargets, useParsedFilter } from './hooks';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
+import { createForm } from '@formily/core';
+import { FormContext, useField, useFieldSchema } from '@formily/react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCollectionManager_deprecated } from '../collection-manager';
+import { withDynamicSchemaProps } from '../hoc/withDynamicSchemaProps';
+import { useTableBlockParams } from '../modules/blocks/data-blocks/table/hooks/useTableBlockDecoratorProps';
+import { FixedBlockWrapper, SchemaComponentOptions } from '../schema-component';
+import { BlockProvider, useBlockRequestContext } from './BlockProvider';
+import { useBlockHeightProps } from './hooks';
+/**
+ * @internal
+ */
 export const TableBlockContext = createContext<any>({});
+TableBlockContext.displayName = 'TableBlockContext';
+
+/**
+ * @internal
+ */
 export function getIdsWithChildren(nodes) {
   const ids = [];
   if (nodes) {
@@ -33,21 +48,46 @@ interface Props {
    * Table 区块的 collection name
    */
   collection?: string;
+  children?: any;
+  expandFlag?: boolean;
 }
 
 const InternalTableBlockProvider = (props: Props) => {
-  const { params, showIndex, dragSort, rowKey, childrenColumnName, fieldNames, ...others } = props;
+  const {
+    params,
+    showIndex,
+    dragSort,
+    rowKey,
+    childrenColumnName,
+    expandFlag: propsExpandFlag = false,
+    fieldNames,
+    ...others
+  } = props;
   const field: any = useField();
   const { resource, service } = useBlockRequestContext();
   const fieldSchema = useFieldSchema();
-  const { treeTable } = fieldSchema?.['x-decorator-props'] || {};
-  const [expandFlag, setExpandFlag] = useState(fieldNames ? true : false);
+  const [expandFlag, setExpandFlag] = useState(fieldNames || propsExpandFlag ? true : false);
+  const { heightProps } = useBlockHeightProps();
+
+  useEffect(() => {
+    setExpandFlag(fieldNames || propsExpandFlag);
+  }, [fieldNames || propsExpandFlag]);
+
   const allIncludesChildren = useMemo(() => {
-    if (treeTable !== false) {
-      const keys = getIdsWithChildren(service?.data?.data);
-      return keys || [];
+    const { treeTable } = fieldSchema?.['x-decorator-props'] || {};
+    const data = service?.data?.data;
+    if (treeTable) {
+      const keys = getIdsWithChildren(data);
+      return keys;
     }
-  }, [service?.loading]);
+  }, [service?.loading, fieldSchema]);
+
+  const setExpandFlagValue = useCallback(
+    (flag) => {
+      setExpandFlag(flag || !expandFlag);
+    },
+    [expandFlag],
+  );
 
   return (
     <FixedBlockWrapper>
@@ -64,179 +104,94 @@ const InternalTableBlockProvider = (props: Props) => {
           expandFlag,
           childrenColumnName,
           allIncludesChildren,
-          setExpandFlag: () => setExpandFlag(!expandFlag),
+          setExpandFlag: setExpandFlagValue,
+          heightProps,
         }}
       >
-        <RenderChildrenWithAssociationFilter {...props} />
+        {props.children}
       </TableBlockContext.Provider>
     </FixedBlockWrapper>
   );
 };
 
-export const TableBlockProvider = (props) => {
-  const resourceName = props.resource;
-  const params = useMemo(() => ({ ...props.params }), [props.params]);
+/**
+ * @internal
+ * 用于兼容旧版本的 schema，当不需要兼容时可直接移除该方法
+ * @param props
+ * @returns
+ */
+const useTableBlockParamsCompat = (props) => {
   const fieldSchema = useFieldSchema();
-  const { getCollection, getCollectionField } = useCollectionManager();
-  const record = useRecord();
 
-  const collection = getCollection(props.collection);
-  const { treeTable, dragSortBy } = fieldSchema?.['x-decorator-props'] || {};
-  if (props.dragSort) {
-    params['sort'] = dragSortBy || ['sort'];
+  let params,
+    parseVariableLoading = false;
+  // 1. 新版本的 schema 存在 x-use-decorator-props 属性
+  if (fieldSchema['x-use-decorator-props']) {
+    params = props.params;
+    parseVariableLoading = props.parseVariableLoading;
+  } else {
+    // 2. 旧版本的 schema 不存在 x-use-decorator-props 属性
+    // 因为 schema 中是否存在 x-use-decorator-props 是固定不变的，所以这里可以使用 hooks
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const tableBlockParams = useTableBlockParams(props);
+    params = tableBlockParams.params;
+    parseVariableLoading = tableBlockParams.parseVariableLoading;
   }
-  let childrenColumnName = 'children';
-  if (collection?.tree && treeTable !== false) {
+
+  return { params, parseVariableLoading };
+};
+
+export const TableBlockProvider = withDynamicSchemaProps((props) => {
+  const resourceName = props.resource || props.association;
+
+  const fieldSchema = useFieldSchema();
+  const { getCollection, getCollectionField } = useCollectionManager_deprecated(props.dataSource);
+  const collection = getCollection(props.collection, props.dataSource);
+  const { treeTable, pagingMode } = fieldSchema?.['x-decorator-props'] || {};
+  const { params, parseVariableLoading } = useTableBlockParamsCompat(props);
+  // Prevent tables with 'children' field from automatically converting to tree-structured tables
+  let childrenColumnName = '__nochildren__';
+
+  if (treeTable) {
+    childrenColumnName = 'children';
+
     if (resourceName?.includes('.')) {
       const f = getCollectionField(resourceName);
       if (f?.treeChildren) {
         childrenColumnName = f.name;
-        params['tree'] = true;
       }
+      params['tree'] = true;
     } else {
-      const f = collection.fields.find((f) => f.treeChildren);
+      const f = collection?.fields.find((f) => f.treeChildren);
       if (f) {
         childrenColumnName = f.name;
       }
       params['tree'] = true;
     }
+  } else {
+    childrenColumnName = '__nochildren__';
   }
   const form = useMemo(() => createForm(), [treeTable]);
-  const { filter: parsedFilter } = useParsedFilter({
-    filterOption: params?.filter,
-    currentRecord: { __parent: record, __collectionName: props.collection },
-  });
-  const paramsWithFilter = useMemo(() => {
-    return {
-      ...params,
-      filter: parsedFilter,
-    };
-  }, [parsedFilter, params]);
+
+  // 在解析变量的时候不渲染，避免因为重复请求数据导致的资源浪费
+  if (parseVariableLoading) {
+    return null;
+  }
 
   return (
     <SchemaComponentOptions scope={{ treeTable }}>
       <FormContext.Provider value={form}>
-        <BlockProvider name={props.name || 'table'} {...props} params={paramsWithFilter} runWhenParamsChanged>
-          <InternalTableBlockProvider {...props} childrenColumnName={childrenColumnName} params={paramsWithFilter} />
+        <BlockProvider name={props.name || 'table'} {...props} params={params} runWhenParamsChanged>
+          <InternalTableBlockProvider {...props} childrenColumnName={childrenColumnName} params={params} />
         </BlockProvider>
       </FormContext.Provider>
     </SchemaComponentOptions>
   );
-};
+});
 
+/**
+ * @internal
+ */
 export const useTableBlockContext = () => {
   return useContext(TableBlockContext);
-};
-
-export const useTableBlockProps = () => {
-  const field = useField<ArrayField>();
-  const fieldSchema = useFieldSchema();
-  const ctx = useTableBlockContext();
-  const globalSort = fieldSchema.parent?.['x-decorator-props']?.['params']?.['sort'];
-  const { getDataBlocks } = useFilterBlock();
-
-  useEffect(() => {
-    if (!ctx?.service?.loading) {
-      field.value = [];
-      field.value = ctx?.service?.data?.data;
-      field?.setInitialValue(ctx?.service?.data?.data);
-      field.data = field.data || {};
-      field.data.selectedRowKeys = ctx?.field?.data?.selectedRowKeys;
-      field.componentProps.pagination = field.componentProps.pagination || {};
-      field.componentProps.pagination.pageSize = ctx?.service?.data?.meta?.pageSize;
-      field.componentProps.pagination.total = ctx?.service?.data?.meta?.count;
-      field.componentProps.pagination.current = ctx?.service?.data?.meta?.page;
-    }
-  }, [ctx?.service?.loading]);
-  return {
-    childrenColumnName: ctx.childrenColumnName,
-    loading: ctx?.service?.loading,
-    showIndex: ctx.showIndex,
-    dragSort: ctx.dragSort,
-    rowKey: ctx.rowKey || 'id',
-    pagination:
-      ctx?.params?.paginate !== false
-        ? {
-            defaultCurrent: ctx?.params?.page || 1,
-            defaultPageSize: ctx?.params?.pageSize,
-          }
-        : false,
-    onRowSelectionChange(selectedRowKeys) {
-      ctx.field.data = ctx?.field?.data || {};
-      ctx.field.data.selectedRowKeys = selectedRowKeys;
-      ctx?.field?.onRowSelect?.(selectedRowKeys);
-    },
-    async onRowDragEnd({ from, to }) {
-      await ctx.resource.move({
-        sourceId: from[ctx.rowKey || 'id'],
-        targetId: to[ctx.rowKey || 'id'],
-      });
-      ctx.service.refresh();
-    },
-    onChange({ current, pageSize }, filters, sorter) {
-      const sort = sorter.order
-        ? sorter.order === `ascend`
-          ? [sorter.field]
-          : [`-${sorter.field}`]
-        : globalSort || ctx.service.params?.[0]?.sort;
-      ctx.service.run({ ...ctx.service.params?.[0], page: current, pageSize, sort });
-    },
-    onClickRow(record, setSelectedRow, selectedRow) {
-      const { targets, uid } = findFilterTargets(fieldSchema);
-      const dataBlocks = getDataBlocks();
-
-      // 如果是之前创建的区块是没有 x-filter-targets 属性的，所以这里需要判断一下避免报错
-      if (!targets || !targets.some((target) => dataBlocks.some((dataBlock) => dataBlock.uid === target.uid))) {
-        // 当用户已经点击过某一行，如果此时再把相连接的区块给删除的话，行的高亮状态就会一直保留。
-        // 这里暂时没有什么比较好的方法，只是在用户再次点击的时候，把高亮状态给清除掉。
-        setSelectedRow((prev) => (prev.length ? [] : prev));
-        return;
-      }
-
-      const value = [record[ctx.rowKey]];
-
-      dataBlocks.forEach((block) => {
-        const target = targets.find((target) => target.uid === block.uid);
-        if (!target) return;
-
-        const param = block.service.params?.[0] || {};
-        // 保留原有的 filter
-        const storedFilter = block.service.params?.[1]?.filters || {};
-
-        if (selectedRow.includes(record[ctx.rowKey])) {
-          delete storedFilter[uid];
-        } else {
-          storedFilter[uid] = {
-            $and: [
-              {
-                [target.field || ctx.rowKey]: {
-                  [target.field ? '$in' : '$eq']: value,
-                },
-              },
-            ],
-          };
-        }
-
-        const mergedFilter = mergeFilter([
-          ...Object.values(storedFilter).map((filter) => removeNullCondition(filter)),
-          block.defaultFilter,
-        ]);
-
-        return block.doFilter(
-          {
-            ...param,
-            page: 1,
-            filter: mergedFilter,
-          },
-          { filters: storedFilter },
-        );
-      });
-
-      // 更新表格的选中状态
-      setSelectedRow((prev) => (prev?.includes(record[ctx.rowKey]) ? [] : [...value]));
-    },
-    onExpand(expanded, record) {
-      ctx?.field.onExpandClick?.(expanded, record);
-    },
-  };
 };

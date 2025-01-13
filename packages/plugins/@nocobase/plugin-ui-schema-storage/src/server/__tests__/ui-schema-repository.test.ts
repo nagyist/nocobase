@@ -1,8 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Collection, Database } from '@nocobase/database';
-import { MockServer, mockServer } from '@nocobase/test';
+import { MockServer, createMockServer } from '@nocobase/test';
 import { SchemaNode } from '../dao/ui_schema_node_dao';
 import UiSchemaRepository from '../repository';
-import PluginUiSchema from '../server';
 
 describe('ui_schema repository', () => {
   let app: MockServer;
@@ -16,23 +24,12 @@ describe('ui_schema repository', () => {
   });
 
   beforeEach(async () => {
-    app = mockServer({
+    app = await createMockServer({
       registerActions: true,
+      plugins: ['ui-schema-storage'],
     });
 
     db = app.db;
-
-    await db.clean({ drop: true });
-
-    app.plugin(PluginUiSchema, { name: 'ui-schema-storage' });
-
-    await app.load();
-    await db.sync({
-      force: false,
-      alter: {
-        drop: false,
-      },
-    });
     repository = db.getCollection('uiSchemas').repository as UiSchemaRepository;
     treePathCollection = db.getCollection('uiSchemaTreePath');
   });
@@ -224,6 +221,11 @@ describe('ui_schema repository', () => {
     expect(s2['x-uid']).not.toEqual(s['x-uid']);
   });
 
+  it('should be null', async () => {
+    const s2 = await repository.duplicate('test-null');
+    expect(s2).toBeNull();
+  });
+
   describe('schema', () => {
     let schema;
     beforeEach(() => {
@@ -373,6 +375,48 @@ describe('ui_schema repository', () => {
       });
     });
 
+    it('should get parent json schema', async () => {
+      await repository.insert({
+        'x-uid': 'n1',
+        name: 'a',
+        type: 'object',
+        properties: {
+          b: {
+            'x-uid': 'n2',
+            type: 'object',
+            properties: {
+              c: { 'x-uid': 'n3' },
+            },
+          },
+          d: { 'x-uid': 'n4' },
+        },
+      });
+
+      const parentSchema = await repository.getParentJsonSchema('n2');
+      expect(parentSchema['x-uid']).toBe('n1');
+    });
+
+    it('should get parent property', async () => {
+      await repository.insert({
+        'x-uid': 'n1',
+        name: 'a',
+        type: 'object',
+        properties: {
+          b: {
+            'x-uid': 'n2',
+            type: 'object',
+            properties: {
+              c: { 'x-uid': 'n3' },
+            },
+          },
+          d: { 'x-uid': 'n4' },
+        },
+      });
+
+      const parentProperty = await repository.getParentProperty('n2');
+      expect(parentProperty['x-uid']).toBe('n1');
+    });
+
     it('should getJsonSchema by subTree', async () => {
       await repository.insert({
         'x-uid': 'n1',
@@ -391,6 +435,28 @@ describe('ui_schema repository', () => {
       });
 
       const schema = await repository.getJsonSchema('n2');
+      expect(schema).toBeDefined();
+    });
+
+    it('should get root async json schema', async () => {
+      await repository.insert({
+        'x-uid': 'n1',
+        async: true,
+        name: 'a',
+        type: 'object',
+        properties: {
+          b: {
+            'x-uid': 'n2',
+            type: 'object',
+            properties: {
+              c: { 'x-uid': 'n3' },
+            },
+          },
+          d: { 'x-uid': 'n4' },
+        },
+      });
+
+      const schema = await repository.getJsonSchema('n1');
       expect(schema).toBeDefined();
     });
 
@@ -886,6 +952,96 @@ describe('ui_schema repository', () => {
     });
   });
 
+  describe('initializeActionContext', function () {
+    let rootNode;
+    let rootUid: string;
+    let oldTree;
+
+    beforeEach(async () => {
+      const root = {
+        type: 'object',
+        title: 'title',
+        name: 'root',
+        properties: {
+          a1: {
+            type: 'string',
+            title: 'A1',
+            'x-component': 'Input',
+          },
+          b1: {
+            type: 'string',
+            title: 'B1',
+            properties: {
+              c1: {
+                type: 'string',
+                title: 'C1',
+              },
+              d1: {
+                type: 'string',
+                title: 'D1',
+              },
+            },
+          },
+        },
+      };
+
+      await repository.insert(root);
+
+      rootNode = await repository.findOne({
+        filter: {
+          name: 'root',
+        },
+      });
+
+      rootUid = rootNode.get('x-uid') as string;
+
+      oldTree = await repository.getJsonSchema(rootUid);
+    });
+
+    it('should update root ui schema and only have x-action-context to be updated', async () => {
+      await repository.initializeActionContext({
+        'x-uid': rootUid,
+        title: 'test-title',
+        ['x-action-context']: {
+          field1: 'field1',
+          field2: 'field2',
+        },
+        properties: {
+          a1: {
+            type: 'string',
+            title: 'new a1 title',
+            'x-component': 'Input',
+          },
+        },
+      });
+
+      const newTree = await repository.getJsonSchema(rootUid);
+      expect(newTree).toEqual({
+        ...oldTree,
+        ['x-action-context']: {
+          field1: 'field1',
+          field2: 'field2',
+        },
+      });
+
+      // will not updated when x-action-context existed
+      await repository.initializeActionContext({
+        'x-uid': rootUid,
+        ['x-action-context']: {
+          field3: 'field3',
+          field4: 'field4',
+        },
+      });
+      expect(newTree).toEqual({
+        ...oldTree,
+        ['x-action-context']: {
+          field1: 'field1',
+          field2: 'field2',
+        },
+      });
+    });
+  });
+
   it('should insertInner with removeParent', async () => {
     const schema = {
       'x-uid': 'A',
@@ -1142,7 +1298,7 @@ describe('ui_schema repository', () => {
   });
 
   it('should insert big schema', async () => {
-    const schema = require('./fixtures/data').default;
+    const schema = (await import('./fixtures/data')).default;
 
     console.time('test');
     await repository.insertNewSchema(schema);
@@ -1221,7 +1377,7 @@ describe('ui_schema repository', () => {
       },
     };
     await repository.insert(tree);
-    const schema = require('./fixtures/data').default;
+    const schema = (await import('./fixtures/data')).default;
 
     await repository.insertAdjacent('afterEnd', 'A', schema);
     const rootUid = schema['x-uid'];

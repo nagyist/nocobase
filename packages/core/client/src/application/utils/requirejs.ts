@@ -1,15 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+/* istanbul ignore file -- @preserve */
 // @ts-nocheck
 /* eslint-disable */
 /* prettier-ignore */
-/** vim: et:ts=4:sw=4:sts=4
- * @license RequireJS 2.3.6 Copyright jQuery Foundation and other contributors.
- * Released under MIT license, https://github.com/requirejs/requirejs/blob/master/LICENSE
- */
-//Not using strict: uneven strict support in browsers, #392, and causes
-//problems with requirejs.exec()/transpiler plugins that may not be strict.
-/*jslint regexp: true, nomen: true, sloppy: true */
-/*global window, navigator, document, importScripts, setTimeout, opera */
-/// <reference types="@types/requirejs" />
+import type { Require, RequireDefine } from './types'
 
 export interface RequireJS {
   require: Require
@@ -17,6 +19,9 @@ export interface RequireJS {
   define: RequireDefine
 }
 
+/**
+ * @internal
+ */
 export function getRequireJs(): RequireJS {
   var requirejs, require, define;
   var req, s, head, baseElement, dataMain, src,

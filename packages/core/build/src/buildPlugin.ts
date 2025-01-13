@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import ncc from '@vercel/ncc';
 import react from '@vitejs/plugin-react';
 import chalk from 'chalk';
@@ -9,7 +18,7 @@ import { build as viteBuild } from 'vite';
 import cssInjectedByJsPlugin from 'vite-plugin-css-injected-by-js';
 
 import { EsbuildSupportExts, globExcludeFiles } from './constant';
-import { PkgLog, UserConfig, getPackageJson } from './utils';
+import { PkgLog, UserConfig, getEnvDefine, getPackageJson } from './utils';
 import {
   buildCheck,
   checkFileSize,
@@ -34,6 +43,7 @@ const external = [
   '@nocobase/cache',
   '@nocobase/client',
   '@nocobase/database',
+  '@nocobase/data-source-manager',
   '@nocobase/evaluators',
   '@nocobase/logger',
   '@nocobase/resourcer',
@@ -127,20 +137,30 @@ const pluginPrefix = (
 
 const target_dir = 'dist';
 
-export function deleteJsFiles(cwd: string, log: PkgLog) {
-  log('delete babel js files');
-  const jsFiles = fg.globSync(['**/*', '!**/*.d.ts', '!node_modules'], {
+export function deleteServerFiles(cwd: string, log: PkgLog) {
+  log('delete server files');
+  const files = fg.globSync(['*'], {
     cwd: path.join(cwd, target_dir),
     absolute: true,
+    deep: 1,
+    onlyFiles: true,
   });
-  jsFiles.forEach((item) => {
-    fs.unlinkSync(item);
+  const dirs = fg.globSync(['*', '!client', '!node_modules'], {
+    cwd: path.join(cwd, target_dir),
+    absolute: true,
+    deep: 1,
+    onlyDirectories: true,
+  });
+  [...files, ...dirs].forEach((item) => {
+    fs.removeSync(item);
   });
 }
 
 export function writeExternalPackageVersion(cwd: string, log: PkgLog) {
   log('write external version');
-  const sourceFiles = fg.globSync(sourceGlobalFiles, { cwd, absolute: true }).map((item) => fs.readFileSync(item, 'utf-8'));
+  const sourceFiles = fg
+    .globSync(sourceGlobalFiles, { cwd, absolute: true })
+    .map((item) => fs.readFileSync(item, 'utf-8'));
   const sourcePackages = getSourcePackages(sourceFiles);
   const excludePackages = getExcludePackages(sourcePackages, external, pluginPrefix);
   const data = excludePackages.reduce<Record<string, string>>((prev, packageName) => {
@@ -156,7 +176,9 @@ export function writeExternalPackageVersion(cwd: string, log: PkgLog) {
 export async function buildServerDeps(cwd: string, serverFiles: string[], log: PkgLog) {
   log('build plugin server dependencies');
   const outDir = path.join(cwd, target_dir, 'node_modules');
-  const serverFileSource = serverFiles.filter(item => validExts.includes(path.extname(item))).map((item) => fs.readFileSync(item, 'utf-8'));
+  const serverFileSource = serverFiles
+    .filter((item) => validExts.includes(path.extname(item)))
+    .map((item) => fs.readFileSync(item, 'utf-8'));
   const sourcePackages = getSourcePackages(serverFileSource);
   const includePackages = getIncludePackages(sourcePackages, external, pluginPrefix);
   const excludePackages = getExcludePackages(sourcePackages, external, pluginPrefix);
@@ -250,28 +272,34 @@ export async function buildPluginServer(cwd: string, userConfig: UserConfig, sou
   const packageJson = getPackageJson(cwd);
   const serverFiles = fg.globSync(serverGlobalFiles, { cwd, absolute: true });
   buildCheck({ cwd, packageJson, entry: 'server', files: serverFiles, log });
-  const otherExts = Array.from(new Set(serverFiles.map((item) => path.extname(item)).filter((item) => !EsbuildSupportExts.includes(item))));
+  const otherExts = Array.from(
+    new Set(serverFiles.map((item) => path.extname(item)).filter((item) => !EsbuildSupportExts.includes(item))),
+  );
   if (otherExts.length) {
     log('%s will not be processed, only be copied to the dist directory.', chalk.yellow(otherExts.join(',')));
   }
 
-  await tsupBuild(userConfig.modifyTsupConfig({
-    entry: serverFiles,
-    splitting: false,
-    clean: false,
-    bundle: false,
-    silent: true,
-    treeshake: false,
-    target: 'node16',
-    sourcemap,
-    outDir: path.join(cwd, target_dir),
-    format: 'cjs',
-    skipNodeModulesBundle: true,
-    loader: {
-      ...otherExts.reduce((prev, cur) => ({ ...prev, [cur]: 'copy' }), {}),
-      '.json': 'copy',
-    },
-  }));
+  deleteServerFiles(cwd, log);
+
+  await tsupBuild(
+    userConfig.modifyTsupConfig({
+      entry: serverFiles,
+      splitting: false,
+      clean: false,
+      bundle: false,
+      silent: true,
+      treeshake: false,
+      target: 'node16',
+      sourcemap,
+      outDir: path.join(cwd, target_dir),
+      format: 'cjs',
+      skipNodeModulesBundle: true,
+      loader: {
+        ...otherExts.reduce((prev, cur) => ({ ...prev, [cur]: 'copy' }), {}),
+        '.json': 'copy',
+      },
+    }),
+  );
 
   await buildServerDeps(cwd, serverFiles, log);
 }
@@ -299,45 +327,40 @@ export async function buildPluginClient(cwd: string, userConfig: UserConfig, sou
   const entry = fg.globSync('src/client/index.{ts,tsx,js,jsx}', { absolute: true, cwd });
   const outputFileName = 'index.js';
 
-  await viteBuild(userConfig.modifyViteConfig({
-    mode: 'production',
-    define: {
-      'process.env.NODE_ENV': JSON.stringify('production'),
-      'process.env.__TEST__': false,
-      'process.env.__E2E__': process.env.__E2E__ ? true : false,
-    },
-    logLevel: 'warn',
-    build: {
-      minify: true,
-      outDir,
-      cssCodeSplit: false,
-      emptyOutDir: true,
-      sourcemap,
-      lib: {
-        entry,
-        formats: ['umd'],
-        name: packageJson.name,
-        fileName: () => outputFileName,
-      },
-      target: ['es2015', 'edge88', 'firefox78', 'chrome87', 'safari14'],
-      rollupOptions: {
-        cache: true,
-        external: [...Object.keys(globals), 'react', 'react/jsx-runtime'],
-        output: {
-          exports: 'named',
-          globals: {
-            react: 'React',
-            'react/jsx-runtime': 'jsxRuntime',
-            ...globals,
+  await viteBuild(
+    userConfig.modifyViteConfig({
+      mode: process.env.NODE_ENV || 'production',
+      define: getEnvDefine(),
+      logLevel: 'warn',
+      build: {
+        minify: process.env.NODE_ENV === 'production',
+        outDir,
+        cssCodeSplit: false,
+        emptyOutDir: true,
+        sourcemap,
+        lib: {
+          entry,
+          formats: ['umd'],
+          name: packageJson.name,
+          fileName: () => outputFileName,
+        },
+        target: ['es2015', 'edge88', 'firefox78', 'chrome87', 'safari14'],
+        rollupOptions: {
+          cache: true,
+          external: [...Object.keys(globals), 'react', 'react/jsx-runtime'],
+          output: {
+            exports: 'named',
+            globals: {
+              react: 'React',
+              'react/jsx-runtime': 'jsxRuntime',
+              ...globals,
+            },
           },
         },
       },
-    },
-    plugins: [
-      react(),
-      cssInjectedByJsPlugin({ styleId: packageJson.name }),
-    ],
-  }));
+      plugins: [react(), cssInjectedByJsPlugin({ styleId: packageJson.name })],
+    }),
+  );
 
   checkFileSize(outDir, log);
 }

@@ -1,12 +1,21 @@
-import { getConfigurableProperties } from './properties';
-import { ICollectionTemplate } from './types';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export const tree: ICollectionTemplate = {
-  name: 'tree',
-  title: '{{t("Tree collection")}}',
-  order: 3,
-  color: 'blue',
-  default: {
+import { CollectionTemplate } from '../../data-source/collection-template/CollectionTemplate';
+import { getConfigurableProperties } from './properties';
+
+export class TreeCollectionTemplate extends CollectionTemplate {
+  name = 'tree';
+  title = '{{t("Tree collection")}}';
+  order = 3;
+  color = 'blue';
+  default = {
     tree: 'adjacencyList',
     fields: [
       {
@@ -62,22 +71,25 @@ export const tree: ICollectionTemplate = {
         },
       },
     ],
-  },
-  events: {
+  };
+  presetFieldsDisabledIncludes = ['id'];
+  events = {
     beforeSubmit(values) {
       if (Array.isArray(values?.fields)) {
         values?.fields.map((f) => {
-          f.target = values.name;
+          if (!f.target && ['belongsToMany', 'belongsTo', 'hasMany', 'hasOne'].includes(f.type)) {
+            f.target = values.name;
+          }
         });
       }
     },
-  },
-  configurableProperties: getConfigurableProperties(
+  };
+  configurableProperties = getConfigurableProperties(
     'title',
     'name',
     'inherits',
     'category',
     'description',
-    'moreOptions',
-  ),
-};
+    'presetFields',
+  );
+}

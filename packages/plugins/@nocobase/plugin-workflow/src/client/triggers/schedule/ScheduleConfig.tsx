@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { onFieldValueChange } from '@formily/core';
 import { useForm, useFormEffects, ISchema } from '@formily/react';
 import { css, SchemaComponent } from '@nocobase/client';
@@ -65,17 +74,24 @@ const ModeFieldsets = {
       },
     },
   },
-  [SCHEDULE_MODE.COLLECTION_FIELD]: {
+  [SCHEDULE_MODE.DATE_FIELD]: {
     collection: {
       ...collection,
+      'x-component-props': {
+        dataSourceFilter(item) {
+          return item.options.key === 'main' || item.options.isDBInstance;
+        },
+      },
       'x-reactions': [
         ...collection['x-reactions'],
         {
           // only full path works
           target: 'startsOn',
+          effects: ['onFieldValueChange'],
           fulfill: {
             state: {
               visible: '{{!!$self.value}}',
+              value: '{{Object.create({})}}',
             },
           },
         },
@@ -145,7 +161,7 @@ const ModeFieldsets = {
           dependencies: ['mode', 'collection'],
           fulfill: {
             state: {
-              visible: `{{$deps[0] === ${SCHEDULE_MODE.COLLECTION_FIELD} && $deps[1]}}`,
+              visible: `{{$deps[0] === ${SCHEDULE_MODE.DATE_FIELD} && $deps[1]}}`,
             },
           },
         },
@@ -157,7 +173,7 @@ const ModeFieldsets = {
 const scheduleModeOptions = [
   { value: SCHEDULE_MODE.STATIC, label: `{{t("Based on certain date", { ns: "${NAMESPACE}" })}}` },
   {
-    value: SCHEDULE_MODE.COLLECTION_FIELD,
+    value: SCHEDULE_MODE.DATE_FIELD,
     label: `{{t("Based on date field of collection", { ns: "${NAMESPACE}" })}}`,
   },
 ];

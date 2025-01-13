@@ -1,4 +1,5 @@
-import React, { FC } from 'react';
+import { Field } from '@formily/core';
+import { observer, useField, useFieldSchema } from '@formily/react';
 import {
   Application,
   Plugin,
@@ -11,9 +12,8 @@ import {
   useSchemaInitializerItem,
   useSchemaInitializerRender,
 } from '@nocobase/client';
-import { observer, useField, useFieldSchema } from '@formily/react';
-import { Field } from '@formily/core';
-import { ButtonProps, ListProps, List, Card } from 'antd';
+import { ButtonProps, List, ListProps } from 'antd';
+import React, { FC } from 'react';
 
 const Hello = observer(() => {
   const field = useField<Field>();
@@ -56,7 +56,7 @@ const CustomListGridMenu: FC<SchemaInitializerItemsProps<ButtonProps, ListProps<
 };
 
 const myInitializer = new SchemaInitializer({
-  name: 'MyInitializer',
+  name: 'myInitializer',
   title: 'Add Block',
   // 插入位置
   insertPosition: 'beforeEnd',
@@ -75,11 +75,14 @@ const myInitializer = new SchemaInitializer({
   ],
 });
 
-const AddBlockButton = observer(() => {
-  const fieldSchema = useFieldSchema();
-  const { render } = useSchemaInitializerRender(fieldSchema['x-initializer']);
-  return render();
-});
+const AddBlockButton = observer(
+  () => {
+    const fieldSchema = useFieldSchema();
+    const { render } = useSchemaInitializerRender(fieldSchema['x-initializer']);
+    return render();
+  },
+  { displayName: 'AddBlockButton' },
+);
 
 const Page = observer(
   (props) => {
@@ -102,7 +105,7 @@ const Root = () => {
           type: 'void',
           name: 'page',
           'x-component': 'Page',
-          'x-initializer': 'MyInitializer',
+          'x-initializer': 'myInitializer',
           properties: {
             hello1: {
               type: 'void',

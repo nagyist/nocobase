@@ -1,8 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { FormItem, FormLayout } from '@formily/antd-v5';
 import { registerValidateRules } from '@formily/core';
 import React from 'react';
 import { defaultProps, operators } from './properties';
-import { IField } from './types';
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
 
 registerValidateRules({
   json(value) {
@@ -18,14 +27,14 @@ registerValidateRules({
   },
 });
 
-export const json: IField = {
-  name: 'json',
-  type: 'object',
-  group: 'advanced',
-  order: 4,
-  title: '{{t("JSON")}}',
-  sortable: true,
-  default: {
+export class JsonFieldInterface extends CollectionFieldInterface {
+  name = 'json';
+  type = 'object';
+  group = 'advanced';
+  order = 4;
+  title = '{{t("JSON")}}';
+  sortable = false;
+  default = {
     type: 'json',
     // name,
     uiSchema: {
@@ -40,10 +49,10 @@ export const json: IField = {
       },
       default: null,
     },
-  },
-  availableTypes: ['json', 'array', 'jsonb'],
-  hasDefaultValue: true,
-  properties: {
+  };
+  availableTypes = ['json', 'array', 'set', 'jsonb', 'text', 'circle', 'lineString', 'point', 'polygon'];
+  hasDefaultValue = true;
+  properties = {
     ...defaultProps,
     jsonb: {
       type: 'boolean',
@@ -58,8 +67,8 @@ export const json: IField = {
       'x-hidden': `{{ !isDialect('postgres') }}`,
       'x-disabled': `{{ disabledJSONB }}`,
     },
-  },
-  filterable: {
-    operators: operators.string,
-  },
-};
+  };
+  // filterable = {
+  //   operators: operators.string,
+  // };
+}

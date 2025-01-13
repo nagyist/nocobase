@@ -1,8 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database } from '@nocobase/database';
-import PluginCollectionManager from '@nocobase/plugin-collection-manager';
-import PluginErrorHandler from '@nocobase/plugin-error-handler';
 import UiSchemaStoragePlugin, { UiSchemaRepository } from '@nocobase/plugin-ui-schema-storage';
-import { mockServer, MockServer } from '@nocobase/test';
+import { createMockServer, MockServer } from '@nocobase/test';
+import { vi } from 'vitest';
 
 describe('server hooks', () => {
   let app: MockServer;
@@ -55,18 +63,12 @@ describe('server hooks', () => {
   });
 
   beforeEach(async () => {
-    app = mockServer({
+    app = await createMockServer({
       registerActions: true,
+      plugins: ['ui-schema-storage', 'data-source-main', 'error-handler'],
     });
 
-    await app.cleanDb();
     db = app.db;
-
-    app.plugin(UiSchemaStoragePlugin, { name: 'ui-schema-storage' });
-    app.plugin(PluginErrorHandler, { name: 'error-handler' });
-    app.plugin(PluginCollectionManager, { name: 'collection-manager' });
-
-    await app.loadAndInstall();
 
     uiSchemaRepository = db.getRepository('uiSchemas');
     await uiSchemaRepository.insert(schema);
@@ -93,7 +95,7 @@ describe('server hooks', () => {
     await PostModel.migrate();
 
     const serverHooks = uiSchemaPlugin.serverHooks;
-    const hookFn = jest.fn();
+    const hookFn = vi.fn();
 
     serverHooks.register('onCollectionFieldDestroy', 'onFieldDestroy', hookFn);
 
@@ -128,7 +130,7 @@ describe('server hooks', () => {
 
     const serverHooks = uiSchemaPlugin.serverHooks;
 
-    const hookFn = jest.fn();
+    const hookFn = vi.fn();
 
     serverHooks.register('onCollectionDestroy', 'onCollectionDestroy', hookFn);
 
@@ -155,7 +157,7 @@ describe('server hooks', () => {
     };
 
     const serverHooks = uiSchemaPlugin.serverHooks;
-    const hookFn = jest.fn();
+    const hookFn = vi.fn();
 
     serverHooks.register('onSelfCreate', 'afterCreateMenu', hookFn);
 
@@ -196,7 +198,7 @@ describe('server hooks', () => {
     await PostModel.migrate();
 
     const serverHooks = uiSchemaPlugin.serverHooks;
-    const hookFn = jest.fn();
+    const hookFn = vi.fn();
 
     serverHooks.register('onAnyCollectionFieldDestroy', 'test1', hookFn);
 
@@ -250,7 +252,7 @@ describe('server hooks', () => {
 
     const serverHooks = uiSchemaPlugin.serverHooks;
 
-    const jestFn = jest.fn();
+    const jestFn = vi.fn();
 
     serverHooks.register('onCollectionFieldDestroy', 'preventDestroy', async ({ options }) => {
       await options.transaction.rollback();
@@ -266,7 +268,9 @@ describe('server hooks', () => {
         },
         individualHooks: true,
       });
-    } catch (e) {}
+    } catch (e) {
+      console.log(e);
+    }
 
     expect(jestFn).toHaveBeenCalled();
     expect(
@@ -310,7 +314,7 @@ describe('server hooks', () => {
 
     const serverHooks = uiSchemaPlugin.serverHooks;
 
-    const jestFn = jest.fn();
+    const jestFn = vi.fn();
 
     serverHooks.register('onSelfMove', 'testOnSelfMove', async ({ options }) => {
       jestFn();

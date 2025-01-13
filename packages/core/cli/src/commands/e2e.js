@@ -1,7 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 const { Command } = require('commander');
 const { run, isPortReachable } = require('../util');
 const { execSync } = require('node:child_process');
 const axios = require('axios');
+const { pTest } = require('./p-test');
+const os = require('os');
+const treeKill = require('tree-kill');
+const chalk = require('chalk');
 
 /**
  * 检查服务是否启动成功
@@ -31,7 +44,7 @@ const checkServer = async (duration = 1000, max = 60 * 10) => {
           }
         })
         .catch((error) => {
-          console.error('Request error:', error.message);
+          console.error('Request error:', error?.response?.data?.error);
         });
     }, duration);
   });
@@ -81,6 +94,7 @@ async function appReady() {
 async function runApp(options = {}) {
   console.log('installing...');
   await run('nocobase', ['install', '-f']);
+  await run('nocobase', ['pm', 'enable-all']);
   if (await isPortReachable(process.env.APP_PORT)) {
     console.log('app started');
     return;
@@ -89,6 +103,17 @@ async function runApp(options = {}) {
   run('nocobase', [process.env.APP_ENV === 'production' ? 'start' : 'dev'], options);
 }
 
+process.on('SIGINT', async () => {
+  treeKill(process.pid, (error) => {
+    if (error) {
+      console.error(error);
+    } else {
+      console.log(chalk.yellow('Force killing...'));
+    }
+    process.exit();
+  });
+});
+
 const commonConfig = {
   stdio: 'inherit',
 };
@@ -96,13 +121,13 @@ const commonConfig = {
 const runCodegenSync = () => {
   try {
     execSync(
-      `npx playwright codegen --load-storage=playwright/.auth/codegen.auth.json ${process.env.APP_BASE_URL} --save-storage=playwright/.auth/codegen.auth.json`,
+      `npx playwright codegen --load-storage=storage/playwright/.auth/codegen.auth.json ${process.env.APP_BASE_URL} --save-storage=storage/playwright/.auth/codegen.auth.json`,
       commonConfig,
     );
   } catch (err) {
     if (err.message.includes('auth.json')) {
       execSync(
-        `npx playwright codegen ${process.env.APP_BASE_URL} --save-storage=playwright/.auth/codegen.auth.json`,
+        `npx playwright codegen ${process.env.APP_BASE_URL} --save-storage=storage/playwright/.auth/codegen.auth.json`,
         commonConfig,
       );
     } else {
@@ -123,7 +148,10 @@ const filterArgv = () => {
     if (element.startsWith('--url=')) {
       continue;
     }
-    if (element === '--skip-reporter') {
+    if (element === '--build') {
+      continue;
+    }
+    if (element === '--production') {
       continue;
     }
     argv.push(element);
@@ -142,14 +170,21 @@ module.exports = (cli) => {
       console.log('APP_BASE_URL:', process.env.APP_BASE_URL);
     }
   });
+
   e2e
     .command('test')
     .allowUnknownOption()
     .option('--url [url]')
-    .option('--skip-reporter')
+    .option('--build')
+    .option('--production')
     .action(async (options) => {
-      if (options.skipReporter) {
-        process.env.PLAYWRIGHT_SKIP_REPORTER = true;
+      process.env.__E2E__ = true;
+      if (options.production) {
+        process.env.APP_ENV = 'production';
+      }
+      if (options.build) {
+        process.env.APP_ENV = 'production';
+        await run('yarn', ['build']);
       }
       if (options.url) {
         process.env.APP_BASE_URL = options.url.replace('localhost', '127.0.0.1');
@@ -182,8 +217,13 @@ module.exports = (cli) => {
   e2e
     .command('start-app')
     .option('--production')
+    .option('--build')
     .option('--port [port]')
     .action(async (options) => {
+      process.env.__E2E__ = true;
+      if (options.build) {
+        await run('yarn', ['build']);
+      }
       if (options.production) {
         process.env.APP_ENV = 'production';
       }
@@ -195,5 +235,30 @@ module.exports = (cli) => {
 
   e2e.command('reinstall-app').action(async (options) => {
     await run('nocobase', ['install', '-f'], options);
+    await run('nocobase', ['pm2', 'enable-all']);
   });
+
+  e2e.command('install-deps').action(async () => {
+    await run('npx', ['playwright', 'install', '--with-deps']);
+  });
+
+  e2e
+    .command('p-test')
+    .option('--stop-on-error')
+    .option('--build')
+    .option('--concurrency [concurrency]', '', os.cpus().length)
+    .option(
+      '--match [match]',
+      'Only the files matching one of these patterns are executed as test files. Matching is performed against the absolute file path. Strings are treated as glob patterns.',
+      'packages/**/__e2e__/**/*.test.ts',
+    )
+    .option('--ignore [ignore]', 'Skip tests that match the pattern. Strings are treated as glob patterns.', undefined)
+    .action(async (options) => {
+      process.env.__E2E__ = true;
+      if (options.build) {
+        process.env.APP_ENV = 'production';
+        await run('yarn', ['build']);
+      }
+      await pTest({ ...options, concurrency: 1 * options.concurrency });
+    });
 };

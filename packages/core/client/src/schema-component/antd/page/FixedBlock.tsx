@@ -1,11 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
 import { useField, useFieldSchema } from '@formily/react';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useRecord } from '../../../record-provider';
-import { useDesignable } from '../../hooks';
-import { useIsBlockInPage } from './hooks/useIsBlockInPage';
-import { SchemaSettingsSwitchItem } from '../../../schema-settings';
 
 const FixedBlockContext = React.createContext<{
   setFixedBlock: (value: string | false) => void;
@@ -44,61 +48,15 @@ export const useFixedBlock = () => {
 export const FixedBlockWrapper: React.FC = (props) => {
   const fixedBlock = useFixedSchema();
   const { height, fixedBlockUID } = useFixedBlock();
-  const record = useRecord();
-  const isPopup = Object.keys(record).length;
-  if (isPopup) {
-    return <>{props.children}</>;
-  }
   /**
    * The fixedBlockUID of false means that the page has no fixed blocks
    * isPopup means that the FixedBlock is in the popup mode
    */
-  if (!fixedBlock && fixedBlockUID) return null;
-  return (
-    <div
-      className="nb-fixed-block"
-      style={{
-        height: fixedBlockUID ? `calc(100vh - ${height})` : undefined,
-      }}
-    >
-      {props.children}
-    </div>
-  );
+  if (!fixedBlock && fixedBlockUID) return <>{props.children}</>;
+  return <div className="nb-fixed-block">{props.children}</div>;
 };
 
-export const FixedBlockDesignerItem = () => {
-  const field = useField();
-  const { t } = useTranslation();
-  const fieldSchema = useFieldSchema();
-  const { dn } = useDesignable();
-  const { inFixedBlock } = useFixedBlock();
-  const { isBlockInPage } = useIsBlockInPage();
-
-  if (!isBlockInPage() || !inFixedBlock) {
-    return null;
-  }
-  return (
-    <SchemaSettingsSwitchItem
-      title={t('Fix block')}
-      checked={fieldSchema['x-decorator-props']?.fixedBlock}
-      onChange={async (fixedBlock) => {
-        const decoratorProps = {
-          ...fieldSchema['x-decorator-props'],
-          fixedBlock,
-        };
-        await dn.emit('patch', {
-          schema: {
-            ['x-uid']: fieldSchema['x-uid'],
-            'x-decorator-props': decoratorProps,
-          },
-        });
-        field.decoratorProps = fieldSchema['x-decorator-props'] = decoratorProps;
-      }}
-    />
-  );
-};
-
-interface FixedBlockProps {
+export interface FixedBlockProps {
   height: number | string;
 }
 
@@ -106,11 +64,11 @@ const fixedBlockCss = css`
   overflow: hidden;
   position: relative;
   .noco-card-item {
-    height: 100%;
+    height: auto;
     .ant-card {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      height: auto;
       .ant-card-body {
         height: 1px;
         flex: 1;
@@ -122,7 +80,7 @@ const fixedBlockCss = css`
   }
 `;
 
-const FixedBlock: React.FC<FixedBlockProps> = (props) => {
+export const FixedBlock: React.FC<FixedBlockProps> = (props) => {
   const { height } = props;
   const [fixedBlockUID, _setFixedBlock] = useState<false | string>(false);
   const fixedBlockUIDRef = useRef(fixedBlockUID);
@@ -132,14 +90,7 @@ const FixedBlock: React.FC<FixedBlockProps> = (props) => {
   };
   return (
     <FixedBlockContext.Provider value={{ inFixedBlock: true, height, setFixedBlock, fixedBlockUID, fixedBlockUIDRef }}>
-      <div
-        className={fixedBlockUID ? fixedBlockCss : ''}
-        style={{
-          height: fixedBlockUID ? `calc(100vh - ${height})` : undefined,
-        }}
-      >
-        {props.children}
-      </div>
+      <div className={fixedBlockUID ? fixedBlockCss : ''}>{props.children}</div>
     </FixedBlockContext.Provider>
   );
 };

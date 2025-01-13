@@ -1,6 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { SchemaExpressionScopeContext, SchemaOptionsContext } from '@formily/react';
+import { act, renderHook, waitFor } from '@nocobase/test/client';
 import React from 'react';
-import { act, renderHook, waitFor } from 'testUtils';
+import { Router } from 'react-router';
 import { APIClientProvider } from '../../api-client';
 import { mockAPIClient } from '../../testUtils';
 import { CurrentUserProvider } from '../../user';
@@ -9,7 +19,7 @@ import useVariables from '../hooks/useVariables';
 
 vi.mock('../../collection-manager', async () => {
   return {
-    useCollectionManager: () => {
+    useCollectionManager_deprecated: () => {
       return {
         getCollectionJoinField: (path: string) => {
           if (path === 'users.belongsToField') {
@@ -42,12 +52,24 @@ vi.mock('../../collection-manager', async () => {
               target: 'test',
             };
           }
+          if (path === 'users.belongsToManyField') {
+            return {
+              type: 'belongsToMany',
+              target: 'test',
+              through: 'throughCollectionName',
+            };
+          }
           if (path === 'local.belongsToField') {
             return {
               type: 'belongsTo',
               target: 'test',
             };
           }
+        },
+        getCollection: () => {
+          return {
+            getPrimaryKey: () => 'id',
+          };
         },
       };
     },
@@ -59,6 +81,8 @@ const { apiClient, mockRequest } = mockAPIClient();
 
 // 用于解析 `$nRole` 的值
 apiClient.auth.role = 'root';
+// 用于解析 `$nToken` 的值
+apiClient.auth.token = 'token';
 
 mockRequest.onGet('/auth:check').reply(() => {
   return [
@@ -105,6 +129,20 @@ mockRequest.onGet('/users/0/hasManyField:list?pageSize=9999').reply(() => {
     },
   ];
 });
+mockRequest.onGet('/users/0/belongsToManyField:list?pageSize=9999').reply(() => {
+  return [
+    200,
+    {
+      data: [
+        {
+          id: 0,
+          name: '$user.belongsToManyField',
+          throughCollectionName: 'throughCollectionName',
+        },
+      ],
+    },
+  ];
+});
 mockRequest.onGet('/test/0/hasManyField:list?pageSize=9999').reply(() => {
   return [
     200,
@@ -133,15 +171,17 @@ mockRequest.onGet('/someBelongsToField/0/belongsToField:get').reply(() => {
 
 const Providers = ({ children }) => {
   return (
-    <APIClientProvider apiClient={apiClient}>
-      <CurrentUserProvider>
-        <SchemaOptionsContext.Provider value={{}}>
-          <SchemaExpressionScopeContext.Provider value={{}}>
-            <VariablesProvider>{children}</VariablesProvider>
-          </SchemaExpressionScopeContext.Provider>
-        </SchemaOptionsContext.Provider>
-      </CurrentUserProvider>
-    </APIClientProvider>
+    <Router location={window.location} navigator={null}>
+      <APIClientProvider apiClient={apiClient}>
+        <CurrentUserProvider>
+          <SchemaOptionsContext.Provider value={{}}>
+            <SchemaExpressionScopeContext.Provider value={{}}>
+              <VariablesProvider>{children}</VariablesProvider>
+            </SchemaExpressionScopeContext.Provider>
+          </SchemaOptionsContext.Provider>
+        </CurrentUserProvider>
+      </APIClientProvider>
+    </Router>
   );
 };
 
@@ -209,6 +249,8 @@ describe('useVariables', () => {
             "yesterday": [Function],
           },
           "$nRole": "root",
+          "$nToken": "token",
+          "$nURLSearchParams": {},
           "$system": {
             "now": [Function],
           },
@@ -234,7 +276,7 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.nickname }}')).toBe('test');
+      expect(await result.current.parseVariable('{{ $user.nickname }}').then(({ value }) => value)).toBe('test');
     });
   });
 
@@ -244,7 +286,35 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.nickname }}')).toBe('from request');
+      expect(await result.current.parseVariable('{{ $user.nickname }}').then(({ value }) => value)).toBe(
+        'from request',
+      );
+    });
+  });
+
+  it('$date', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      expect(
+        await result.current
+          .parseVariable('{{ $date.today }}', [], { fieldOperator: '$dateOn' })
+          .then(({ value }) => typeof value),
+      ).toBe('string');
+      expect(
+        Array.isArray(
+          await result.current
+            .parseVariable('{{ $date.today }}', [], { fieldOperator: '$dateOn' })
+            .then(({ value }) => value),
+        ),
+      ).toBe(false);
+      expect(
+        await result.current
+          .parseVariable('{{ $date.today }}', [], { fieldOperator: '$dateBetween' })
+          .then(({ value }) => value),
+      ).toHaveLength(2);
     });
   });
 
@@ -254,10 +324,24 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.belongsToField }}')).toEqual({
+      expect(await result.current.parseVariable('{{ $user.belongsToField }}').then(({ value }) => value)).toEqual({
         id: 0,
         name: '$user.belongsToField',
       });
+    });
+  });
+
+  it('set doNotRequest to true to ensure the result is empty', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      expect(
+        await result.current
+          .parseVariable('{{ $user.belongsToField }}', undefined, { doNotRequest: true })
+          .then(({ value }) => value),
+      ).toBe(null);
     });
   });
 
@@ -267,7 +351,9 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.belongsToField.name }}')).toBe('$user.belongsToField');
+      expect(await result.current.parseVariable('{{ $user.belongsToField.name }}').then(({ value }) => value)).toBe(
+        '$user.belongsToField',
+      );
     });
   });
 
@@ -277,7 +363,7 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.hasManyField }}')).toEqual([
+      expect(await result.current.parseVariable('{{ $user.hasManyField }}').then(({ value }) => value)).toEqual([
         {
           id: 0,
           name: '$user.hasManyField',
@@ -286,7 +372,9 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.hasManyField.name }}')).toEqual(['$user.hasManyField']);
+      expect(await result.current.parseVariable('{{ $user.hasManyField.name }}').then(({ value }) => value)).toEqual([
+        '$user.hasManyField',
+      ]);
     });
   });
 
@@ -296,12 +384,33 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.hasManyField.hasManyField }}')).toEqual([
+      expect(
+        await result.current.parseVariable('{{ $user.hasManyField.hasManyField }}').then(({ value }) => value),
+      ).toEqual([
         {
           id: 0,
           name: '$user.hasManyField.hasManyField',
         },
       ]);
+    });
+  });
+
+  it('$user.hasManyField', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      expect(await result.current.parseVariable('{{ $user.hasManyField }}')).toEqual({
+        collectionName: 'test',
+        dataSource: 'main',
+        value: [
+          {
+            id: 0,
+            name: '$user.hasManyField',
+          },
+        ],
+      });
     });
   });
 
@@ -311,9 +420,9 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.hasManyField.hasManyField.name }}')).toEqual([
-        '$user.hasManyField.hasManyField',
-      ]);
+      expect(
+        await result.current.parseVariable('{{ $user.hasManyField.hasManyField.name }}').then(({ value }) => value),
+      ).toEqual(['$user.hasManyField.hasManyField']);
     });
   });
 
@@ -339,7 +448,7 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.hasManyField }}')).toEqual([
+      expect(await result.current.parseVariable('{{ $user.hasManyField }}').then(({ value }) => value)).toEqual([
         {
           id: 0,
           name: '$user.hasManyField',
@@ -348,10 +457,27 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $user.hasManyField.hasManyField }}')).toEqual([
+      expect(
+        await result.current.parseVariable('{{ $user.hasManyField.hasManyField }}').then(({ value }) => value),
+      ).toEqual([
         {
           id: 0,
           name: '$user.hasManyField.hasManyField',
+        },
+      ]);
+    });
+  });
+
+  it('should remove through collection field', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      expect(await result.current.parseVariable('{{ $user.belongsToManyField }}').then(({ value }) => value)).toEqual([
+        {
+          id: 0,
+          name: '$user.belongsToManyField',
         },
       ]);
     });
@@ -420,6 +546,8 @@ describe('useVariables', () => {
             "yesterday": [Function],
           },
           "$nRole": "root",
+          "$nToken": "token",
+          "$nURLSearchParams": {},
           "$system": {
             "now": [Function],
           },
@@ -504,6 +632,8 @@ describe('useVariables', () => {
             "yesterday": [Function],
           },
           "$nRole": "root",
+          "$nToken": "token",
+          "$nURLSearchParams": {},
           "$new": {
             "name": "new variable",
           },
@@ -530,11 +660,12 @@ describe('useVariables', () => {
         ctx: {
           name: 'new variable',
         },
+        defaultValue: null,
       });
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $new.name }}')).toBe('new variable');
+      expect(await result.current.parseVariable('{{ $new.name }}').then(({ value }) => value)).toBe('new variable');
     });
   });
 
@@ -553,7 +684,47 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $new.noExist }}')).toBe(undefined);
+      expect(await result.current.parseVariable('{{ $new.noExist }}').then(({ value }) => value)).toBe(null);
+    });
+  });
+
+  it('$new.noExist with default value', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      result.current.registerVariable({
+        name: '$new',
+        ctx: {
+          name: 'new variable',
+        },
+        defaultValue: 'default value',
+      });
+    });
+
+    await waitFor(async () => {
+      expect(await result.current.parseVariable('{{ $new.noExist }}').then(({ value }) => value)).toBe('default value');
+    });
+  });
+
+  it('$new.noExist with undefined default value', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      result.current.registerVariable({
+        name: '$new',
+        ctx: {
+          name: 'new variable',
+        },
+        defaultValue: undefined,
+      });
+    });
+
+    await waitFor(async () => {
+      expect(await result.current.parseVariable('{{ $new.noExist }}').then(({ value }) => value)).toBe(undefined);
     });
   });
 
@@ -572,8 +743,30 @@ describe('useVariables', () => {
         ctx: {
           name: 'local variable',
         },
+        collectionName: 'local',
+        dataSource: 'local',
       }),
-    ).toBe('local variable');
+    ).toEqual({
+      value: 'local variable',
+      dataSource: 'local',
+    });
+
+    expect(
+      await result.current.parseVariable('{{ $local }}', {
+        name: '$local',
+        ctx: {
+          name: 'local variable',
+        },
+        collectionName: 'local',
+        dataSource: 'local',
+      }),
+    ).toEqual({
+      value: {
+        name: 'local variable',
+      },
+      collectionName: 'local',
+      dataSource: 'local',
+    });
 
     // 由于 $local 是一个局部变量，所以不会被缓存到 ctx 中
     expect(result.current.getVariable('$local')).toBe(null);
@@ -589,17 +782,47 @@ describe('useVariables', () => {
     });
 
     expect(
-      await result.current.parseVariable('{{ $local.name }}', [
-        {
-          name: '$local',
-          ctx: {
-            name: 'local variable',
+      await result.current
+        .parseVariable('{{ $local.name }}', [
+          {
+            name: '$local',
+            ctx: {
+              name: 'local variable',
+            },
           },
-        },
-      ]),
+        ])
+        .then(({ value }) => value),
     ).toBe('local variable');
 
     // 由于 $local 是一个局部变量，所以不会被缓存到 ctx 中
+    expect(result.current.getVariable('$local')).toBe(null);
+  });
+
+  it('parse multiple variables concurrently using local variables', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    const promises = [];
+
+    await waitFor(() => {
+      for (let i = 0; i < 3; i++) {
+        promises.push(
+          result.current.parseVariable('{{ $user.nickname }}', [
+            {
+              name: `$local`,
+              ctx: {
+                name: `local variable ${i}`,
+              },
+            },
+          ]),
+        );
+      }
+    });
+
+    await Promise.all(promises);
+
+    // 并发多次解析之后，最终的全局变量不应该包含之前注册的局部变量
     expect(result.current.getVariable('$local')).toBe(null);
   });
 
@@ -622,7 +845,9 @@ describe('useVariables', () => {
     });
 
     await waitFor(async () => {
-      expect(await result.current.parseVariable('{{ $some.belongsToField.belongsToField }}')).toEqual({
+      expect(
+        await result.current.parseVariable('{{ $some.belongsToField.belongsToField }}').then(({ value }) => value),
+      ).toEqual({
         id: 0,
         name: '$some.belongsToField.belongsToField',
       });
@@ -636,11 +861,31 @@ describe('useVariables', () => {
         belongsToField: null,
       },
       collectionName: 'some',
+      defaultValue: 'default value',
     });
 
     await waitFor(async () => {
-      // 因为 $some 的 ctx 没有 id 所以无法获取关系字段的数据
-      expect(await result.current.parseVariable('{{ $some.belongsToField.belongsToField }}')).toBe(undefined);
+      // 只有解析后的值是 undefined 才会使用默认值
+      expect(
+        await result.current.parseVariable('{{ $some.belongsToField.belongsToField }}').then(({ value }) => value),
+      ).toBe(null);
+    });
+
+    // 会覆盖之前的 $some
+    result.current.registerVariable({
+      name: '$some',
+      ctx: {
+        name: 'new variable',
+      },
+      collectionName: 'some',
+      defaultValue: 'default value',
+    });
+
+    await waitFor(async () => {
+      // 解析后的值是 undefined 所以会返回上面设置的默认值
+      expect(
+        await result.current.parseVariable('{{ $some.belongsToField.belongsToField }}').then(({ value }) => value),
+      ).toBe('default value');
     });
   });
 
@@ -653,6 +898,36 @@ describe('useVariables', () => {
       expect(await result.current.getCollectionField('{{ $user.belongsToField }}')).toEqual({
         type: 'belongsTo',
         target: 'test',
+      });
+    });
+  });
+
+  it('getCollectionFiled with only variable name', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      expect(await result.current.getCollectionField('{{ $user }}')).toEqual({
+        target: 'users',
+      });
+    });
+  });
+
+  it('getCollectionFiled with local variable name', async () => {
+    const { result } = renderHook(() => useVariables(), {
+      wrapper: Providers,
+    });
+
+    await waitFor(async () => {
+      expect(
+        await result.current.getCollectionField('{{ $local }}', {
+          name: '$local',
+          ctx: {},
+          collectionName: 'local',
+        }),
+      ).toEqual({
+        target: 'local',
       });
     });
   });

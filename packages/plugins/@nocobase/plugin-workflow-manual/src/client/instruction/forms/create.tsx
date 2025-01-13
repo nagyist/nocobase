@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React, { useMemo, useState } from 'react';
 
 import {
@@ -7,7 +16,8 @@ import {
   SchemaSettingsDivider,
   SchemaSettingsLinkageRules,
   SchemaSettingsRemove,
-  useCollection,
+  useCollection_deprecated,
+  useGetSchemaInitializerMenuItems,
   useMenuSearch,
 } from '@nocobase/client';
 
@@ -18,7 +28,7 @@ import { ManualFormType } from '../SchemaConfig';
 import { findSchema } from '../utils';
 
 function CreateFormDesigner() {
-  const { name, title } = useCollection();
+  const { name, title } = useCollection_deprecated();
 
   return (
     <GeneralSchemaDesigner title={title || name}>
@@ -39,26 +49,33 @@ function CreateFormDesigner() {
 export default {
   title: `{{t("Create record form", { ns: "${NAMESPACE}" })}}`,
   config: {
-    useInitializer({ collections }) {
+    useInitializer({ allCollections }) {
       const childItems = useMemo(
         () =>
-          collections.map((item) => ({
-            name: _.camelCase(`createRecordForm-child-${item.name}`),
-            type: 'item',
-            title: item.title,
-            label: item.label,
-            schema: {
-              collection: item.name,
-              title: `{{t("Create record", { ns: "${NAMESPACE}" })}}`,
-              formType: 'create',
-              'x-designer': 'CreateFormDesigner',
-            },
-            Component: FormBlockInitializer,
+          allCollections.map(({ key, displayName, collections }) => ({
+            key: key,
+            name: key,
+            label: displayName,
+            type: 'subMenu',
+            children: collections.map((item) => ({
+              name: _.camelCase(`createRecordForm-child-${item.name}`),
+              type: 'item',
+              title: item.title || item.tableName,
+              schema: {
+                collection: item.name,
+                dataSource: key,
+                title: `{{t("Create record", { ns: "${NAMESPACE}" })}}`,
+                formType: 'create',
+                'x-designer': 'CreateFormDesigner',
+              },
+              Component: FormBlockInitializer,
+            })),
           })),
-        [collections],
+        [allCollections],
       );
-      const [isOpenSubMenu, setIsOpenSubMenu] = useState(false);
-      const searchedChildren = useMenuSearch(childItems, isOpenSubMenu, true);
+      const [openMenuKeys, setOpenMenuKeys] = useState([]);
+      const searchedChildren = useMenuSearch({ data: childItems, openKeys: openMenuKeys });
+
       return {
         name: 'createRecordForm',
         key: 'createRecordForm',
@@ -66,7 +83,7 @@ export default {
         title: `{{t("Create record form", { ns: "${NAMESPACE}" })}}`,
         componentProps: {
           onOpenChange(keys) {
-            setIsOpenSubMenu(keys.length > 0);
+            setOpenMenuKeys(keys);
           },
         },
         children: searchedChildren,
@@ -87,10 +104,13 @@ export default {
       formBlocks.forEach((formBlock) => {
         const [formKey] = Object.keys(formBlock.properties);
         const formSchema = formBlock.properties[formKey];
+        //获取actionBar的schemakey
+        const actionKey =
+          Object.entries(formSchema.properties).find(([key, f]) => f['x-component'] === 'ActionBar')?.[0] || 'actions';
         forms[formKey] = {
           type: 'create',
           title: formBlock['x-component-props']?.title || formKey,
-          actions: findSchema(formSchema.properties.actions, (item) => item['x-component'] === 'Action').map(
+          actions: findSchema(formSchema.properties[actionKey], (item) => item['x-component'] === 'Action').map(
             (item) => ({
               status: item['x-decorator-props'].value,
               values: item['x-action-settings']?.assignedValues?.values,

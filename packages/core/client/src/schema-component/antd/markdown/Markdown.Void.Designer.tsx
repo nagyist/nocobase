@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useField } from '@formily/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +15,9 @@ import {
   SchemaSettingsDivider,
   SchemaSettingsItem,
   SchemaSettingsRemove,
+  SchemaSettingsRenderEngine,
 } from '../../../schema-settings';
+import { SchemaSettingsBlockHeightItem } from '../../../schema-settings/SchemaSettingsBlockHeightItem';
 
 export const MarkdownVoidDesigner = () => {
   const field = useField();
@@ -19,6 +30,8 @@ export const MarkdownVoidDesigner = () => {
           field.editable = true;
         }}
       />
+      <SchemaSettingsRenderEngine />
+      <SchemaSettingsBlockHeightItem />
       <SchemaSettingsDivider />
       <SchemaSettingsRemove
         removeParentsIfNoChildren

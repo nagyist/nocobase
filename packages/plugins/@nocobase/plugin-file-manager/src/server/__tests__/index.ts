@@ -1,17 +1,24 @@
-import { MockServer, mockServer } from '@nocobase/test';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { MockServer, createMockServer } from '@nocobase/test';
 import send from 'koa-send';
 import path from 'path';
 import supertest from 'supertest';
 
-import plugin from '../';
-
 export async function getApp(options = {}): Promise<MockServer> {
-  const app = mockServer({
+  const app = await createMockServer({
     ...options,
     cors: {
       origin: '*',
     },
-    acl: false,
+    plugins: ['users', 'auth', 'file-manager'],
   });
 
   app.use(async (ctx, next) => {
@@ -22,15 +29,11 @@ export async function getApp(options = {}): Promise<MockServer> {
     await next();
   });
 
-  await app.cleanDb();
-
-  app.plugin(plugin);
-
-  app.db.import({
-    directory: path.resolve(__dirname, './tables'),
+  await app.db.import({
+    directory: path.resolve(__dirname, './collections'),
   });
 
-  await app.loadAndInstall();
+  await app.db.sync();
 
   return app;
 }

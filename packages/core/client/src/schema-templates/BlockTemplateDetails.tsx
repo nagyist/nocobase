@@ -1,8 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { PageHeader as AntdPageHeader } from '@ant-design/pro-layout';
 import { Input, Spin } from 'antd';
 import React, { useContext, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useAPIClient, useRequest, useSchemaTemplateManager } from '..';
+import { useNavigateNoUpdate } from '../application/CustomRouterContextProvider';
 import { RemoteSchemaComponent, SchemaComponentContext } from '../schema-component';
 
 const EditableTitle = (props) => {
@@ -59,7 +69,7 @@ const EditableTitle = (props) => {
 };
 
 export const BlockTemplateDetails = () => {
-  const navigate = useNavigate();
+  const navigate = useNavigateNoUpdate();
   const params = useParams<any>();
   const key = params?.key;
   const value = useContext(SchemaComponentContext);

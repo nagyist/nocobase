@@ -1,8 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Context } from '@nocobase/actions';
 import { Model } from '@nocobase/database';
+import { Authenticator } from './auth-manager';
 
 export type AuthConfig = {
-  authenticator: Model;
+  authenticator: Authenticator;
   options: {
     [key: string]: any;
   };
@@ -22,7 +32,7 @@ interface IAuth {
 
 export abstract class Auth implements IAuth {
   abstract user: Model;
-  protected authenticator: Model;
+  protected authenticator: Authenticator;
   protected options: {
     [key: string]: any;
   };
@@ -36,7 +46,7 @@ export abstract class Auth implements IAuth {
   }
 
   // The abstract methods are required to be implemented by all authentications.
-  abstract check();
+  abstract check(): Promise<Model>;
   // The following methods are mainly designed for user authentications.
   async signIn(): Promise<any> {}
   async signUp(): Promise<any> {}

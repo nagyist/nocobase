@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { mockDatabase } from '../index';
 import Database from '../../database';
 import { Collection } from '../../collection';
@@ -71,6 +80,7 @@ describe('create with belongsToMany', () => {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
     Post = db.collection({
       name: 'posts',
       fields: [
@@ -181,8 +191,11 @@ describe('create', () => {
         },
       },
     });
+
     expect(u1.name).toEqual('u1');
+
     const group = await u1.get('group');
+
     expect(group.name).toEqual('g1');
 
     const u2 = await User.repository.firstOrCreate({

@@ -1,30 +1,44 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import lodash from 'lodash';
-import { HasOne, MultiAssociationAccessors, Sequelize, Transaction, Transactionable } from 'sequelize';
+import { HasOne, MultiAssociationAccessors, Sequelize, Transaction } from 'sequelize';
 import injectTargetCollection from '../decorators/target-collection-decorator';
-import {
-  CommonFindOptions,
-  CountOptions,
-  DestroyOptions,
-  Filter,
-  FindOneOptions,
-  FindOptions,
-  TK,
-  TargetKey,
-  UpdateOptions,
-} from '../repository';
 import { updateModelByValues } from '../update-associations';
 import { UpdateGuard } from '../update-guard';
 import { RelationRepository, transaction } from './relation-repository';
-
-export type FindAndCountOptions = CommonFindOptions;
-
-export interface AssociatedOptions extends Transactionable {
-  tk?: TK;
-}
+import {
+  AssociatedOptions,
+  CountOptions,
+  DestroyOptions,
+  Filter,
+  FindOptions,
+  TargetKey,
+  UpdateOptions,
+  FirstOrCreateOptions,
+} from './types';
+import { valuesToFilter } from '../utils/filter-utils';
 
 export abstract class MultipleRelationRepository extends RelationRepository {
-  extendFindOptions(findOptions) {
-    return findOptions;
+  async targetRepositoryFilterOptionsBySourceValue(): Promise<any> {
+    let filterForeignKeyValue = this.sourceKeyValue;
+
+    if (this.isMultiTargetKey()) {
+      const sourceModel = await this.getSourceModel();
+
+      // @ts-ignore
+      filterForeignKeyValue = sourceModel.get(this.association.sourceKey);
+    }
+
+    return {
+      [this.association.foreignKey]: filterForeignKeyValue,
+    };
   }
 
   async find(options?: FindOptions): Promise<any> {
@@ -44,9 +58,7 @@ export abstract class MultipleRelationRepository extends RelationRepository {
     const appendFilter = {
       isPivotFilter: true,
       association: pivotAssoc,
-      where: {
-        [association.foreignKey]: this.sourceKeyValue,
-      },
+      where: await this.targetRepositoryFilterOptionsBySourceValue(),
     };
 
     return targetRepository.find({
@@ -55,7 +67,7 @@ export abstract class MultipleRelationRepository extends RelationRepository {
     });
   }
 
-  async findAndCount(options?: FindAndCountOptions): Promise<[any[], number]> {
+  async findAndCount(options?: FindOptions): Promise<[any[], number]> {
     const transaction = await this.getTransaction(options, false);
 
     return [
@@ -77,10 +89,14 @@ export abstract class MultipleRelationRepository extends RelationRepository {
     if (!sourceModel) return 0;
 
     const queryOptions = this.buildQueryOptions(options);
+    const include = queryOptions.include?.filter((item: { association: string }) => {
+      const association = this.targetModel.associations?.[item.association];
+      return association?.associationType !== 'BelongsToArray';
+    });
 
     const count = await sourceModel[this.accessors().get]({
       where: queryOptions.where,
-      include: queryOptions.include,
+      include,
       includeIgnoreAttributes: false,
       attributes: [
         [
@@ -99,7 +115,7 @@ export abstract class MultipleRelationRepository extends RelationRepository {
     return parseInt(count.count);
   }
 
-  async findOne(options?: FindOneOptions): Promise<any> {
+  async findOne(options?: FindOptions): Promise<any> {
     const transaction = await this.getTransaction(options, false);
     const rows = await this.find({ ...options, limit: 1, transaction });
     return rows.length == 1 ? rows[0] : null;
@@ -159,7 +175,7 @@ export abstract class MultipleRelationRepository extends RelationRepository {
     return instances;
   }
 
-  async destroy(options?: TK | DestroyOptions): Promise<boolean> {
+  async destroy(options?: TargetKey | DestroyOptions): Promise<boolean> {
     return false;
   }
 
@@ -182,5 +198,11 @@ export abstract class MultipleRelationRepository extends RelationRepository {
 
   protected accessors() {
     return <MultiAssociationAccessors>super.accessors();
+  }
+
+  @transaction()
+  async updateOrCreate(options: FirstOrCreateOptions) {
+    const result = await super.updateOrCreate(options);
+    return Array.isArray(result) ? result[0] : result;
   }
 }

@@ -1,23 +1,31 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { useField, useFieldSchema } from '@formily/react';
 import { merge } from '@formily/shared';
 import _ from 'lodash';
 import React, { useCallback, useEffect, useMemo } from 'react';
-import { useFormBlockContext } from '../../../block-provider';
+import { useFormBlockContext } from '../../../block-provider/FormBlockProvider';
 import {
-  CollectionFieldProvider,
-  useCollection,
-  useCollectionField,
+  useCollectionField_deprecated,
   useCollectionFilterOptions,
-  useCollectionManager,
+  useCollectionManager_deprecated,
+  useCollection_deprecated,
 } from '../../../collection-manager';
+import { CollectionFieldProvider } from '../../../data-source';
 import { useRecord } from '../../../record-provider';
 import { useCompile, useComponent } from '../../../schema-component';
 import { VariableInput, getShouldChange } from '../../../schema-settings/VariableInput/VariableInput';
 import { Option } from '../../../schema-settings/VariableInput/type';
 import { formatVariableScop } from '../../../schema-settings/VariableInput/utils/formatVariableScop';
 import { useLocalVariables, useVariables } from '../../../variables';
-import { DeletedField } from '../DeletedField';
 
 interface AssignedFieldProps {
   value: any;
@@ -28,7 +36,7 @@ interface AssignedFieldProps {
 const InternalField: React.FC = (props) => {
   const field = useField<Field>();
   const fieldSchema = useFieldSchema();
-  const { uiSchema } = useCollectionField();
+  const { uiSchema } = useCollectionField_deprecated();
   const component = useComponent(uiSchema?.['x-component']);
   const compile = useCompile();
   const setFieldProps = (key, value) => {
@@ -39,14 +47,6 @@ const InternalField: React.FC = (props) => {
       field.required = !!uiSchema['required'];
     }
   };
-  const ctx = useFormBlockContext();
-
-  useEffect(() => {
-    if (ctx?.field) {
-      ctx.field.added = ctx.field.added || new Set();
-      ctx.field.added.add(fieldSchema.name);
-    }
-  });
 
   useEffect(() => {
     if (!uiSchema) {
@@ -82,7 +82,7 @@ const InternalField: React.FC = (props) => {
 const CollectionField = (props) => {
   const fieldSchema = useFieldSchema();
   return (
-    <CollectionFieldProvider name={fieldSchema.name} fallback={<DeletedField />}>
+    <CollectionFieldProvider name={fieldSchema.name}>
       <InternalField {...props} />
     </CollectionFieldProvider>
   );
@@ -95,8 +95,8 @@ export enum AssignedFieldValueType {
 
 export const AssignedField = (props: AssignedFieldProps) => {
   const { value, onChange } = props;
-  const { getCollectionFields, getAllCollectionsInheritChain } = useCollectionManager();
-  const collection = useCollection();
+  const { getCollectionFields, getAllCollectionsInheritChain } = useCollectionManager_deprecated();
+  const collection = useCollection_deprecated();
   const { form } = useFormBlockContext();
   const fieldSchema = useFieldSchema();
   const record = useRecord();

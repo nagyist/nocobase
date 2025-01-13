@@ -1,27 +1,33 @@
-import Database from '@nocobase/database';
-import { mockServer } from '@nocobase/test';
-import nodemailerMock from 'nodemailer-mock';
-import { Notification, NotificationService } from '../models';
-import plugin from '../server';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-jest.setTimeout(300000);
+import Database from '@nocobase/database';
+import { createMockServer } from '@nocobase/test';
+import nodemailerMock from 'nodemailer-mock';
+import os from 'os';
+import { Notification, NotificationService } from '../models';
 
 describe('notifications', () => {
   let db: Database;
 
   let app;
   beforeEach(async () => {
-    app = mockServer();
-    app.plugin(plugin);
-    await app.load();
+    app = await createMockServer({
+      plugins: ['notifications'],
+    });
     db = app.db;
-    await db.sync();
     NotificationService.createTransport = nodemailerMock.createTransport;
   });
 
   afterEach(() => app.destroy());
 
-  it('create', async () => {
+  it.skipIf(os.platform() === 'win32')('create', async () => {
     const Notification = db.getCollection('notifications');
     const notification = (await Notification.repository.create({
       values: {

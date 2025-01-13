@@ -1,7 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { promises as fs } from 'fs';
 import path from 'path';
 import { getApp } from '.';
-import { FILE_FIELD_NAME, STORAGE_TYPE_LOCAL } from '../constants';
+import { FILE_FIELD_NAME, FILE_SIZE_LIMIT_DEFAULT, STORAGE_TYPE_LOCAL } from '../../constants';
+import PluginFileManagerServer from '../server';
 
 const { LOCAL_STORAGE_BASE_URL, LOCAL_STORAGE_DEST = 'storage/uploads', APP_PORT = '13000' } = process.env;
 
@@ -13,17 +23,16 @@ describe('action', () => {
   let db;
   let StorageRepo;
   let AttachmentRepo;
+  let local1;
 
   beforeEach(async () => {
-    app = await getApp({
-      database: {},
-    });
+    app = await getApp();
     agent = app.agent();
     db = app.db;
 
     AttachmentRepo = db.getCollection('attachments').repository;
     StorageRepo = db.getCollection('storages').repository;
-    await StorageRepo.create({
+    local1 = await StorageRepo.create({
       values: {
         name: 'local1',
         type: STORAGE_TYPE_LOCAL,
@@ -42,6 +51,88 @@ describe('action', () => {
 
   describe('create / upload', () => {
     describe('default storage', () => {
+      it('should be create file record', async () => {
+        const Plugin = app.pm.get(PluginFileManagerServer) as PluginFileManagerServer;
+        const model = await Plugin.createFileRecord({
+          collectionName: 'attachments',
+          filePath: path.resolve(__dirname, './files/text.txt'),
+        });
+        const matcher = {
+          title: 'text',
+          extname: '.txt',
+          path: '',
+          // size: 13,
+          meta: {},
+          storageId: 1,
+        };
+        expect(model.toJSON()).toMatchObject(matcher);
+      });
+
+      it('should be local2 storage', async () => {
+        const storage = await StorageRepo.create({
+          values: {
+            name: 'local2',
+            type: STORAGE_TYPE_LOCAL,
+            baseUrl: DEFAULT_LOCAL_BASE_URL,
+            rules: {
+              size: 1024,
+            },
+            paranoid: true,
+          },
+        });
+        const Plugin = app.pm.get(PluginFileManagerServer) as PluginFileManagerServer;
+        const model = await Plugin.createFileRecord({
+          collectionName: 'attachments',
+          storageName: 'local2',
+          filePath: path.resolve(__dirname, './files/text.txt'),
+        });
+        const matcher = {
+          title: 'text',
+          extname: '.txt',
+          path: '',
+          // size: 13,
+          meta: {},
+          storageId: storage.id,
+        };
+        expect(model.toJSON()).toMatchObject(matcher);
+      });
+
+      it('should be custom values', async () => {
+        const Plugin = app.pm.get(PluginFileManagerServer) as PluginFileManagerServer;
+        const model = await Plugin.createFileRecord({
+          collectionName: 'attachments',
+          filePath: path.resolve(__dirname, './files/text.txt'),
+          values: {
+            size: 22,
+          },
+        });
+        const matcher = {
+          title: 'text',
+          extname: '.txt',
+          path: '',
+          size: 22,
+          meta: {},
+          storageId: 1,
+        };
+        expect(model.toJSON()).toMatchObject(matcher);
+      });
+
+      it('should be upload file', async () => {
+        const Plugin = app.pm.get(PluginFileManagerServer) as PluginFileManagerServer;
+        const data = await Plugin.uploadFile({
+          filePath: path.resolve(__dirname, './files/text.txt'),
+          documentRoot: 'storage/backups/test',
+        });
+        const matcher = {
+          title: 'text',
+          extname: '.txt',
+          path: '',
+          meta: {},
+          storageId: 1,
+        };
+        expect(data).toMatchObject(matcher);
+      });
+
       it('upload file should be ok', async () => {
         const { body } = await agent.resource('attachments').create({
           [FILE_FIELD_NAME]: path.resolve(__dirname, './files/text.txt'),
@@ -51,7 +142,7 @@ describe('action', () => {
           title: 'text',
           extname: '.txt',
           path: '',
-          size: 13,
+          // size: 13,
           mimetype: 'text/plain',
           meta: {},
           storageId: 1,
@@ -88,12 +179,12 @@ describe('action', () => {
         );
         const file = await fs.readFile(`${destPath}/${attachment.filename}`);
         // 文件是否保存到指定路径
-        expect(file.toString()).toBe('Hello world!\n');
+        expect(file.toString().includes('Hello world!')).toBeTruthy();
 
         // 通过 url 是否能正确访问
         const url = attachment.url.replace(`http://localhost:${APP_PORT}`, '');
         const content = await agent.get(url);
-        expect(content.text).toBe('Hello world!\n');
+        expect(content.text.includes('Hello world!')).toBeTruthy();
       });
     });
 
@@ -191,11 +282,47 @@ describe('action', () => {
 
         // 文件的 url 是否正常生成
         expect(body.data.url).toBe(`${BASE_URL}/${urlPath}/${body.data.filename}`);
-        console.log(body.data.url);
         const url = body.data.url.replace(`http://localhost:${APP_PORT}`, '');
         const content = await agent.get(url);
-        expect(content.text).toBe('Hello world!\n');
+        expect(content.text.includes('Hello world!')).toBe(true);
       });
+    });
+  });
+
+  describe('rules', () => {
+    it.skip('file size smaller than limit', async () => {
+      const storage = await StorageRepo.create({
+        values: {
+          name: 'local_private',
+          type: STORAGE_TYPE_LOCAL,
+          rules: {
+            size: 13,
+          },
+          baseUrl: '/storage/uploads',
+          options: {
+            documentRoot: 'storage/uploads',
+          },
+        },
+      });
+
+      db.collection({
+        name: 'customers',
+        fields: [
+          {
+            name: 'file',
+            type: 'belongsTo',
+            target: 'attachments',
+            storage: storage.name,
+          },
+        ],
+      });
+
+      const res1 = await agent.resource('attachments').create({
+        attachmentField: 'customers.file',
+        file: path.resolve(__dirname, './files/text.txt'),
+      });
+      // console.log('-------', res1);
+      expect(res1.status).toBe(200);
     });
   });
 
@@ -327,6 +454,59 @@ describe('action', () => {
 
       const attachmentExists = await AttachmentRepo.findById(attachment.id);
       expect(attachmentExists).toBeNull();
+    });
+  });
+
+  describe('association', () => {
+    it('has-many', async () => {
+      const UserRepo = db.getRepository('users');
+      const user = await UserRepo.findOne();
+      const FileRepo = db.getRepository('users.files', user.id);
+      const f1s = await FileRepo.count();
+      expect(f1s).toBe(0);
+      const { body } = await agent.resource('users.files', 1).create({
+        [FILE_FIELD_NAME]: path.resolve(__dirname, './files/text.txt'),
+      });
+      const f2s = await FileRepo.find({});
+      expect(f2s.length).toBe(1);
+      expect(f2s[0].userId).toBe(user.id);
+
+      await agent.resource('users.files', 1).destroy({ filterByTk: body.data.id });
+      const f3s = await FileRepo.count();
+      expect(f3s).toBe(0);
+    });
+  });
+
+  describe('storage actions', () => {
+    describe('getRules', () => {
+      it('get rules without key as default storage', async () => {
+        const { body, status } = await agent.resource('storages').getRules();
+        expect(status).toBe(200);
+        expect(body.data).toEqual({ size: FILE_SIZE_LIMIT_DEFAULT });
+      });
+
+      it('get rules by storage id as default rules', async () => {
+        const { body, status } = await agent.resource('storages').getRules({ filterByTk: 1 });
+        expect(status).toBe(200);
+        expect(body.data).toEqual({ size: FILE_SIZE_LIMIT_DEFAULT });
+      });
+
+      it('get rules by unexisted id as 404', async () => {
+        const { body, status } = await agent.resource('storages').getRules({ filterByTk: -1 });
+        expect(status).toBe(404);
+      });
+
+      it('get rules by storage id', async () => {
+        const { body, status } = await agent.resource('storages').getRules({ filterByTk: local1.id });
+        expect(status).toBe(200);
+        expect(body.data).toMatchObject({ size: 1024 });
+      });
+
+      it('get rules by storage name', async () => {
+        const { body, status } = await agent.resource('storages').getRules({ filterByTk: local1.name });
+        expect(status).toBe(200);
+        expect(body.data).toMatchObject({ size: 1024 });
+      });
     });
   });
 });

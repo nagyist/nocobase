@@ -1,18 +1,29 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import Icon, { TableOutlined } from '@ant-design/icons';
 import { Divider, Empty, Input, MenuProps, Spin } from 'antd';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   SchemaInitializerItem,
-  useSchemaInitializer,
-  useSchemaInitializerMenuItems,
   SchemaInitializerMenu,
+  useGetSchemaInitializerMenuItems,
+  useSchemaInitializer,
 } from '../../application';
+import { DataSource } from '../../data-source';
+import { Collection, CollectionFieldOptions } from '../../data-source/collection/Collection';
 import { useCompile } from '../../schema-component';
 import { useSchemaTemplateManager } from '../../schema-templates';
-import { useCollectionDataSourceItemsV2 } from '../utils';
+import { useCollectionDataSourceItems } from '../utils';
 
-const MENU_ITEM_HEIGHT = 40;
+const MENU_ITEM_HEIGHT = 32;
 const STEP = 15;
 
 export const SearchCollections = ({ value: outValue, onChange }) => {
@@ -48,7 +59,7 @@ export const SearchCollections = ({ value: outValue, onChange }) => {
       <Input
         ref={inputRef}
         allowClear
-        style={{ padding: '0 4px 6px' }}
+        style={{ padding: '0 4px 6px', boxShadow: 'none' }}
         bordered={false}
         placeholder={t('Search and select collection')}
         value={value}
@@ -108,27 +119,51 @@ const LoadingItem = ({ loadMore, maxHeight }) => {
   );
 };
 
-export function useMenuSearch(items: any[], isOpenSubMenu: boolean, showType?: boolean) {
+export function useMenuSearch({
+  data,
+  openKeys,
+  showType,
+  hideSearch,
+}: {
+  data: any[];
+  openKeys: string[];
+  showType?: boolean;
+  hideSearch?: boolean;
+}) {
   const [searchValue, setSearchValue] = useState('');
   const [count, setCount] = useState(STEP);
+
+  const isMuliSource = useMemo(() => data.length > 1, [data]);
+  const openKey = useMemo(() => {
+    return isMuliSource ? openKeys?.[1] : openKeys?.length > 0;
+  }, [openKeys]);
+
   useEffect(() => {
-    if (isOpenSubMenu) {
+    if (!openKey) {
       setSearchValue('');
     }
-  }, [isOpenSubMenu]);
+  }, [openKey]);
+
+  const currentItems = useMemo(() => {
+    if (isMuliSource) {
+      if (!openKey) return [];
+      return data.find((item) => (item.key || item.name) === openKey)?.children || [];
+    }
+    return data[0]?.children || [];
+  }, [data, isMuliSource, openKey]);
 
   // 根据搜索的值进行处理
   const searchedItems = useMemo(() => {
-    if (!searchValue) return items;
+    if (!searchValue) return currentItems;
     const lowerSearchValue = searchValue.toLocaleLowerCase();
-    return items.filter(
+    return currentItems.filter(
       (item) =>
         (item.label || item.title) &&
         String(item.label || item.title)
           .toLocaleLowerCase()
           .includes(lowerSearchValue),
     );
-  }, [searchValue, items]);
+  }, [searchValue, currentItems]);
 
   const shouldLoadMore = useMemo(() => searchedItems.length > count, [count, searchedItems]);
 
@@ -139,28 +174,31 @@ export function useMenuSearch(items: any[], isOpenSubMenu: boolean, showType?: b
 
   // 最终的返回结果
   const resultItems = useMemo<MenuProps['items']>(() => {
-    // isMenuType 为了 `useSchemaInitializerMenuItems()` 里面处理判断标识的
-    const res: any[] = [
+    const res = [];
+    if (!hideSearch) {
       // 开头：搜索框
-      Object.assign(
-        {
-          key: 'search',
-          label: (
-            <SearchCollections
-              value={searchValue}
-              onChange={(val: string) => {
-                setCount(STEP);
-                setSearchValue(val);
-              }}
-            />
-          ),
-          onClick({ domEvent }) {
-            domEvent.stopPropagation();
+      res.push(
+        Object.assign(
+          {
+            key: 'search',
+            label: (
+              <SearchCollections
+                value={searchValue}
+                onChange={(val: string) => {
+                  setCount(STEP);
+                  setSearchValue(val);
+                }}
+              />
+            ),
+            onClick({ domEvent }) {
+              domEvent.stopPropagation();
+            },
           },
-        },
-        showType ? { isMenuType: true } : {},
-      ),
-    ];
+          // isMenuType 为了 `useSchemaInitializerMenuItems()` 里面处理判断标识的
+          showType ? { isMenuType: true } : {},
+        ),
+      );
+    }
 
     // 中间：搜索的数据
     if (limitedSearchedItems.length > 0) {
@@ -205,9 +243,25 @@ export function useMenuSearch(items: any[], isOpenSubMenu: boolean, showType?: b
     }
 
     return res;
-  }, [limitedSearchedItems, searchValue, shouldLoadMore, showType]);
+  }, [hideSearch, limitedSearchedItems, searchValue, shouldLoadMore, showType]);
 
-  return resultItems;
+  const res = useMemo(() => {
+    if (!isMuliSource) return resultItems;
+    return data.map((item) => {
+      if (openKey && item.key === openKey) {
+        return {
+          ...item,
+          children: resultItems,
+        };
+      } else {
+        return {
+          ...item,
+          children: [],
+        };
+      }
+    });
+  }, [data, isMuliSource, openKey, resultItems]);
+  return res;
 }
 
 export interface DataBlockInitializerProps {
@@ -215,57 +269,122 @@ export interface DataBlockInitializerProps {
     templateSchema: any,
     {
       item,
+      fromOthersInPopup,
     }: {
       item: any;
+      fromOthersInPopup?: boolean;
     },
   ) => any;
   onCreateBlockSchema?: (args: any) => void;
   createBlockSchema?: (args: any) => any;
-  isCusomeizeCreate?: boolean;
   icon?: string | React.ReactNode;
   name: string;
   title: string;
-  items?: any[];
+  /**
+   * 用来筛选弹窗中的 “Current record” 和 “Associated records” 选项中的数据表
+   */
+  filter?: (options: { collection: Collection; associationField: CollectionFieldOptions }) => boolean;
+  filterDataSource?: (dataSource: DataSource) => boolean;
+  /**
+   * 用来筛选弹窗中的 “Other records” 选项中的数据表
+   */
+  filterOtherRecordsCollection?: (collection: Collection) => boolean;
   componentType: string;
+  onlyCurrentDataSource?: boolean;
+  hideSearch?: boolean;
+  showAssociationFields?: boolean;
+  /** 如果只有一项数据表时，不显示 children 列表 */
+  hideChildrenIfSingleCollection?: boolean;
+  items?: ReturnType<typeof useCollectionDataSourceItems>[];
+  /**
+   * 隐藏弹窗中的 Other records 选项
+   */
+  hideOtherRecordsInPopup?: boolean;
+  onClick?: (args: any) => void;
+  /** 用于更改 Current record 的文案 */
+  currentText?: string;
+  /** 用于更改 Other records 的文案 */
+  otherText?: string;
+  children?: React.ReactNode;
 }
 
-export const DataBlockInitializer = (props: DataBlockInitializerProps) => {
+export const DataBlockInitializer: FC<DataBlockInitializerProps> = (props) => {
   const {
     templateWrap,
     onCreateBlockSchema,
     componentType,
-    createBlockSchema,
-    isCusomeizeCreate,
     icon = TableOutlined,
     name,
     title,
-    items,
+    filter,
+    onlyCurrentDataSource,
+    hideSearch,
+    showAssociationFields,
+    hideChildrenIfSingleCollection,
+    filterDataSource,
+    items: itemsFromProps,
+    hideOtherRecordsInPopup,
+    onClick: propsOnClick,
+    filterOtherRecordsCollection,
+    currentText,
+    otherText,
   } = props;
-  const { insert } = useSchemaInitializer();
+  const { insert, setVisible } = useSchemaInitializer();
   const compile = useCompile();
   const { getTemplateSchemaByMode } = useSchemaTemplateManager();
   const onClick = useCallback(
-    async ({ item }) => {
+    async (options) => {
+      const { item, fromOthersInPopup } = options;
+
+      if (propsOnClick) {
+        return propsOnClick(options);
+      }
+
       if (item.template) {
         const s = await getTemplateSchemaByMode(item);
-        templateWrap ? insert(templateWrap(s, { item })) : insert(s);
+        templateWrap ? insert(templateWrap(s, { item, fromOthersInPopup })) : insert(s);
       } else {
         if (onCreateBlockSchema) {
-          onCreateBlockSchema({ item });
-        } else if (createBlockSchema) {
-          insert(createBlockSchema({ collection: item.collectionName || item.name, isCusomeizeCreate }));
+          onCreateBlockSchema({ item, fromOthersInPopup });
         }
       }
+
+      setVisible(false);
     },
-    [createBlockSchema, getTemplateSchemaByMode, insert, isCusomeizeCreate, onCreateBlockSchema, templateWrap],
+    [getTemplateSchemaByMode, insert, setVisible, onCreateBlockSchema, propsOnClick, templateWrap],
   );
-  const defaultItems = useCollectionDataSourceItemsV2(componentType);
-  const menuChildren = useMemo(() => items || defaultItems, [items, defaultItems]);
-  const childItems = useSchemaInitializerMenuItems(menuChildren, name, onClick);
-  const [isOpenSubMenu, setIsOpenSubMenu] = useState(false);
-  const searchedChildren = useMenuSearch(childItems, isOpenSubMenu);
-  const compiledMenuItems = useMemo(
-    () => [
+  const items =
+    itemsFromProps ||
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useCollectionDataSourceItems({
+      name,
+      componentName: componentType,
+      filter,
+      filterDataSource,
+      filterOtherRecordsCollection,
+      onlyCurrentDataSource,
+      showAssociationFields,
+      dataBlockInitializerProps: props,
+      hideOtherRecordsInPopup,
+      onClick,
+      currentText,
+      otherText,
+    });
+  const getMenuItems = useGetSchemaInitializerMenuItems(onClick);
+  const childItems = useMemo(() => {
+    return getMenuItems(items, name);
+  }, [getMenuItems, items, name]);
+  const [openMenuKeys, setOpenMenuKeys] = useState([]);
+  const searchedChildren = useMenuSearch({ data: childItems, openKeys: openMenuKeys, hideSearch });
+  const compiledMenuItems = useMemo(() => {
+    let children = searchedChildren.filter((item) => item.key !== 'search' && item.key !== 'empty');
+    if (hideChildrenIfSingleCollection && children.length === 1) {
+      // 只有一项可选时，直接展开
+      children = children[0].children;
+    } else {
+      children = searchedChildren;
+    }
+    return [
       {
         key: name,
         label: compile(title),
@@ -274,17 +393,16 @@ export const DataBlockInitializer = (props: DataBlockInitializerProps) => {
           if (info.key !== name) return;
           onClick({ ...info, item: props });
         },
-        children: searchedChildren,
+        children,
       },
-    ],
-    [name, compile, title, icon, searchedChildren, onClick, props],
-  );
+    ];
+  }, [searchedChildren, hideChildrenIfSingleCollection, name, compile, title, icon, onClick, props]);
 
-  if (menuChildren.length > 0) {
+  if (childItems.length > 1 || (childItems.length === 1 && childItems[0].children?.length > 0)) {
     return (
       <SchemaInitializerMenu
         onOpenChange={(keys) => {
-          setIsOpenSubMenu(keys.length > 0);
+          setOpenMenuKeys(keys);
         }}
         items={compiledMenuItems}
       />

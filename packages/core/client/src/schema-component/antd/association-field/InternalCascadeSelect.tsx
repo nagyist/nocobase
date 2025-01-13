@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayItems, FormItem } from '@formily/antd-v5';
 import { createForm, onFormValuesChange } from '@formily/core';
 import { FormProvider, connect, createSchemaField, observer, useField, useFieldSchema } from '@formily/react';
@@ -6,10 +15,11 @@ import { Select as AntdSelect, Input, Space, Spin, Tag } from 'antd';
 import dayjs from 'dayjs';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAPIClient, useCollectionManager } from '../../../';
-import { mergeFilter } from '../../../block-provider/SharedFilterProvider';
+import { useAPIClient, useCollectionManager_deprecated } from '../../../';
+import { mergeFilter } from '../../../filter-provider/utils';
 import { SchemaComponent, useCompile } from '../../../schema-component';
 import useServiceOptions, { useAssociationFieldContext } from './hooks';
+import { useDataBlockRequest } from '../../../data-source';
 
 const EMPTY = 'N/A';
 const SchemaField = createSchemaField({
@@ -22,7 +32,7 @@ const SchemaField = createSchemaField({
 });
 
 const CascadeSelect = connect((props) => {
-  const { data, mapOptions, onChange } = props;
+  const { data, mapOptions, onChange, value } = props;
   const [selectedOptions, setSelectedOptions] = useState<{ key: string; children: any; value?: any }[]>([
     { key: undefined, children: [], value: null },
   ]);
@@ -33,7 +43,7 @@ const CascadeSelect = connect((props) => {
   const service = useServiceOptions(props);
   const { options: collectionField, field: associationField } = useAssociationFieldContext<any>();
   const resource = api.resource(collectionField.target);
-  const { getCollectionJoinField, getInterface } = useCollectionManager();
+  const { getCollectionJoinField, getInterface } = useCollectionManager_deprecated();
   const fieldNames = associationField?.componentProps?.fieldNames;
   const targetField =
     collectionField?.target &&
@@ -47,10 +57,10 @@ const CascadeSelect = connect((props) => {
   }, [targetField]);
   const field: any = useField();
   useEffect(() => {
-    if (props.value) {
-      const values = Array.isArray(props.value)
-        ? extractLastNonNullValueObjects(props.value?.filter((v) => v.value), true)
-        : transformNestedData(props.value);
+    if (value) {
+      const values = Array.isArray(value)
+        ? extractLastNonNullValueObjects(value?.filter((v) => v.value), true)
+        : transformNestedData(value);
       const options = values?.map?.((v) => {
         return {
           key: v.parentId,
@@ -120,7 +130,7 @@ const CascadeSelect = connect((props) => {
     const response = await resource.list({
       pageSize: 200,
       params: service?.params,
-      filter: mergeFilter([service?.params?.filter, filter]),
+      filter: mergeFilter([filter]),
       tree: !filter.parentId ? true : undefined,
     });
     return response?.data?.data;
@@ -130,8 +140,8 @@ const CascadeSelect = connect((props) => {
     const data = await handleGetOptions({ parentId: option?.id });
     const options = [...selectedOptions];
     options.splice(index + 1);
-    if (value) {
-      options[index] = { ...options[index], value: option };
+    options[index] = { ...options[index], value: option };
+    if (option?.id) {
       options[index + 1] = { key: option?.id, children: data?.length > 0 ? data : null };
     }
     setSelectedOptions(options);
@@ -226,6 +236,8 @@ export const InternalCascadeSelect = observer(
     const { t } = useTranslation();
     const field: any = useField();
     const fieldSchema = useFieldSchema();
+    const { loading, data: formData } = useDataBlockRequest() || {};
+    const initialValue = formData?.data?.[fieldSchema.name];
     useEffect(() => {
       const id = uid();
       selectForm.addEffects(id, () => {
@@ -234,7 +246,6 @@ export const InternalCascadeSelect = observer(
             const value = extractLastNonNullValueObjects(form.values?.[fieldSchema.name]);
             setTimeout(() => {
               form.setValuesIn(fieldSchema.name, value);
-              props.onChange(value);
               field.value = value;
             });
           } else {
@@ -243,7 +254,6 @@ export const InternalCascadeSelect = observer(
             );
             setTimeout(() => {
               field.value = value;
-              props.onChange(value);
             });
           }
         });
@@ -252,12 +262,14 @@ export const InternalCascadeSelect = observer(
         selectForm.removeEffects(id);
       };
     }, []);
+
     const toValue = () => {
-      if (Array.isArray(field.value) && field.value.length > 0) {
-        return field.value;
+      if (Array.isArray(initialValue) && initialValue.length > 0) {
+        return initialValue;
       }
       return [{}];
     };
+
     const defaultValue = toValue();
     const schema = {
       type: 'object',
@@ -301,25 +313,28 @@ export const InternalCascadeSelect = observer(
         },
       },
     };
+
     return (
-      <FormProvider form={selectForm}>
-        {collectionField.interface === 'm2o' ? (
-          <SchemaComponent
-            components={{ FormItem }}
-            schema={{
-              ...fieldSchema,
-              default: field.value,
-              title: '',
-              'x-component': AssociationCascadeSelect,
-              'x-component-props': {
-                ...props,
-              },
-            }}
-          />
-        ) : (
-          <SchemaField schema={schema} />
-        )}
-      </FormProvider>
+      !loading && (
+        <FormProvider form={selectForm}>
+          {collectionField.interface === 'm2o' ? (
+            <SchemaComponent
+              components={{ FormItem }}
+              schema={{
+                ...fieldSchema,
+                default: initialValue,
+                title: '',
+                'x-component': AssociationCascadeSelect,
+                'x-component-props': {
+                  ...props,
+                },
+              }}
+            />
+          ) : (
+            <SchemaField schema={schema} />
+          )}
+        </FormProvider>
+      )
     );
   },
   { displayName: 'InternalCascadeSelect' },

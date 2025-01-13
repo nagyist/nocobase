@@ -1,7 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import path from 'path';
 import { MockServer } from '@nocobase/test';
-import s3Storage from '../../storages/s3';
-import { FILE_FIELD_NAME } from '../../constants';
+import S3Storage from '../../storages/s3';
+import { FILE_FIELD_NAME } from '../../../constants';
 import { getApp, requestFile } from '..';
 import Database from '@nocobase/database';
 
@@ -14,6 +23,7 @@ describe('storage:s3', () => {
   let AttachmentRepo;
   let StorageRepo;
   let storage;
+  const s3Storage = new S3Storage();
 
   beforeEach(async () => {
     app = await getApp();

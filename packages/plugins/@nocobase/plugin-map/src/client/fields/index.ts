@@ -1,11 +1,15 @@
-import { circle } from './circle';
-import { lineString } from './lineString';
-import { point } from './point';
-import { polygon } from './polygon';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export const fields = [point, polygon, lineString, circle];
+import { CircleFieldInterface } from './circle';
+import { LineStringFieldInterface } from './lineString';
+import { PointFieldInterface } from './point';
+import { PolygonFieldInterface } from './polygon';
 
-export const interfaces = fields.reduce((ins, field) => {
-  ins[field.name] = field;
-  return ins;
-}, {});
+export const fields = [PointFieldInterface, PolygonFieldInterface, LineStringFieldInterface, CircleFieldInterface];

@@ -1,17 +1,30 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { Schema, useField, useFieldSchema } from '@formily/react';
-import React, { createContext, useContext, useEffect } from 'react';
+import { omit } from 'lodash';
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAPIClient, useRequest } from '../api-client';
 import { useAppSpin } from '../application/hooks/useAppSpin';
 import { useBlockRequestContext } from '../block-provider/BlockProvider';
-import { useCollection, useCollectionManager } from '../collection-manager';
 import { useResourceActionContext } from '../collection-manager/ResourceActionProvider';
+import { CollectionNotAllowViewPlaceholder, useCollection, useCollectionManager } from '../data-source';
+import { useDataSourceKey } from '../data-source/data-source/DataSourceProvider';
 import { useRecord } from '../record-provider';
 import { SchemaComponentOptions, useDesignable } from '../schema-component';
+
 import { useApp } from '../application';
 
 export const ACLContext = createContext<any>({});
+ACLContext.displayName = 'ACLContext';
 
 // TODO: delete this，replace by `ACLPlugin`
 export const ACLProvider = (props) => {
@@ -32,7 +45,6 @@ const getRouteUrl = (props) => {
 };
 
 export const ACLRolesCheckProvider = (props) => {
-  const route = getRouteUrl(props.children.props);
   const { setDesignable } = useDesignable();
   const { render } = useAppSpin();
   const api = useAPIClient();
@@ -88,33 +100,55 @@ export const useACLContext = () => {
 };
 
 export const ACLActionParamsContext = createContext<any>({});
+ACLActionParamsContext.displayName = 'ACLActionParamsContext';
+
+export const ACLCustomContext = createContext<any>({});
+ACLCustomContext.displayName = 'ACLCustomContext';
+
+const useACLCustomContext = () => {
+  return useContext(ACLCustomContext);
+};
 
 export const useACLRolesCheck = () => {
   const ctx = useContext(ACLContext);
-  const data = ctx?.data?.data;
-  const getActionAlias = (actionPath: string) => {
-    const actionName = actionPath.split(':').pop();
-    return data?.actionAlias?.[actionName] || actionName;
-  };
+  const dataSourceName = useDataSourceKey();
+  const { dataSources: dataSourcesAcl } = ctx?.data?.meta || {};
+  const data = { ...ctx?.data?.data, ...omit(dataSourcesAcl?.[dataSourceName], 'snippets') };
+  const getActionAlias = useCallback(
+    (actionPath: string) => {
+      const actionName = actionPath.split(':').pop();
+      return data?.actionAlias?.[actionName] || actionName;
+    },
+    [data?.actionAlias],
+  );
   return {
     data,
     getActionAlias,
-    inResources: (resourceName: string) => {
-      return data?.resources?.includes?.(resourceName);
-    },
-    getResourceActionParams: (actionPath: string) => {
-      const [resourceName] = actionPath.split(':');
-      const actionAlias = getActionAlias(actionPath);
-      return data?.actions?.[`${resourceName}:${actionAlias}`] || data?.actions?.[actionPath];
-    },
-    getStrategyActionParams: (actionPath: string) => {
-      const actionAlias = getActionAlias(actionPath);
-      const strategyAction = data?.strategy?.actions?.find((action) => {
-        const [value] = action.split(':');
-        return value === actionAlias;
-      });
-      return strategyAction ? {} : null;
-    },
+    inResources: useCallback(
+      (resourceName: string) => {
+        return data?.resources?.includes?.(resourceName);
+      },
+      [data?.resources],
+    ),
+    getResourceActionParams: useCallback(
+      (actionPath: string) => {
+        const [resourceName] = actionPath.split(':');
+        const actionAlias = getActionAlias(actionPath);
+        return data?.actions?.[`${resourceName}:${actionAlias}`] || data?.actions?.[actionPath];
+      },
+      [data?.actions, getActionAlias],
+    ),
+    getStrategyActionParams: useCallback(
+      (actionPath: string) => {
+        const actionAlias = getActionAlias(actionPath);
+        const strategyAction = data?.strategy?.actions?.find((action) => {
+          const [value] = action.split(':');
+          return value === actionAlias;
+        });
+        return strategyAction ? {} : null;
+      },
+      [data?.strategy?.actions, getActionAlias],
+    ),
   };
 };
 
@@ -138,65 +172,105 @@ const getIgnoreScope = (options: any = {}) => {
 
 const useAllowedActions = () => {
   const service = useResourceActionContext();
-  const result = useBlockRequestContext() || { service };
-  return result?.allowedActions ?? result?.service?.data?.meta?.allowedActions;
+  const result = useBlockRequestContext();
+  return result?.allowedActions ?? service?.data?.meta?.allowedActions;
 };
 
 const useResourceName = () => {
   const service = useResourceActionContext();
   const result = useBlockRequestContext() || { service };
-  return result?.props?.resource || result?.service?.defaultRequest?.resource;
+  return (
+    result?.props?.resource ||
+    result?.props?.association ||
+    result?.props?.collection ||
+    result?.service?.defaultRequest?.resource
+  );
 };
 
 export function useACLRoleContext() {
   const { data, getActionAlias, inResources, getResourceActionParams, getStrategyActionParams } = useACLRolesCheck();
   const allowedActions = useAllowedActions();
-  const { getCollectionJoinField } = useCollectionManager();
-  const verifyScope = (actionName: string, recordPkValue: any) => {
-    const actionAlias = getActionAlias(actionName);
-    if (!Array.isArray(allowedActions?.[actionAlias])) {
-      return null;
-    }
-    return allowedActions[actionAlias].includes(recordPkValue);
-  };
+  const cm = useCollectionManager();
+  const verifyScope = useCallback(
+    (actionName: string, recordPkValue: any) => {
+      const actionAlias = getActionAlias(actionName);
+      if (!Array.isArray(allowedActions?.[actionAlias])) {
+        return null;
+      }
+      return allowedActions[actionAlias].includes(recordPkValue);
+    },
+    [allowedActions, getActionAlias],
+  );
+
   return {
     ...data,
-    parseAction: (actionPath: string, options: any = {}) => {
-      const [resourceName, actionName] = actionPath.split(':');
-      const targetResource = resourceName?.includes('.') && getCollectionJoinField(resourceName)?.target;
-      if (!getIgnoreScope(options)) {
-        const r = verifyScope(actionName, options.recordPkValue);
-        if (r !== null) {
-          return r ? {} : null;
+    parseAction: useCallback(
+      (actionPath: string, options: any = {}) => {
+        const [resourceName, actionName] = actionPath?.split(':') || [];
+        const targetResource = resourceName?.includes('.') && cm.getCollectionField(resourceName)?.target;
+        if (!getIgnoreScope(options)) {
+          const r = verifyScope(actionName, options.recordPkValue);
+          if (r !== null) {
+            return r ? {} : null;
+          }
         }
-      }
-      if (data?.allowAll) {
-        return {};
-      }
-      if (inResources(targetResource)) {
-        return getResourceActionParams(`${targetResource}:${actionName}`);
-      }
-      if (inResources(resourceName)) {
-        return getResourceActionParams(actionPath);
-      }
-      return getStrategyActionParams(actionPath);
-    },
+        if (data?.allowAll) {
+          return {};
+        }
+        if (inResources(targetResource)) {
+          return getResourceActionParams(`${targetResource}:${actionName}`);
+        }
+        if (inResources(resourceName)) {
+          return getResourceActionParams(actionPath);
+        }
+        return getStrategyActionParams(actionPath);
+      },
+      [cm, data?.allowAll, getResourceActionParams, getStrategyActionParams, inResources, verifyScope],
+    ),
+  };
+}
+
+/**
+ * Used to get whether the current user has permission to configure UI
+ * @returns {allowConfigUI: boolean}
+ */
+export function useUIConfigurationPermissions(): { allowConfigUI: boolean } {
+  const { allowAll, snippets } = useACLRoleContext();
+  return {
+    allowConfigUI: allowAll || snippets.includes('ui.*'),
   };
 }
 
 export const ACLCollectionProvider = (props) => {
   const { allowAll, parseAction } = useACLRoleContext();
+  const { allowAll: customAllowAll } = useACLCustomContext();
+  const app = useApp();
   const schema = useFieldSchema();
-  if (allowAll) {
+
+  let actionPath = schema?.['x-acl-action'] || props.actionPath;
+  const resoureName = schema?.['x-decorator-props']?.['association'] || schema?.['x-decorator-props']?.['collection'];
+
+  // 兼容 undefined 的情况
+  if (actionPath === 'undefined:list' && resoureName && resoureName !== 'undefined') {
+    actionPath = `${resoureName}:list`;
+  }
+
+  const params = useMemo(() => {
+    if (!actionPath) {
+      return null;
+    }
+    return parseAction(actionPath, { schema });
+  }, [parseAction, actionPath, schema]);
+
+  if (allowAll || app.disableAcl || customAllowAll) {
     return props.children;
   }
-  const actionPath = schema?.['x-acl-action'] || props.actionPath;
   if (!actionPath) {
-    return props.children;
+    return <ACLActionParamsContext.Provider value={{}}>{props.children}</ACLActionParamsContext.Provider>;
   }
-  const params = parseAction(actionPath, { schema });
+
   if (!params) {
-    return null;
+    return <CollectionNotAllowViewPlaceholder />;
   }
   const [_, actionName] = actionPath.split(':');
   params.actionName = actionName;
@@ -208,36 +282,51 @@ export const useACLActionParamsContext = () => {
 };
 
 export const useRecordPkValue = () => {
-  const { getPrimaryKey } = useCollection();
+  const collection = useCollection();
   const record = useRecord();
-  const primaryKey = getPrimaryKey();
+
+  if (!collection) {
+    return;
+  }
+
+  const primaryKey = collection.getPrimaryKey();
   return record?.[primaryKey];
 };
 
 export const ACLActionProvider = (props) => {
-  const { template, writableView } = useCollection();
+  const collection = useCollection();
   const recordPkValue = useRecordPkValue();
   const resource = useResourceName();
   const { parseAction } = useACLRoleContext();
   const schema = useFieldSchema();
   let actionPath = schema['x-acl-action'];
   const editablePath = ['create', 'update', 'destroy', 'importXlsx'];
+
   if (!actionPath && resource && schema['x-action']) {
     actionPath = `${resource}:${schema['x-action']}`;
   }
   if (!actionPath?.includes(':')) {
     actionPath = `${resource}:${actionPath}`;
   }
+
+  const params = useMemo(
+    () => parseAction(actionPath, { schema, recordPkValue }),
+    [parseAction, actionPath, schema, recordPkValue],
+  );
+
   if (!actionPath) {
     return <>{props.children}</>;
   }
-  const params = parseAction(actionPath, { schema, recordPkValue });
+  if (!resource) {
+    return <>{props.children}</>;
+  }
+
   if (!params) {
-    return null;
+    return <ACLActionParamsContext.Provider value={params}>{props.children}</ACLActionParamsContext.Provider>;
   }
   //视图表无编辑权限时不显示
   if (editablePath.includes(actionPath) || editablePath.includes(actionPath?.split(':')[1])) {
-    if (template !== 'view' || writableView) {
+    if ((collection && collection.template !== 'view') || collection?.writableView) {
       return <ACLActionParamsContext.Provider value={params}>{props.children}</ACLActionParamsContext.Provider>;
     }
     return null;
@@ -247,28 +336,34 @@ export const ACLActionProvider = (props) => {
 
 export const useACLFieldWhitelist = () => {
   const params = useContext(ACLActionParamsContext);
-  const whitelist = []
-    .concat(params?.whitelist || [])
-    .concat(params?.fields || [])
-    .concat(params?.appends || []);
+  const whitelist = useMemo(() => {
+    return []
+      .concat(params?.whitelist || [])
+      .concat(params?.fields || [])
+      .concat(params?.appends || []);
+  }, [params?.whitelist, params?.fields, params?.appends]);
   return {
     whitelist,
-    schemaInWhitelist(fieldSchema: Schema, isSkip?) {
-      if (isSkip) {
-        return true;
-      }
-      if (whitelist.length === 0) {
-        return true;
-      }
-      if (!fieldSchema) {
-        return true;
-      }
-      if (!fieldSchema['x-collection-field']) {
-        return true;
-      }
-      const [key1, key2] = fieldSchema['x-collection-field'].split('.');
-      return whitelist?.includes(key2 || key1);
-    },
+    schemaInWhitelist: useCallback(
+      (fieldSchema: Schema | any, isSkip?) => {
+        if (isSkip) {
+          return true;
+        }
+        if (whitelist.length === 0) {
+          return true;
+        }
+        if (!fieldSchema) {
+          return true;
+        }
+        if (!fieldSchema['x-collection-field']) {
+          return true;
+        }
+        const [key1, key2] = fieldSchema['x-collection-field'].split('.');
+        const [associationField] = fieldSchema['name'].split('.');
+        return whitelist?.includes(associationField || key2 || key1);
+      },
+      [whitelist],
+    ),
   };
 };
 
@@ -278,13 +373,16 @@ export const ACLCollectionFieldProvider = (props) => {
   const { allowAll } = useACLRoleContext();
   const { whitelist } = useACLFieldWhitelist();
   const [name] = (fieldSchema.name as string).split('.');
-  const allowed = !fieldSchema['x-acl-ignore'] && whitelist.length > 0 ? whitelist.includes(name) : true;
+  const allowed =
+    !fieldSchema['x-acl-ignore'] && whitelist.length > 0 && fieldSchema?.['x-collection-field']
+      ? whitelist.includes(name)
+      : true;
   useEffect(() => {
     if (!allowed) {
       field.required = false;
       field.display = 'hidden';
     }
-  }, [allowed]);
+  }, [allowed, field]);
 
   if (allowAll) {
     return <>{props.children}</>;

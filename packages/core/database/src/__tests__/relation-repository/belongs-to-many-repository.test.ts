@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Collection } from '@nocobase/database';
 import Database from '../../database';
 import { BelongsToManyRepository } from '../../relation-repository/belongs-to-many-repository';
@@ -239,41 +248,66 @@ describe('belongs to many with target key', function () {
     expect(count).toEqual(0);
   });
 
-  test('destroy with target key and filter', async () => {
-    const t1 = await Tag.repository.create({
-      values: {
-        name: 't1',
-        status: 'published',
-      },
-    });
-
-    const t2 = await Tag.repository.create({
-      values: {
-        name: 't2',
-        status: 'draft',
-      },
-    });
-
+  test('firstOrCreate', async () => {
     const p1 = await Post.repository.create({
       values: { title: 'p1' },
     });
 
     const PostTagRepository = new BelongsToManyRepository(Post, 'tags', p1.get('title') as string);
 
-    await PostTagRepository.set([t1.get('name') as string, t2.get('name') as string]);
-
-    let [_, count] = await PostTagRepository.findAndCount();
-    expect(count).toEqual(2);
-
-    await PostTagRepository.destroy({
-      filterByTk: t1.get('name') as string,
-      filter: {
-        status: 'draft',
+    // 测试基本创建
+    const tag1 = await PostTagRepository.firstOrCreate({
+      filterKeys: ['name'],
+      values: {
+        name: 't1',
+        status: 'active',
       },
     });
 
-    [_, count] = await PostTagRepository.findAndCount();
-    expect(count).toEqual(2);
+    expect(tag1.name).toEqual('t1');
+    expect(tag1.status).toEqual('active');
+
+    // 测试查找已存在记录
+    const tag2 = await PostTagRepository.firstOrCreate({
+      filterKeys: ['name'],
+      values: {
+        name: 't1',
+        status: 'inactive',
+      },
+    });
+
+    expect(tag2.id).toEqual(tag1.id);
+    expect(tag2.status).toEqual('active');
+  });
+
+  test('updateOrCreate', async () => {
+    const p1 = await Post.repository.create({
+      values: { title: 'p1' },
+    });
+
+    const PostTagRepository = new BelongsToManyRepository(Post, 'tags', p1.get('title') as string);
+
+    const tag1 = await PostTagRepository.updateOrCreate({
+      filterKeys: ['name'],
+      values: {
+        name: 't1',
+        status: 'active',
+      },
+    });
+
+    expect(tag1.name).toEqual('t1');
+    expect(tag1.status).toEqual('active');
+
+    const tag2 = await PostTagRepository.updateOrCreate({
+      filterKeys: ['name'],
+      values: {
+        name: 't1',
+        status: 'inactive',
+      },
+    });
+
+    expect(tag2.id).toEqual(tag1.id);
+    expect(tag2.status).toEqual('inactive');
   });
 });
 
@@ -342,6 +376,49 @@ describe('belongs to many', () => {
 
   afterEach(async () => {
     await db.close();
+  });
+
+  it('should get database instance in repository', async () => {
+    const p1 = await Post.repository.create({
+      values: {
+        title: 'p1',
+      },
+    });
+
+    const postTagsRepository = new BelongsToManyRepository(Post, 'tags', p1.id);
+    expect(postTagsRepository.database).toBe(db);
+  });
+
+  it('should create associations with associations', async () => {
+    const p1 = await Post.repository.create({
+      values: {
+        title: 'p1',
+      },
+    });
+
+    const postTagsRepository = new BelongsToManyRepository(Post, 'tags', p1.id);
+
+    await postTagsRepository.create({
+      values: {
+        name: 't1',
+        colors: [
+          {
+            name: 'red',
+          },
+        ],
+      },
+    });
+
+    const t1 = await postTagsRepository.findOne({
+      filter: {
+        name: 't1',
+      },
+      appends: ['colors'],
+    });
+
+    expect(t1.name).toEqual('t1');
+    expect(t1.colors.length).toEqual(1);
+    expect(t1.colors[0].name).toEqual('red');
   });
 
   test('create with through values', async () => {

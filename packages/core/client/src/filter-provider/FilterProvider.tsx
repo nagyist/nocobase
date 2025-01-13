@@ -1,11 +1,31 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useField, useFieldSchema } from '@formily/react';
 import { uniqBy } from 'lodash';
-import React, { createContext, useEffect, useRef } from 'react';
-import { useBlockRequestContext } from '../block-provider/BlockProvider';
-import { SharedFilter, mergeFilter } from '../block-provider/SharedFilterProvider';
-import { CollectionFieldOptions, useCollection } from '../collection-manager';
+import React, { createContext, useCallback, useEffect, useRef } from 'react';
+import { CollectionFieldOptions_deprecated } from '../collection-manager';
+import { Collection } from '../data-source/collection/Collection';
+import { useCollection } from '../data-source/collection/CollectionProvider';
+import { useDataBlockRequest } from '../data-source/data-block/DataBlockRequestProvider';
+import { useDataLoadingMode } from '../modules/blocks/data-blocks/details-multi/setDataLoadingModeSettingsItem';
 import { removeNullCondition } from '../schema-component';
-import { useAssociatedFields } from './utils';
+import { mergeFilter, useAssociatedFields } from './utils';
+
+enum FILTER_OPERATOR {
+  AND = '$and',
+  OR = '$or',
+}
+
+export type FilterParam = {
+  [K in FILTER_OPERATOR]?: any;
+};
 
 export interface ForeignKeyField {
   /** 外键字段所在的数据表的名称 */
@@ -19,10 +39,8 @@ export interface ForeignKeyField {
   [key: string]: any;
 }
 
-type Collection = ReturnType<typeof useCollection>;
-
 export interface DataBlock {
-  /** 唯一标识符，schema 中的 name 值 */
+  /** 唯一标识符，schema 中的 x-uid 值 */
   uid: string;
   /** 用户自行设置的区块名称 */
   title?: string;
@@ -32,16 +50,23 @@ export interface DataBlock {
   doFilter: (params: any, params2?: any) => Promise<void>;
   /** 清除筛选区块设置的筛选参数 */
   clearFilter: (uid: string) => void;
+  /** 将数据区块的数据置为空 */
+  clearData: () => void;
   /** 数据区块表中所有的关系字段 */
-  associatedFields?: CollectionFieldOptions[];
+  associatedFields?: CollectionFieldOptions_deprecated[];
   /** 数据区块表中所有的外键字段 */
   foreignKeyFields?: ForeignKeyField[];
   /** 数据区块已经存在的过滤条件（通过 `设置数据范围` 或者其它能设置筛选条件的功能） */
-  defaultFilter?: SharedFilter;
+  defaultFilter?: FilterParam;
   /** 数据区块用于请求数据的接口 */
   service?: any;
   /** 数据区块所的 DOM 容器 */
   dom: HTMLElement;
+  /**
+   * auto: 数据区块会在初始渲染时请求数据
+   * manual: 只有当点击了筛选按钮，才会请求数据
+   */
+  dataLoadingMode?: 'auto' | 'manual';
 }
 
 interface FilterContextValue {
@@ -50,6 +75,7 @@ interface FilterContextValue {
 }
 
 const FilterContext = createContext<FilterContextValue>(null);
+FilterContext.displayName = 'FilterContext';
 
 /**
  * 主要用于记录当前页面中的数据区块的信息，用于在过滤区块中使用
@@ -62,41 +88,44 @@ export const FilterBlockProvider: React.FC = ({ children }) => {
 };
 
 /**
- * 用于收集记录当前页面中的数据区块的信息
+ * 用于收集当前页面中的数据区块的信息，用于在过滤区块中使用
  * @param param0
  * @returns
  */
-export const FilterBlockRecord = ({
+export const DataBlockCollector = ({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params?: { filter: SharedFilter };
+  params?: { filter?: FilterParam };
 }) => {
   const collection = useCollection();
-  const { recordDataBlocks, removeDataBlock } = useFilterBlock();
-  const { service } = useBlockRequestContext();
+  const { recordDataBlocks } = useFilterBlock();
+  const service = useDataBlockRequest();
   const field = useField();
   const fieldSchema = useFieldSchema();
   const associatedFields = useAssociatedFields();
   const container = useRef(null);
+  const dataLoadingMode = useDataLoadingMode();
 
   const shouldApplyFilter =
+    field &&
     field.decoratorType !== 'FilterFormBlockProvider' &&
     field.decoratorType !== 'FormBlockProvider' &&
     field.decoratorProps.blockType !== 'filter';
 
-  const addBlockToDataBlocks = () => {
+  const addBlockToDataBlocks = useCallback(() => {
     recordDataBlocks({
       uid: fieldSchema['x-uid'],
       title: field.componentProps.title,
-      doFilter: service.runAsync,
+      doFilter: service.runAsync as any,
       collection,
       associatedFields,
-      foreignKeyFields: collection.foreignKeyFields as ForeignKeyField[],
+      foreignKeyFields: collection.getFields('isForeignKey') as ForeignKeyField[],
       defaultFilter: params?.filter || {},
       service,
       dom: container.current,
+      dataLoadingMode,
       clearFilter(uid: string) {
         const param = this.service.params?.[0] || {};
         const storedFilter = this.service.params?.[1]?.filters || {};
@@ -115,18 +144,24 @@ export const FilterBlockRecord = ({
           { filters: storedFilter },
         );
       },
+      clearData() {
+        this.service.mutate(undefined);
+      },
     });
-  };
+  }, [
+    associatedFields,
+    collection,
+    dataLoadingMode,
+    field?.componentProps?.title,
+    fieldSchema,
+    params?.filter,
+    recordDataBlocks,
+    service,
+  ]);
 
   useEffect(() => {
     if (shouldApplyFilter) addBlockToDataBlocks();
-  }, [params?.filter, service]);
-
-  useEffect(() => {
-    return () => {
-      removeDataBlock(fieldSchema['x-uid']);
-    };
-  }, []);
+  }, [addBlockToDataBlocks, shouldApplyFilter]);
 
   return <div ref={container}>{children}</div>;
 };
@@ -138,11 +173,13 @@ export const FilterBlockRecord = ({
 export const useFilterBlock = () => {
   const ctx = React.useContext(FilterContext);
   // 有可能存在页面没有提供 FilterBlockProvider 的情况，比如内部使用的数据表管理页面
+  const getDataBlocks = useCallback<() => DataBlock[]>(() => ctx?.dataBlocks || [], [ctx?.dataBlocks]);
+
   if (!ctx) {
     return {
       inProvider: false,
       recordDataBlocks: () => {},
-      getDataBlocks: () => [] as DataBlock[],
+      getDataBlocks,
       removeDataBlock: () => {},
     };
   }
@@ -152,15 +189,14 @@ export const useFilterBlock = () => {
 
     if (existingBlock) {
       // 这里的值有可能会变化，所以需要更新
-      existingBlock.service = block.service;
-      existingBlock.defaultFilter = block.defaultFilter;
+      Object.assign(existingBlock, block);
       return;
     }
     // 由于 setDataBlocks 是异步操作，所以上面的 existingBlock 在判断时有可能用的是旧的 dataBlocks,所以下面还需要根据 uid 进行去重操作
     setDataBlocks((prev) => uniqBy([...prev, block], 'uid'));
   };
-  const getDataBlocks = () => dataBlocks;
   const removeDataBlock = (uid: string) => {
+    if (dataBlocks.every((item) => item.uid !== uid)) return;
     setDataBlocks((prev) => prev.filter((item) => item.uid !== uid));
   };
 

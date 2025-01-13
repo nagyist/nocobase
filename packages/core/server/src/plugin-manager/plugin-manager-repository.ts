@@ -1,15 +1,45 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import Topo from '@hapi/topo';
 import { Repository } from '@nocobase/database';
-import lodash from 'lodash';
+import { default as _, default as lodash } from 'lodash';
 import { PluginManager } from './plugin-manager';
-import { PluginData } from './types';
 
 export class PluginManagerRepository extends Repository {
+  /**
+   * @internal
+   */
   pm: PluginManager;
 
+  /**
+   * @internal
+   */
   setPluginManager(pm: PluginManager) {
     this.pm = pm;
   }
 
+  async createByName(nameOrPkgs) {}
+
+  async has(nameOrPkg: string) {
+    const { name } = await PluginManager.parseName(nameOrPkg);
+    const instance = await this.findOne({
+      filter: {
+        name,
+      },
+    });
+    return !!instance;
+  }
+
+  /**
+   * @deprecated
+   */
   async remove(name: string | string[]) {
     await this.destroy({
       filter: {
@@ -18,6 +48,9 @@ export class PluginManagerRepository extends Repository {
     });
   }
 
+  /**
+   * @deprecated
+   */
   async enable(name: string | string[]) {
     const pluginNames = lodash.castArray(name);
     const plugins = pluginNames.map((name) => this.pm.get(name));
@@ -48,15 +81,26 @@ export class PluginManagerRepository extends Repository {
     return pluginNames;
   }
 
-  async upgrade(name: string, data: PluginData) {
-    return this.update({
+  async updateVersions() {
+    const items = await this.find({
       filter: {
-        name,
+        enabled: true,
       },
-      values: data,
     });
+    for (const item of items) {
+      try {
+        const json = await PluginManager.getPackageJson(item.packageName);
+        item.set('version', json.version);
+        await item.save();
+      } catch (error) {
+        this.pm.app.log.error(error);
+      }
+    }
   }
 
+  /**
+   * @deprecated
+   */
   async disable(name: string | string[]) {
     name = lodash.cloneDeep(name);
 
@@ -77,34 +121,54 @@ export class PluginManagerRepository extends Repository {
     return pluginNames;
   }
 
-  async getItems() {
-    try {
-      // sort plugins by id
-      return await this.find({
-        sort: 'id',
-      });
-    } catch (error) {
-      await this.database.migrator.up();
-      await this.collection.sync({
-        alter: {
-          drop: false,
-        },
-        force: false,
-      });
-      return await this.find({
-        sort: 'id',
-      });
+  async sort(names: string[]) {
+    const pluginNames = _.castArray(names);
+    if (pluginNames.length === 1) {
+      return pluginNames;
     }
+    const sorter = new Topo.Sorter<string>();
+    for (const pluginName of pluginNames) {
+      let packageJson: any = {};
+      try {
+        packageJson = await PluginManager.getPackageJson(pluginName);
+      } catch (error) {
+        packageJson = {};
+      }
+      const peerDependencies = Object.keys(packageJson?.peerDependencies || {});
+      sorter.add(pluginName, { after: peerDependencies, group: packageJson?.packageName || pluginName });
+    }
+    return sorter.nodes;
+  }
+
+  async getItems() {
+    const exists = await this.collection.existsInDb();
+    if (!exists) {
+      return [];
+    }
+    const items = await this.find({
+      sort: 'id',
+      filter: {
+        enabled: true,
+      },
+    });
+    const sortedItems = [];
+    const map = {};
+    for (const item of items) {
+      if (item.packageName) {
+        map[item.packageName] = item;
+      } else {
+        sortedItems.push(item);
+      }
+    }
+    const names = await this.sort(Object.keys(map));
+    for (const name of names) {
+      sortedItems.push(map[name]);
+    }
+    return sortedItems;
   }
 
   async init() {
-    const exists = await this.collection.existsInDb();
-    if (!exists) {
-      return;
-    }
-
     const items = await this.getItems();
-
     for (const item of items) {
       const { options, ...others } = item.toJSON();
       await this.pm.add(item.get('name'), {

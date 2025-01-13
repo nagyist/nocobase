@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Application } from '@nocobase/server';
 import Database from '@nocobase/database';
 import { getApp, sleep } from '@nocobase/plugin-workflow-test';
@@ -220,30 +229,28 @@ describe('workflow > instructions > query', () => {
       expect(job.result.posts[0].id).toBe(post.id);
     });
 
-    it('params.sort', async () => {
+    it('params.sort & params.page & params.pageSize', async () => {
       const n1 = await workflow.createNode({
         type: 'query',
         config: {
           collection: 'posts',
           params: {
             sort: [{ field: 'id', direction: 'asc' }],
+            page: 2,
+            pageSize: 2,
           },
         },
       });
 
-      const p1 = await PostRepo.create({ values: { title: 't1' } });
+      await PostCollection.model.bulkCreate([{ title: 't4' }, { title: 't3' }, { title: 't2' }]);
+      await PostRepo.create({ values: { title: 't1' } });
 
       await sleep(500);
 
-      const p2 = await PostRepo.create({ values: { title: 't2' } });
-
-      await sleep(500);
-
-      // get the 2nd execution
-      const [execution] = await workflow.getExecutions({ order: [['id', 'DESC']] });
-      expect(execution.context.data.title).toBe(p2.title);
+      const [execution] = await workflow.getExecutions();
+      expect(execution.context.data.title).toBe('t1');
       const [job] = await execution.getJobs();
-      expect(job.result.title).toBe(p1.title);
+      expect(job.result.title).toBe('t2');
     });
   });
 
@@ -321,22 +328,23 @@ describe('workflow > instructions > query', () => {
           collection: 'posts',
           multiple: true,
           params: {
-            sort: [{ field: 'id', direction: 'asc' }],
-            page: 1,
-            pageSize: 1,
+            sort: [{ field: 'id', direction: 'desc' }],
+            page: 2,
+            pageSize: 2,
           },
         },
       });
 
-      const p1 = await PostRepo.create({ values: { title: 't1' } });
-      const p2 = await PostRepo.create({ values: { title: 't2' } });
+      await PostCollection.model.bulkCreate([{ title: 't1' }, { title: 't2' }, { title: 't3' }]);
+      await PostRepo.create({ values: { title: 't4' } });
 
       await sleep(500);
 
-      const [execution] = await workflow.getExecutions();
-      const [job] = await execution.getJobs();
-      expect(job.result.length).toBe(1);
-      expect(job.result[0].title).toBe(p1.title);
+      const e1s = await workflow.getExecutions();
+      expect(e1s.length).toBe(1);
+      const [job] = await e1s[0].getJobs();
+      expect(job.result.length).toBe(2);
+      expect(job.result[0].title).toBe('t2');
     });
   });
 
@@ -379,6 +387,37 @@ describe('workflow > instructions > query', () => {
       expect(execution.status).toBe(EXECUTION_STATUS.FAILED);
       const [job] = await execution.getJobs();
       expect(job.result).toMatchObject([]);
+    });
+  });
+
+  describe('multiple data source', () => {
+    it('query on another data source', async () => {
+      const AnotherPostRepo = app.dataSourceManager.dataSources.get('another').collectionManager.getRepository('posts');
+      const post = await AnotherPostRepo.create({ values: { title: 't1' } });
+      const p1s = await AnotherPostRepo.find();
+      expect(p1s.length).toBe(1);
+
+      const n1 = await workflow.createNode({
+        type: 'query',
+        config: {
+          collection: 'another:posts',
+          params: {
+            filter: {
+              // @ts-ignore
+              id: post.id,
+            },
+          },
+        },
+      });
+
+      await PostRepo.create({ values: { title: 't1' } });
+
+      await sleep(500);
+
+      const [execution] = await workflow.getExecutions();
+      expect(execution.status).toBe(EXECUTION_STATUS.RESOLVED);
+      const [job] = await execution.getJobs();
+      expect(job.result.title).toBe('t1');
     });
   });
 });

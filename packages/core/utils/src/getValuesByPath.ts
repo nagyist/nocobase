@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 export const getValuesByPath = (obj: object, path: string, defaultValue?: any) => {
   if (!obj) {
     return defaultValue;
@@ -29,15 +38,15 @@ export const getValuesByPath = (obj: object, path: string, defaultValue?: any) =
     }
   }
 
-  result = result.filter((item) => item != null);
+  result = result.filter((item) => item !== undefined);
 
   if (result.length === 0) {
     return defaultValue;
   }
 
   if (shouldReturnArray) {
-    return result;
+    return result.filter((item) => item !== null);
   }
 
-  return result.length === 1 ? result[0] : result;
+  return result[0];
 };

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useFieldSchema } from '@formily/react';
 import { error, forEach } from '@nocobase/utils/client';
 import { Select, Space } from 'antd';
@@ -5,12 +14,12 @@ import _ from 'lodash';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAPIClient } from '../../../api-client';
-import { findFormBlock } from '../../../block-provider';
-import { useCollectionManager } from '../../../collection-manager';
-import { useDuplicatefieldsContext } from '../../../schema-initializer/components';
+import { findFormBlock, useFormBlockContext } from '../../../block-provider/FormBlockProvider';
+import { useCollectionManager_deprecated } from '../../../collection-manager';
 import { compatibleDataId } from '../../../schema-settings/DataTemplates/FormDataTemplates';
 import { useToken } from '../__builtins__';
 import { RemoteSelect } from '../remote-select';
+import { useDataSourceHeaders, useDataSourceKey } from '../../../data-source';
 
 export interface ITemplate {
   config?: {
@@ -35,13 +44,13 @@ export interface ITemplate {
   display: boolean;
 }
 
-const useDataTemplates = () => {
+export const useFormDataTemplates = () => {
   const fieldSchema = useFieldSchema();
   const { t } = useTranslation();
-  const data = useDuplicatefieldsContext();
-  const { getCollectionJoinField } = useCollectionManager();
-  if (data) {
-    return data;
+  const { duplicateData } = useFormBlockContext();
+  const { getCollectionJoinField } = useCollectionManager_deprecated();
+  if (duplicateData) {
+    return duplicateData;
   }
   const { items = [], display = true } = findDataTemplates(fieldSchema);
   // 过滤掉已经被删除的字段
@@ -84,20 +93,22 @@ const useDataTemplates = () => {
   };
 };
 
-export const Templates = ({ style = {}, form }) => {
+export const Templates = ({ style = {}, form }: { style?: React.CSSProperties; form?: any }) => {
   const { token } = useToken();
-  const { templates, display, enabled, defaultTemplate } = useDataTemplates();
-  const { getCollectionJoinField } = useCollectionManager();
+  const { templates, display, enabled, defaultTemplate } = useFormDataTemplates();
+  const { getCollectionJoinField } = useCollectionManager_deprecated();
   const templateOptions = compatibleDataId(templates);
   const [targetTemplate, setTargetTemplate] = useState(defaultTemplate?.key || 'none');
   const [targetTemplateData, setTemplateData] = useState(null);
   const api = useAPIClient();
   const { t } = useTranslation();
+  const dataSource = useDataSourceKey();
+  const headers = useDataSourceHeaders(dataSource);
   useEffect(() => {
-    if (enabled && defaultTemplate) {
+    if (enabled && defaultTemplate && form) {
       form.__template = true;
       if (defaultTemplate.key === 'duplicate') {
-        handleTemplateDataChange(defaultTemplate.dataId, defaultTemplate);
+        handleTemplateDataChange(defaultTemplate.dataId, defaultTemplate, headers);
       }
     }
   }, []);
@@ -107,7 +118,13 @@ export const Templates = ({ style = {}, form }) => {
     }
   }, [templateOptions]);
   const wrapperStyle = useMemo(() => {
-    return { display: 'flex', alignItems: 'center', backgroundColor: token.colorFillAlter, padding: '1em', ...style };
+    return {
+      display: 'flex',
+      alignItems: 'center',
+      backgroundColor: token.colorFillAlter,
+      padding: token.padding,
+      ...style,
+    };
   }, [style, token.colorFillAlter]);
 
   const labelStyle = useMemo<{
@@ -125,10 +142,10 @@ export const Templates = ({ style = {}, form }) => {
     form?.reset();
   }, []);
 
-  const handleTemplateDataChange: any = useCallback(async (value, option) => {
+  const handleTemplateDataChange: any = useCallback(async (value, option, headers) => {
     const template = { ...option, dataId: value };
     setTemplateData(option);
-    fetchTemplateData(api, template, t)
+    fetchTemplateData(api, template, headers)
       .then((data) => {
         if (form && data) {
           // 切换之前先把之前的数据清空
@@ -138,6 +155,7 @@ export const Templates = ({ style = {}, form }) => {
           forEach(data, (value, key) => {
             if (value) {
               form.values[key] = value;
+              form?.setInitialValuesIn?.(key, value);
             }
           });
         }
@@ -179,7 +197,7 @@ export const Templates = ({ style = {}, form }) => {
                 filter: template?.dataScope,
               },
             }}
-            onChange={(value) => handleTemplateDataChange(value?.id, { ...value, ...template })}
+            onChange={(value) => handleTemplateDataChange(value?.id, { ...value, ...template }, headers)}
             targetField={getCollectionJoinField(`${template?.collection}.${template.titleField}`)}
           />
         )}
@@ -196,12 +214,16 @@ function findDataTemplates(fieldSchema): ITemplate {
   return {} as ITemplate;
 }
 
-export async function fetchTemplateData(api, template: { collection: string; dataId: number; fields: string[] }, t) {
+export async function fetchTemplateData(
+  api,
+  template: { collection: string; dataId: number; fields: string[] },
+  headers?,
+) {
   if (template.fields.length === 0 || !template.dataId) {
     return;
   }
   return api
-    .resource(template.collection)
+    .resource(template.collection, undefined, headers)
     .get({
       filterByTk: template.dataId,
       fields: template.fields,

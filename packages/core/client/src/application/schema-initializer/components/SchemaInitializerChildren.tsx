@@ -1,8 +1,17 @@
-import React, { FC, useMemo } from 'react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-import { SchemaInitializerItemType } from '../types';
-import { SchemaInitializerItemContext } from '../context';
+import React, { FC, memo, useMemo } from 'react';
+
 import { useFindComponent } from '../../../schema-component';
+import { SchemaInitializerItemContext } from '../context';
+import { SchemaInitializerItemType } from '../types';
 export const SchemaInitializerChildren: FC<{ children: SchemaInitializerItemType[] }> = (props) => {
   const { children } = props;
   if (!children) return null;
@@ -21,6 +30,7 @@ const typeComponentMap: Record<string, string> = {
   item: 'SchemaInitializerItemInternal',
   itemGroup: 'SchemaInitializerItemGroupInternal',
   divider: 'SchemaInitializerDivider',
+  switch: 'SchemaInitializerSwitchInternal',
   subMenu: 'SchemaInitializerSubMenuInternal',
   actionModal: 'SchemaInitializerActionModalInternal',
 };
@@ -28,7 +38,7 @@ const typeComponentMap: Record<string, string> = {
 const useChildrenDefault = () => undefined;
 const useVisibleDefault = () => true;
 const useComponentPropsDefault = () => undefined;
-export const SchemaInitializerChild: FC<SchemaInitializerItemType> = (props) => {
+export const SchemaInitializerChild: FC<SchemaInitializerItemType> = memo((props) => {
   const {
     type,
     Component,
@@ -37,7 +47,7 @@ export const SchemaInitializerChild: FC<SchemaInitializerItemType> = (props) => 
     useVisible = useVisibleDefault,
     useChildren = useChildrenDefault,
     useComponentProps = useComponentPropsDefault,
-    checkChildrenLength,
+    hideIfNoChildren,
     componentProps,
     sort: _unUse,
     ...others
@@ -49,7 +59,10 @@ export const SchemaInitializerChild: FC<SchemaInitializerItemType> = (props) => 
   const componentVal = Component || component;
   const isBuiltType = !componentVal && type && typeComponentMap[type];
 
-  const componentChildren = useChildrenRes || children;
+  const componentChildren = useMemo(() => {
+    const res = [...(useChildrenRes || []), ...(children || [])];
+    return res.length === 0 ? undefined : res;
+  }, [useChildrenRes, children]);
   const contextValue = useMemo(() => {
     return {
       ...others,
@@ -67,7 +80,7 @@ export const SchemaInitializerChild: FC<SchemaInitializerItemType> = (props) => 
   if (!C) {
     return null;
   }
-  if (checkChildrenLength && Array.isArray(componentChildren) && componentChildren.length === 0) {
+  if (hideIfNoChildren && !componentChildren) {
     return null;
   }
 
@@ -78,4 +91,5 @@ export const SchemaInitializerChild: FC<SchemaInitializerItemType> = (props) => 
       </C>
     </SchemaInitializerItemContext.Provider>
   );
-};
+});
+SchemaInitializerChild.displayName = 'SchemaInitializerChild';

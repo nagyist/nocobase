@@ -1,7 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Plugin } from '@nocobase/server';
 import { resolve } from 'path';
 
-export class MobileClientPlugin extends Plugin {
+export class PluginMobileServer extends Plugin {
   afterAdd() {}
 
   async load() {
@@ -15,16 +24,10 @@ export class MobileClientPlugin extends Plugin {
   }
 
   async install() {
-    // const repository = this.app.db.getRepository('uiRoutes');
-    // for (const values of routes) {
-    //   await repository.create({
-    //     values,
-    //   });
-    // }
     const uiSchemas = this.db.getRepository<any>('uiSchemas');
-    const systemSettings = this.db.getRepository('systemSettings');
-    const schema = await uiSchemas.insert({
+    await uiSchemas.insert({
       type: 'void',
+      'x-uid': 'nocobase-mobile-container',
       'x-component': 'MContainer',
       'x-designer': 'MContainer.Designer',
       'x-component-props': {},
@@ -38,7 +41,7 @@ export class MobileClientPlugin extends Plugin {
             grid: {
               type: 'void',
               'x-component': 'Grid',
-              'x-initializer': 'MBlockInitializers',
+              'x-initializer': 'mobilePage:addBlock',
               'x-component-props': {
                 showDivider: false,
               },
@@ -47,9 +50,6 @@ export class MobileClientPlugin extends Plugin {
         },
       },
     });
-    const instance = await systemSettings.findOne();
-    instance.set('options.mobileSchemaUid', schema['x-uid']);
-    await instance.save();
   }
 
   async afterEnable() {}
@@ -59,4 +59,4 @@ export class MobileClientPlugin extends Plugin {
   async remove() {}
 }
 
-export default MobileClientPlugin;
+export default PluginMobileServer;

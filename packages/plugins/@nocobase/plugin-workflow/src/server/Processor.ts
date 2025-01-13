@@ -1,7 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Model, Transaction, Transactionable } from '@nocobase/database';
 import { appendArrayColumn } from '@nocobase/evaluators';
 import { Logger } from '@nocobase/logger';
 import { parse } from '@nocobase/utils';
+import set from 'lodash/set';
 import type Plugin from './Plugin';
 import { EXECUTION_STATUS, JOB_STATUS } from './constants';
 import { Runner } from './instructions';
@@ -9,6 +19,7 @@ import type { ExecutionModel, FlowNodeModel, JobModel } from './types';
 
 export interface ProcessorOptions extends Transactionable {
   plugin: Plugin;
+  [key: string]: any;
 }
 
 export default class Processor {
@@ -25,18 +36,47 @@ export default class Processor {
 
   logger: Logger;
 
-  transaction?: Transaction;
+  /**
+   * @experimental
+   */
+  transaction: Transaction;
 
+  /**
+   * @experimental
+   */
+  mainTransaction: Transaction;
+
+  /**
+   * @experimental
+   */
   nodes: FlowNodeModel[] = [];
+
+  /**
+   * @experimental
+   */
   nodesMap = new Map<number, FlowNodeModel>();
+
+  /**
+   * @experimental
+   */
   jobsMap = new Map<number, JobModel>();
+
+  /**
+   * @experimental
+   */
   jobsMapByNodeKey: { [key: string]: any } = {};
+
+  /**
+   * @experimental
+   */
+  lastSavedJob: JobModel | null = null;
 
   constructor(
     public execution: ExecutionModel,
     public options: ProcessorOptions,
   ) {
     this.logger = options.plugin.getLogger(execution.workflowId);
+    this.transaction = options.transaction;
   }
 
   // make dual linked nodes list then cache
@@ -67,29 +107,20 @@ export default class Processor {
     });
   }
 
-  private async getTransaction() {
-    if (!this.execution.workflow.options?.useTransaction) {
-      return;
-    }
-
-    const { options } = this;
-
-    // @ts-ignore
-    return options.transaction && !options.transaction.finished
-      ? options.transaction
-      : await options.plugin.db.sequelize.transaction();
-  }
-
   public async prepare() {
-    const { execution } = this;
+    const {
+      execution,
+      options: { plugin },
+    } = this;
     if (!execution.workflow) {
-      execution.workflow = await execution.getWorkflow();
+      execution.workflow = plugin.enabledCache.get(execution.workflowId);
     }
 
-    const transaction = await this.getTransaction();
-    this.transaction = transaction;
+    this.mainTransaction = plugin.useDataSourceTransaction('main', this.transaction);
 
-    const nodes = await execution.workflow.getNodes();
+    const transaction = this.mainTransaction;
+
+    const nodes = await execution.workflow.getNodes({ transaction });
 
     this.makeNodes(nodes);
 
@@ -104,7 +135,7 @@ export default class Processor {
   public async start() {
     const { execution } = this;
     if (execution.status !== EXECUTION_STATUS.STARTED) {
-      throw new Error(`execution was ended with status ${execution.status}`);
+      throw new Error(`execution was ended with status ${execution.status} before, could not be started again`);
     }
     await this.prepare();
     if (this.nodes.length) {
@@ -118,18 +149,11 @@ export default class Processor {
   public async resume(job: JobModel) {
     const { execution } = this;
     if (execution.status !== EXECUTION_STATUS.STARTED) {
-      throw new Error(`execution was ended with status ${execution.status}`);
+      throw new Error(`execution was ended with status ${execution.status} before, could not be resumed`);
     }
     await this.prepare();
     const node = this.nodesMap.get(job.nodeId);
     await this.recall(node, job);
-  }
-
-  private async commit() {
-    // @ts-ignore
-    if (this.transaction && (!this.options.transaction || this.options.transaction.finished)) {
-      await this.transaction.commit();
-    }
   }
 
   private async exec(instruction: Runner, node: FlowNodeModel, prevJob) {
@@ -140,18 +164,21 @@ export default class Processor {
       this.logger.debug(`config of node`, { data: node.config });
       job = await instruction(node, prevJob, this);
       if (!job) {
-        return null;
+        return this.exit();
       }
     } catch (err) {
       // for uncaught error, set to error
       this.logger.error(
         `execution (${this.execution.id}) run instruction [${node.type}] for node (${node.id}) failed: `,
-        { error: err },
+        err,
       );
       job = {
         result:
           err instanceof Error
-            ? { message: err.message, stack: process.env.NODE_ENV === 'production' ? [] : err.stack }
+            ? {
+                message: err.message,
+                ...err,
+              }
             : err,
         status: JOB_STATUS.ERROR,
       };
@@ -165,6 +192,7 @@ export default class Processor {
     if (!(job instanceof Model)) {
       job.upstreamId = prevJob instanceof Model ? prevJob.get('id') : null;
       job.nodeId = node.id;
+      job.nodeKey = node.key;
     }
     const savedJob = await this.saveJob(job);
 
@@ -186,6 +214,9 @@ export default class Processor {
   public async run(node, input?) {
     const { instructions } = this.options.plugin;
     const instruction = instructions.get(node.type);
+    if (!instruction) {
+      return Promise.reject(new Error(`instruction [${node.type}] not found for node (#${node.id})`));
+    }
     if (typeof instruction.run !== 'function') {
       return Promise.reject(new Error('`run` should be implemented for customized execution of the node'));
     }
@@ -209,9 +240,12 @@ export default class Processor {
     return this.exit(job.status);
   }
 
-  async recall(node, job) {
+  private async recall(node, job) {
     const { instructions } = this.options.plugin;
     const instruction = instructions.get(node.type);
+    if (!instruction) {
+      return Promise.reject(new Error(`instruction [${node.type}] not found for node (#${node.id})`));
+    }
     if (typeof instruction.resume !== 'function') {
       return Promise.reject(
         new Error(`"resume" method should be implemented for [${node.type}] instruction of node (#${node.id})`),
@@ -221,54 +255,62 @@ export default class Processor {
     return this.exec(instruction.resume.bind(instruction), node, job);
   }
 
-  async exit(s?: number) {
+  public async exit(s?: number) {
     if (typeof s === 'number') {
       const status = (<typeof Processor>this.constructor).StatusMap[s] ?? Math.sign(s);
-      await this.execution.update({ status }, { transaction: this.transaction });
+      await this.execution.update({ status }, { transaction: this.mainTransaction });
+    }
+    if (this.mainTransaction && this.mainTransaction !== this.transaction) {
+      await this.mainTransaction.commit();
     }
     this.logger.info(`execution (${this.execution.id}) exiting with status ${this.execution.status}`);
-    await this.commit();
     return null;
   }
 
   // TODO(optimize)
-  async saveJob(payload) {
+  /**
+   * @experimental
+   */
+  async saveJob(payload: JobModel | Record<string, any>): Promise<JobModel> {
     const { database } = <typeof ExecutionModel>this.execution.constructor;
+    const { mainTransaction: transaction } = this;
     const { model } = database.getCollection('jobs');
     let job;
     if (payload instanceof model) {
-      job = await payload.save({ transaction: this.transaction });
+      job = await payload.save({ transaction });
     } else if (payload.id) {
-      job = await model.findByPk(payload.id);
-      await job.update(payload, {
-        transaction: this.transaction,
-      });
+      job = await model.findByPk(payload.id, { transaction });
+      await job.update(payload, { transaction });
     } else {
       job = await model.create(
         {
           ...payload,
           executionId: this.execution.id,
         },
-        {
-          transaction: this.transaction,
-        },
+        { transaction },
       );
     }
     this.jobsMap.set(job.id, job);
 
-    const node = this.nodesMap.get(job.nodeId);
-    this.jobsMapByNodeKey[node.key] = job.result;
+    this.lastSavedJob = job;
+    this.jobsMapByNodeKey[job.nodeKey] = job.result;
 
     return job;
   }
 
+  /**
+   * @experimental
+   */
   getBranches(node: FlowNodeModel): FlowNodeModel[] {
     return this.nodes
       .filter((item) => item.upstream === node && item.branchIndex !== null)
       .sort((a, b) => Number(a.branchIndex) - Number(b.branchIndex));
   }
 
-  // find the first node in current branch
+  /**
+   * @experimental
+   * find the first node in current branch
+   */
   findBranchStartNode(node: FlowNodeModel, parent?: FlowNodeModel): FlowNodeModel | null {
     for (let n = node; n; n = n.upstream) {
       if (!parent) {
@@ -284,7 +326,10 @@ export default class Processor {
     return null;
   }
 
-  // find the node start current branch
+  /**
+   * @experimental
+   * find the node start current branch
+   */
   findBranchParentNode(node: FlowNodeModel): FlowNodeModel | null {
     for (let n = node; n; n = n.upstream) {
       if (n.branchIndex !== null) {
@@ -294,6 +339,9 @@ export default class Processor {
     return null;
   }
 
+  /**
+   * @experimental
+   */
   findBranchEndNode(node: FlowNodeModel): FlowNodeModel | null {
     for (let n = node; n; n = n.downstream) {
       if (!n.downstream) {
@@ -303,6 +351,9 @@ export default class Processor {
     return null;
   }
 
+  /**
+   * @experimental
+   */
   findBranchParentJob(job: JobModel, node: FlowNodeModel): JobModel | null {
     for (let j: JobModel | undefined = job; j; j = this.jobsMap.get(j.upstreamId)) {
       if (j.nodeId === node.id) {
@@ -312,6 +363,9 @@ export default class Processor {
     return null;
   }
 
+  /**
+   * @experimental
+   */
   findBranchLastJob(node: FlowNodeModel, job: JobModel): JobModel | null {
     const allJobs = Array.from(this.jobsMap.values());
     const branchJobs = [];
@@ -329,7 +383,10 @@ export default class Processor {
     return null;
   }
 
-  public getScope(sourceNodeId: number) {
+  /**
+   * @experimental
+   */
+  public getScope(sourceNodeId: number, includeSelfScope = false) {
     const node = this.nodesMap.get(sourceNodeId);
     const systemFns = {};
     const scope = {
@@ -337,13 +394,13 @@ export default class Processor {
       node,
     };
     for (const [name, fn] of this.options.plugin.functions.getEntities()) {
-      systemFns[name] = fn.bind(scope);
+      set(systemFns, name, fn.bind(scope));
     }
 
     const $scopes = {};
-    for (let n = this.findBranchParentNode(node); n; n = this.findBranchParentNode(n)) {
+    for (let n = includeSelfScope ? node : this.findBranchParentNode(node); n; n = this.findBranchParentNode(n)) {
       const instruction = this.options.plugin.instructions.get(n.type);
-      if (typeof instruction.getScope === 'function') {
+      if (typeof instruction?.getScope === 'function') {
         $scopes[n.id] = $scopes[n.key] = instruction.getScope(n, this.jobsMapByNodeKey[n.key], this);
       }
     }
@@ -356,9 +413,12 @@ export default class Processor {
     };
   }
 
-  public getParsedValue(value, sourceNodeId: number, additionalScope?: object) {
+  /**
+   * @experimental
+   */
+  public getParsedValue(value, sourceNodeId: number, { additionalScope = {}, includeSelfScope = false } = {}) {
     const template = parse(value);
-    const scope = Object.assign(this.getScope(sourceNodeId), additionalScope);
+    const scope = Object.assign(this.getScope(sourceNodeId, includeSelfScope), additionalScope);
     template.parameters.forEach(({ key }) => {
       appendArrayColumn(scope, key);
     });

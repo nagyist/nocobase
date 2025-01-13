@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema, useForm } from '@formily/react';
 import { uid } from '@formily/shared';
 import { Card, message } from 'antd';
@@ -83,7 +92,7 @@ const schema: ISchema = {
           type: 'string',
           title: "{{t('System title')}}",
           'x-decorator': 'FormItem',
-          'x-component': 'Input',
+          'x-component': 'Input.TextArea',
           required: true,
         },
         logo: {
@@ -96,6 +105,7 @@ const schema: ISchema = {
             multiple: false,
             // accept: 'jpg,png'
           },
+          'x-use-component-props': 'useFileCollectionStorageRules',
         },
         enabledLanguages: {
           type: 'array',

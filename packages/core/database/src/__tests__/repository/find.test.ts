@@ -1,6 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { mockDatabase } from '../index';
 import Database from '@nocobase/database';
 import { Collection } from '../../collection';
+import qs from 'qs';
 
 describe('find with associations', () => {
   let db: Database;
@@ -12,6 +22,140 @@ describe('find with associations', () => {
 
   afterEach(async () => {
     await db.close();
+  });
+
+  it('should append primary key to sort option', async () => {
+    const User = db.collection({
+      name: 'users',
+      fields: [
+        { name: 'name', type: 'string' },
+        {
+          name: 'age',
+          type: 'integer',
+        },
+      ],
+    });
+
+    await db.sync();
+
+    await User.repository.create({
+      values: [
+        {
+          name: 'user1',
+          age: '10',
+        },
+        {
+          name: 'user2',
+          age: '10',
+        },
+        {
+          name: 'user3',
+          age: '10',
+        },
+      ],
+    });
+
+    const records = await User.repository.find({
+      sort: ['age'],
+    });
+
+    expect(records[0].get('name')).toBe('user1');
+    expect(records[1].get('name')).toBe('user2');
+    expect(records[2].get('name')).toBe('user3');
+  });
+
+  it('should filter with associations by pagination', async () => {
+    const Org = db.collection({
+      name: 'organizations',
+      fields: [
+        { name: 'name', type: 'string' },
+        {
+          name: 'owner',
+          type: 'belongsTo',
+          target: 'users',
+        },
+      ],
+    });
+
+    const User = db.collection({
+      name: 'users',
+      fields: [
+        { name: 'name', type: 'string' },
+        {
+          name: 'qualifications',
+          type: 'belongsToMany',
+          target: 'qualifications',
+        },
+      ],
+    });
+
+    const Qualification = db.collection({
+      name: 'qualifications',
+      fields: [
+        { name: 'name', type: 'string' },
+        {
+          name: 'user',
+          type: 'belongsToMany',
+          target: 'users',
+        },
+      ],
+    });
+
+    await db.sync();
+
+    await User.repository.create({
+      values: [
+        {
+          name: 'u1',
+          qualifications: [
+            {
+              name: 'q1',
+            },
+            {
+              name: 'q2',
+            },
+          ],
+        },
+        {
+          name: 'u2',
+          qualifications: [
+            {
+              name: 'q1',
+            },
+            {
+              name: 'q2',
+            },
+          ],
+        },
+      ],
+    });
+
+    const u1 = await User.repository.findOne({ filter: { name: 'u1' } });
+    const u2 = await User.repository.findOne({ filter: { name: 'u2' } });
+
+    await Org.repository.create({
+      values: [
+        {
+          name: 'o1',
+          owner: u1.get('id'),
+        },
+        {
+          name: 'o2',
+          owner: u2.get('id'),
+        },
+      ],
+    });
+
+    const orgs = await Org.repository.findAndCount({
+      limit: 2,
+      filter: {
+        $or: [{ 'owner.qualifications.name.$includes': 'q1' }, { 'owner.qualifications.name.$includes': 'q2' }],
+      },
+    });
+
+    const [results, count] = orgs;
+    expect(count).toEqual(2);
+    expect(results.length).toEqual(2);
   });
 
   it('should filter has many with limit', async () => {
@@ -74,6 +218,23 @@ describe('find with associations', () => {
   });
 
   it('should filter by association array field', async () => {
+    const Group = db.collection({
+      name: 'groups',
+      fields: [
+        {
+          type: 'string',
+          name: 'name',
+        },
+        {
+          type: 'hasMany',
+          name: 'users',
+        },
+        {
+          type: 'array',
+          name: 'tagFields',
+        },
+      ],
+    });
     const User = db.collection({
       name: 'users',
       fields: [
@@ -84,6 +245,120 @@ describe('find with associations', () => {
         {
           type: 'hasMany',
           name: 'posts',
+        },
+        {
+          type: 'belongsTo',
+          name: 'group',
+        },
+        {
+          type: 'array',
+          name: 'tagFields',
+        },
+      ],
+    });
+
+    const Post = db.collection({
+      name: 'posts',
+      fields: [
+        {
+          type: 'array',
+          name: 'tagFields',
+        },
+        {
+          type: 'string',
+          name: 'title',
+        },
+      ],
+    });
+
+    await db.sync();
+
+    await Group.repository.create({
+      values: [
+        {
+          name: 'g1',
+          users: [
+            {
+              name: 'u1',
+              tagFields: ['u1'],
+              posts: [
+                {
+                  tagFields: ['p1'],
+                  title: 'u1p1',
+                },
+              ],
+            },
+          ],
+          tagFields: ['g1'],
+        },
+      ],
+    });
+
+    // zero nested
+    const posts = await Post.repository.find({
+      filter: {
+        tagFields: {
+          $match: ['p1'],
+        },
+      },
+    });
+
+    expect(posts.length).toEqual(1);
+
+    const filter0 = {
+      $and: [
+        {
+          posts: {
+            tagFields: {
+              $match: ['p1'],
+            },
+          },
+        },
+      ],
+    };
+
+    const userFindResult = await User.repository.find({
+      filter: filter0,
+    });
+
+    expect(userFindResult.length).toEqual(1);
+
+    const filter = {
+      $and: [
+        {
+          users: {
+            posts: {
+              tagFields: {
+                $match: ['p1'],
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const results = await Group.repository.find({
+      filter,
+    });
+
+    expect(results[0].get('name')).toEqual('g1');
+  });
+
+  it('should filter by array not empty', async () => {
+    const User = db.collection({
+      name: 'users',
+      fields: [
+        {
+          type: 'string',
+          name: 'name',
+        },
+        {
+          type: 'hasMany',
+          name: 'posts',
+        },
+        {
+          type: 'array',
+          name: 'tags',
         },
       ],
     });
@@ -108,6 +383,7 @@ describe('find with associations', () => {
       values: [
         {
           name: 'u1',
+          tags: ['u1-tag', 'u2-tag'],
           posts: [
             {
               tags: ['t1'],
@@ -118,33 +394,17 @@ describe('find with associations', () => {
       ],
     });
 
-    const posts = await Post.repository.find({
+    const posts = await User.repository.find({
       filter: {
-        tags: {
-          $match: ['t1'],
+        'posts.tags': {
+          $noneOf: ['t2'],
         },
       },
     });
 
     expect(posts.length).toEqual(1);
 
-    const filter = {
-      $and: [
-        {
-          posts: {
-            tags: {
-              $match: ['t1'],
-            },
-          },
-        },
-      ],
-    };
-
-    const results = await User.repository.find({
-      filter,
-    });
-
-    expect(results[0].get('name')).toEqual('u1');
+    expect(posts[0].get('name')).toEqual('u1');
   });
 
   it('should filter with append', async () => {
@@ -238,24 +498,14 @@ describe('find with associations', () => {
     expect(filterResult[0].get('user').get('department')).toBeDefined();
   });
 
-  it('should filter by association field', async () => {
+  it('should find with associations with sort params', async () => {
     const User = db.collection({
       name: 'users',
-      tree: 'adjacency-list',
       fields: [
         { type: 'string', name: 'name' },
-        { type: 'hasMany', name: 'posts', target: 'posts', foreignKey: 'user_id' },
-        {
-          type: 'belongsTo',
-          name: 'parent',
-          foreignKey: 'parent_id',
-          treeParent: true,
-        },
         {
           type: 'hasMany',
-          name: 'children',
-          foreignKey: 'parent_id',
-          treeChildren: true,
+          name: 'posts',
         },
       ],
     });
@@ -264,13 +514,11 @@ describe('find with associations', () => {
       name: 'posts',
       fields: [
         { type: 'string', name: 'title' },
-        { type: 'belongsTo', name: 'user', target: 'users', foreignKey: 'user_id' },
+        { type: 'belongsTo', name: 'user' },
       ],
     });
 
     await db.sync();
-
-    expect(User.options.tree).toBeTruthy();
 
     await User.repository.create({
       values: [
@@ -280,42 +528,32 @@ describe('find with associations', () => {
             {
               title: 'u1p1',
             },
-          ],
-          children: [
             {
-              name: 'u2',
-              posts: [
-                {
-                  title: '标题2',
-                },
-              ],
+              title: 'u1p2',
+            },
+          ],
+        },
+        {
+          name: 'u2',
+          posts: [
+            {
+              title: 'u2p1',
+            },
+            {
+              title: 'u2p2',
             },
           ],
         },
       ],
     });
 
-    const filter = {
-      $and: [
-        {
-          children: {
-            posts: {
-              title: {
-                $eq: '标题2',
-              },
-            },
-          },
-        },
-      ],
-    };
-
-    const [findResult, count] = await User.repository.findAndCount({
-      filter,
-      offset: 0,
-      limit: 20,
+    const appendArgs = [`posts(${qs.stringify({ sort: ['-id'] })})`];
+    const users = await User.repository.find({
+      appends: appendArgs,
     });
 
-    expect(findResult[0].get('name')).toEqual('u1');
+    expect(users[0].get('name')).toEqual('u1');
+    expect(users[0].get('posts')[0].get('title')).toEqual('u1p2');
   });
 });
 

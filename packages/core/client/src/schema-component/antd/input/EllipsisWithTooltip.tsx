@@ -1,10 +1,19 @@
-import { Popover } from 'antd';
-import React, { CSSProperties, forwardRef, useImperativeHandle, useRef, useState } from 'react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-const getContentWidth = (element) => {
-  if (element) {
+import { Popover } from 'antd';
+import React, { CSSProperties, forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+
+const getContentWidth = (el: HTMLElement) => {
+  if (el) {
     const range = document.createRange();
-    range.selectNodeContents(element);
+    range.selectNodeContents(el);
     const contentWidth = range.getBoundingClientRect().width;
     return contentWidth;
   }
@@ -17,6 +26,13 @@ const ellipsisDefaultStyle: CSSProperties = {
   wordBreak: 'break-all',
 };
 
+const isOverflowTooltip = (el: HTMLElement) => {
+  if (!el) return false;
+  const contentWidth = getContentWidth(el);
+  const offsetWidth = el.offsetWidth;
+  return contentWidth > offsetWidth;
+};
+
 interface IEllipsisWithTooltipProps {
   ellipsis: boolean;
   popoverContent: unknown;
@@ -27,21 +43,41 @@ export const EllipsisWithTooltip = forwardRef((props: Partial<IEllipsisWithToolt
   const [ellipsis, setEllipsis] = useState(false);
   const [visible, setVisible] = useState(false);
   const elRef: any = useRef();
-  useImperativeHandle(ref, () => {
-    return {
-      setPopoverVisible: setVisible,
-    };
-  });
-  if (!props.ellipsis) {
-    return <>{props.children}</>;
-  }
-  const { popoverContent } = props;
+  useImperativeHandle(
+    ref,
+    () => {
+      return {
+        setPopoverVisible: setVisible,
+      };
+    },
+    [],
+  );
 
-  const isOverflowTooltip = () => {
-    const contentWidth = getContentWidth(elRef.current);
-    const offsetWidth = elRef.current?.offsetWidth;
-    return contentWidth > offsetWidth;
-  };
+  const divContent = useMemo(
+    () =>
+      props.ellipsis ? (
+        <div
+          ref={elRef}
+          style={ellipsisDefaultStyle}
+          onMouseEnter={(e) => {
+            const el = e.target as any;
+            const isShowTooltips = isOverflowTooltip(elRef.current);
+            if (isShowTooltips) {
+              setEllipsis(el.scrollWidth >= el.clientWidth);
+            }
+          }}
+        >
+          {props.children}
+        </div>
+      ) : (
+        props.children
+      ),
+    [props.children, props.ellipsis],
+  );
+
+  if (!props.ellipsis || !ellipsis) {
+    return divContent;
+  }
 
   return (
     <Popover
@@ -57,23 +93,12 @@ export const EllipsisWithTooltip = forwardRef((props: Partial<IEllipsisWithToolt
             maxHeight: 400,
           }}
         >
-          {popoverContent || props.children}
+          {props.popoverContent || props.children}
         </div>
       }
     >
-      <div
-        ref={elRef}
-        style={{ ...ellipsisDefaultStyle }}
-        onMouseEnter={(e) => {
-          const el = e.target as any;
-          const isShowTooltips = isOverflowTooltip();
-          if (isShowTooltips) {
-            setEllipsis(el.scrollWidth >= el.clientWidth);
-          }
-        }}
-      >
-        {props.children}
-      </div>
+      {divContent}
     </Popover>
   );
 });
+EllipsisWithTooltip.displayName = 'EllipsisWithTooltip';

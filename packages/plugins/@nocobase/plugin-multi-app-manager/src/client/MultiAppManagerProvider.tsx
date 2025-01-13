@@ -1,11 +1,22 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Icon, PinnedPluginListProvider, SchemaComponentOptions, useApp, useRequest } from '@nocobase/client';
 import { Button, Dropdown } from 'antd';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { AppNameInput } from './AppNameInput';
+import { useStyles } from './MultiAppManagerProvider.style';
 import { usePluginUtils } from './utils';
 
 const MultiAppManager = () => {
+  const { styles } = useStyles();
   const { data, run } = useRequest<{
     data: any[];
   }>(
@@ -18,11 +29,11 @@ const MultiAppManager = () => {
     },
   );
   const { t } = usePluginUtils();
-  const app = useApp();
+  const instance = useApp();
   const items = [
     ...(data?.data || []).map((app) => {
-      let link = `/apps/${app.name}/admin/`;
-      if (app.options?.standaloneDeployment && app.cname) {
+      let link = instance.getRouteUrl(`/apps/${app.name}/admin/`);
+      if (app.cname) {
         link = `//${app.cname}`;
       }
       return {
@@ -36,7 +47,9 @@ const MultiAppManager = () => {
     }),
     {
       key: '.manager',
-      label: <Link to={app.pluginSettingsManager.getRoutePath('multi-app-manager')}>{t('Manage applications')}</Link>,
+      label: (
+        <Link to={instance.pluginSettingsManager.getRoutePath('multi-app-manager')}>{t('Manage applications')}</Link>
+      ),
     },
   ];
   return (
@@ -46,7 +59,7 @@ const MultiAppManager = () => {
       }}
       menu={{ items }}
     >
-      <Button title={'Apps'} icon={<Icon type={'AppstoreOutlined'} />} />
+      <Button className={styles.button} title={'Apps'} icon={<Icon type={'AppstoreOutlined'} />} />
     </Dropdown>
   );
 };

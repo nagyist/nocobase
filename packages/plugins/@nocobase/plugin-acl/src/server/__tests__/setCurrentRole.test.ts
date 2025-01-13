@@ -1,6 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import Database from '@nocobase/database';
 import UsersPlugin from '@nocobase/plugin-users';
 import { MockServer } from '@nocobase/test';
+import { vi } from 'vitest';
 import { setCurrentRole } from '../middlewares/setCurrentRole';
 import { prepareApp } from './prepare';
 
@@ -23,6 +33,7 @@ describe('role', () => {
       state: {
         currentRole: '',
       },
+      t: (key) => key,
     };
   });
 
@@ -56,7 +67,7 @@ describe('role', () => {
     expect(ctx.state.currentRole).toBe('root');
   });
 
-  it('should throw 401', async () => {
+  it('should throw error', async () => {
     ctx.state.currentUser = await db.getRepository('users').findOne({
       appends: ['roles'],
     });
@@ -65,11 +76,13 @@ describe('role', () => {
         return 'abc';
       }
     };
-    const throwFn = jest.fn();
+    const throwFn = vi.fn();
     ctx.throw = throwFn;
     await setCurrentRole(ctx, () => {});
-    expect(throwFn).lastCalledWith(401, { code: 'ROLE_NOT_FOUND_ERR', message: 'The user role does not exist.' });
-    expect(ctx.state.currentRole).not.toBeDefined();
+    expect(throwFn).lastCalledWith(401, {
+      code: 'ROLE_NOT_FOUND_FOR_USER',
+      message: 'The role does not belong to the user',
+    });
   });
 
   it('should set role with anonymous', async () => {
@@ -198,10 +211,13 @@ describe('role', () => {
     });
     roles = await ctx.cache.get(`roles:${ctx.state.currentUser.id}`);
     expect(roles).toBeUndefined();
-    const throwFn = jest.fn();
+    const throwFn = vi.fn();
     ctx.throw = throwFn;
     await setCurrentRole(ctx, () => {});
-    expect(throwFn).lastCalledWith(401, { code: 'ROLE_NOT_FOUND_ERR', message: 'The user role does not exist.' });
+    expect(throwFn).lastCalledWith(401, {
+      code: 'USER_HAS_NO_ROLES_ERR',
+      message: 'The current user has no roles. Please try another account.',
+    });
     expect(ctx.state.currentRole).not.toBeDefined();
   });
 

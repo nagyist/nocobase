@@ -1,16 +1,25 @@
-import { ISchema } from '@formily/react';
-import { constraintsProps, relationshipType, reverseFieldProperties } from './properties';
-import { IField } from './types';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export const o2m: IField = {
-  name: 'o2m',
-  type: 'object',
-  group: 'relation',
-  order: 4,
-  title: '{{t("One to many")}}',
-  description: '{{t("One to many description")}}',
-  isAssociation: true,
-  default: {
+import { ISchema } from '@formily/react';
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
+import { constraintsProps, relationshipType, reverseFieldProperties } from './properties';
+import { getUniqueKeyFromCollection } from './utils';
+export class O2MFieldInterface extends CollectionFieldInterface {
+  name = 'o2m';
+  type = 'object';
+  group = 'relation';
+  order = 4;
+  title = '{{t("One to many")}}';
+  description = '{{t("One to many description")}}';
+  isAssociation = true;
+  default = {
     type: 'hasMany',
     // name,
     uiSchema: {
@@ -19,10 +28,10 @@ export const o2m: IField = {
       'x-component-props': {
         // mode: 'tags',
         multiple: true,
-        fieldNames: {
-          label: 'id',
-          value: 'id',
-        },
+        // fieldNames: {
+        //   label: 'id',
+        //   value: 'id',
+        // },
       },
     },
     reverseField: {
@@ -35,30 +44,33 @@ export const o2m: IField = {
         'x-component-props': {
           // mode: 'tags',
           multiple: false,
-          fieldNames: {
-            label: 'id',
-            value: 'id',
-          },
+          // fieldNames: {
+          //   label: 'id',
+          //   value: 'id',
+          // },
         },
       },
     },
-  },
-  availableTypes: ['hasMany'],
+  };
+  availableTypes = ['hasMany'];
   schemaInitialize(schema: ISchema, { field, block, readPretty, targetCollection }) {
     // schema['type'] = 'array';
-    if (targetCollection?.titleField) {
-      schema['x-component-props'] = schema['x-component-props'] || {};
-      schema['x-component-props'].fieldNames = schema['x-component-props'].fieldNames || { value: 'id' };
-      schema['x-component-props'].fieldNames.label = targetCollection.titleField;
-    }
+    schema['x-component-props'] = schema['x-component-props'] || {};
+    schema['x-component-props'].fieldNames = schema['x-component-props'].fieldNames || {
+      value: getUniqueKeyFromCollection(targetCollection),
+    };
+    schema['x-component-props'].fieldNames.label =
+      schema['x-component-props'].fieldNames?.label ||
+      targetCollection?.titleField ||
+      getUniqueKeyFromCollection(targetCollection);
     if (['Table', 'Kanban'].includes(block)) {
       schema['x-component-props'] = schema['x-component-props'] || {};
       schema['x-component-props']['ellipsis'] = true;
       // 预览文件时需要的参数
       schema['x-component-props']['size'] = 'small';
     }
-  },
-  properties: {
+  }
+  properties = {
     'uiSchema.title': {
       type: 'string',
       title: '{{t("Field display name")}}',
@@ -105,7 +117,7 @@ export const o2m: IField = {
                   type: 'string',
                   title: '{{t("Target collection")}}',
                   required: true,
-                  'x-reactions': ['{{useAsyncDataSource(loadCollections, ["file"])}}'],
+                  'x-reactions': ['{{useAsyncDataSource(loadCollections)}}'],
                   'x-decorator': 'FormItem',
                   'x-component': 'Select',
                   'x-disabled': '{{ !createOnly }}',
@@ -123,8 +135,9 @@ export const o2m: IField = {
               'x-component': 'Grid.Col',
               properties: {
                 sourceKey: {
-                  type: 'void',
+                  type: 'string',
                   title: '{{t("Source key")}}',
+                  description: "{{t('Field values must be unique.')}}",
                   default: 'id',
                   enum: [{ label: 'ID', value: 'id' }],
                   'x-decorator': 'FormItem',
@@ -144,7 +157,7 @@ export const o2m: IField = {
                   description:
                     "{{t('Randomly generated and can be modified. Support letters, numbers and underscores, must start with an letter.')}}",
                   'x-decorator': 'FormItem',
-                  'x-component': 'Input',
+                  'x-component': 'ForeignKey',
                   'x-validator': 'uid',
                   'x-disabled': '{{ !createOnly }}',
                 },
@@ -166,11 +179,12 @@ export const o2m: IField = {
               'x-component': 'Grid.Col',
               properties: {
                 targetKey: {
-                  type: 'void',
+                  type: 'string',
                   title: '{{t("Target key")}}',
                   'x-decorator': 'FormItem',
                   'x-component': 'TargetKey',
                   'x-disabled': '{{ !createOnly }}',
+                  description: "{{t('Field values must be unique.')}}",
                 },
               },
             },
@@ -180,8 +194,8 @@ export const o2m: IField = {
     },
     ...constraintsProps,
     ...reverseFieldProperties,
-  },
-  filterable: {
+  };
+  filterable = {
     nested: true,
     children: [
       // {
@@ -198,5 +212,5 @@ export const o2m: IField = {
       //   },
       // },
     ],
-  },
-};
+  };
+}

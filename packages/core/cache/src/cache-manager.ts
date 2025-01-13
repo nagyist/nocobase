@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { FactoryStore, Store, caching, Cache as BasicCache } from 'cache-manager';
 import { Cache } from './cache';
 import lodash from 'lodash';
@@ -30,7 +39,13 @@ export class CacheManager {
       close?: (store: Store) => Promise<void>;
     }
   >();
+  /**
+   * @internal
+   */
   storeTypes = new Map<string, StoreOptions>();
+  /**
+   * @internal
+   */
   caches = new Map<string, Cache>();
 
   constructor(options?: CacheManagerOptions) {
@@ -45,6 +60,9 @@ export class CacheManager {
         redis: {
           store: redisStore,
           close: async (redis: RedisStore) => {
+            if (!redis.client?.isOpen) {
+              return;
+            }
             await redis.client.quit();
           },
         },
@@ -85,7 +103,7 @@ export class CacheManager {
 
   async createCache(options: { name: string; prefix?: string; store?: string; [key: string]: any }) {
     const { name, prefix, store = this.defaultStore, ...config } = options;
-    if (!lodash.isEmpty(config)) {
+    if (!lodash.isEmpty(config) || store === 'memory') {
       const newStore = await this.createStore({ name, storeType: store, ...config });
       return this.newCache({ name, prefix, store: newStore });
     }
@@ -122,6 +140,9 @@ export class CacheManager {
     await Promise.all(promises);
   }
 
+  /**
+   * @experimental
+   */
   async createBloomFilter(options?: { store?: string }): Promise<BloomFilter> {
     const name = 'bloom-filter';
     const { store = this.defaultStore } = options || {};

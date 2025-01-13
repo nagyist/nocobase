@@ -1,12 +1,23 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Schema } from '@formily/react';
 import { uid } from '@formily/shared';
+import lodash from 'lodash';
 import { SelectedField } from './configure';
 import { FieldOption } from './hooks';
-import { QueryProps } from './renderer';
-import lodash from 'lodash';
+import { ChartRendererContext, QueryProps } from './renderer';
+import { useContext } from 'react';
 
 export const createRendererSchema = (decoratorProps: any, componentProps = {}) => {
-  const { collection } = decoratorProps;
+  const { collection, config } = decoratorProps;
+  const { title, bordered } = config || {};
   return {
     type: 'void',
     'x-decorator': 'ChartRendererProvider',
@@ -16,9 +27,31 @@ export const createRendererSchema = (decoratorProps: any, componentProps = {}) =
     'x-component': 'CardItem',
     'x-component-props': {
       size: 'small',
+      title,
+      bordered,
     },
-    'x-initializer': 'ChartInitializers',
+    'x-initializer': 'charts:addBlock',
     properties: {
+      actions: {
+        type: 'void',
+        'x-decorator': 'div',
+        'x-decorator-props': {
+          style: {
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            zIndex: 10,
+          },
+        },
+        'x-component': 'ActionBar',
+        'x-component-props': {
+          style: {
+            marginRight: 'var(--nb-designer-offset)',
+            marginTop: 'var(--nb-designer-offset)',
+          },
+        },
+        'x-initializer': 'chart:configureActions',
+      },
       [uid()]: {
         type: 'void',
         'x-component': 'ChartRenderer',
@@ -61,6 +94,7 @@ export const getSelectedFields = (fields: FieldOption[], query: QueryProps) => {
         key: selectedField.alias || fieldProps?.key,
         label: selectedField.alias || fieldProps?.label,
         value: selectedField.alias || fieldProps?.value,
+        query: selectedField,
       };
     });
   };
@@ -72,19 +106,22 @@ export const getSelectedFields = (fields: FieldOption[], query: QueryProps) => {
   return selectedFields;
 };
 
-export const processData = (selectedFields: FieldOption[], data: any[], scope: any) => {
+export const processData = (selectedFields: (FieldOption & { query?: any })[], data: any[], scope: any) => {
   const parseEnum = (field: FieldOption, value: any) => {
     const options = field.uiSchema?.enum as { value: string; label: string }[];
     if (!options || !Array.isArray(options)) {
       return value;
     }
-    const option = options.find((option) => option.value === value);
+    if (Array.isArray(value)) {
+      return value.map((v) => parseEnum(field, v));
+    }
+    const option = options.find((option) => option.value === (value?.toString?.() || value));
     return Schema.compile(option?.label || value, scope);
   };
   return data.map((record) => {
     const processed = {};
     Object.entries(record).forEach(([key, value]) => {
-      const field = selectedFields.find((field) => field.value === key);
+      const field = selectedFields.find((field) => field.value === key && !field?.query?.aggregation);
       if (!field) {
         processed[key] = value;
         return;
@@ -92,6 +129,7 @@ export const processData = (selectedFields: FieldOption[], data: any[], scope: a
       switch (field.interface) {
         case 'select':
         case 'radioGroup':
+        case 'multipleSelect':
           processed[key] = parseEnum(field, value);
           break;
         default:
@@ -111,7 +149,7 @@ export const removeUnparsableFilter = (filter: any) => {
       const newLogic = {};
       for (const key in filter) {
         const value = removeUnparsableFilter(filter[key]);
-        if (value && !(typeof value === 'object' && Object.keys(value).length === 0)) {
+        if (value !== null && value !== undefined && !(typeof value === 'object' && Object.keys(value).length === 0)) {
           newLogic[key] = value;
         }
       }
@@ -132,4 +170,28 @@ export const getValuesByPath = (values: any, path: string) => {
     result = lodash.get(result, keys.slice(-1)[0]);
   }
   return result;
+};
+
+export const getFormulaComponent = (type: string) => {
+  return {
+    boolean: 'Checkbox',
+    integer: 'InputNumber',
+    bigInt: 'InputNumber',
+    double: 'InputNumber',
+    decimal: 'InputNumber',
+    date: 'DatePicker',
+    string: 'Input',
+  }[type];
+};
+
+export const getFormulaInterface = (type: string) => {
+  return {
+    boolean: 'boolean',
+    integer: 'integer',
+    bigInt: 'integer',
+    double: 'number',
+    decimal: 'number',
+    date: 'datetime',
+    string: 'input',
+  }[type];
 };

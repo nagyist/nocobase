@@ -1,7 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { LoadingOutlined } from '@ant-design/icons';
 import { ISchema } from '@formily/json-schema';
 import { useForm } from '@formily/react';
 import { uid } from '@formily/shared';
-import { App } from 'antd';
+import { App, Modal, Result } from 'antd';
 import type { RcFile } from 'antd/es/upload';
 import React, { FC, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 import { useAPIClient } from '../../../api-client';
 import { SchemaComponent } from '../../../schema-component';
 import { IPluginData } from '../../types';
+
+const { confirm } = Modal;
 
 interface IPluginUploadFormProps {
   onClose: (refresh?: boolean) => void;
@@ -31,12 +43,41 @@ export const PluginUploadForm: FC<IPluginUploadFormProps> = ({ onClose, pluginDa
         if (pluginData?.packageName) {
           formData.append('packageName', pluginData.packageName);
         }
-        api.request({
+        await api.request({
           url: `pm:${isUpgrade ? 'update' : 'add'}`,
           method: 'post',
           data: formData,
         });
+        Modal.info({
+          icon: null,
+          width: 520,
+          content: (
+            <Result
+              icon={<LoadingOutlined />}
+              title={t('Plugin uploading')}
+              subTitle={t('Plugin is uploading, please wait...')}
+            />
+          ),
+          footer: null,
+        });
         onClose(true);
+        function __health_check() {
+          api
+            .silent()
+            .request({
+              url: `__health_check`,
+              method: 'get',
+            })
+            .then((response) => {
+              if (response?.data === 'ok') {
+                window.location.reload();
+              }
+            })
+            .catch((error) => {
+              // console.error('Health check failed:', error);
+            });
+        }
+        setInterval(__health_check, 1000);
       },
     };
   };

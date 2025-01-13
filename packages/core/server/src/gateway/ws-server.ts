@@ -1,10 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Gateway, IncomingRequest } from '../gateway';
-import WebSocket from 'ws';
+import WebSocket, { WebSocketServer } from 'ws';
 import { nanoid } from 'nanoid';
 import { IncomingMessage } from 'http';
 import { AppSupervisor } from '../app-supervisor';
 import { applyErrorWithArgs, getErrorWithCode } from './errors';
 import lodash from 'lodash';
+import { Logger } from '@nocobase/logger';
 
 declare class WebSocketWithId extends WebSocket {
   id: string;
@@ -26,9 +36,10 @@ function getPayloadByErrorCode(code, options) {
 export class WSServer {
   wss: WebSocket.Server;
   webSocketClients = new Map<string, WebSocketClient>();
+  logger: Logger;
 
   constructor() {
-    this.wss = new WebSocket.Server({ noServer: true });
+    this.wss = new WebSocketServer({ noServer: true });
 
     this.wss.on('connection', (ws: WebSocketWithId, request: IncomingMessage) => {
       const client = this.addNewConnection(ws, request);
@@ -60,10 +71,16 @@ export class WSServer {
     });
 
     AppSupervisor.getInstance().on('appError', async ({ appName, error }) => {
+      let message = error.message;
+
+      if (error.cause) {
+        message = `${message}: ${error.cause.message}`;
+      }
+
       this.sendToConnectionsByTag('app', appName, {
         type: 'notification',
         payload: {
-          message: error.message,
+          message,
           type: 'error',
         },
       });

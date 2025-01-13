@@ -1,7 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Input, Tag, message } from 'antd';
+import { Button, Input, Tag, Tooltip, message } from 'antd';
 import { cloneDeep } from 'lodash';
-import { InfoOutlined } from '@ant-design/icons';
+import { InfoOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { createForm } from '@formily/core';
 import { ISchema, useForm } from '@formily/react';
 
@@ -24,7 +33,7 @@ import { useFlowContext } from '../FlowContext';
 import { DrawerDescription } from '../components/DrawerDescription';
 import { NAMESPACE, lang } from '../locale';
 import useStyles from '../style';
-import { VariableOptions } from '../variable';
+import { UseVariableOptions, VariableOption } from '../variable';
 
 function useUpdateConfigAction() {
   const form = useForm();
@@ -39,7 +48,7 @@ function useUpdateConfigAction() {
         return;
       }
       await form.submit();
-      await api.resource('workflows').update?.({
+      await api.resource('workflows').update({
         filterByTk: workflow.id,
         values: {
           config: form.values,
@@ -53,18 +62,18 @@ function useUpdateConfigAction() {
 }
 
 export abstract class Trigger {
+  sync: boolean;
   title: string;
-  type: string;
   description?: string;
   // group: string;
-  useVariables?(config: any, options?): VariableOptions;
+  useVariables?(config: Record<string, any>, options?: UseVariableOptions): VariableOption[];
   fieldset: { [key: string]: ISchema };
   view?: ISchema;
   scope?: { [key: string]: any };
   components?: { [key: string]: any };
   useInitializers?(config): SchemaInitializerItemType | null;
   initializers?: any;
-  useActionTriggerable?: boolean | (() => boolean);
+  isActionTriggerable?: boolean | ((config: object, context?: object) => boolean);
 }
 
 function TriggerExecution() {
@@ -79,9 +88,16 @@ function TriggerExecution() {
 
   return (
     <SchemaComponent
+      components={{
+        Tooltip,
+      }}
       schema={{
         type: 'void',
         name: 'execution',
+        'x-decorator': 'Tooltip',
+        'x-decorator-props': {
+          title: lang('View result'),
+        },
         'x-component': 'Action',
         'x-component-props': {
           title: <InfoOutlined />,
@@ -124,7 +140,7 @@ function TriggerExecution() {
                 'x-component-props': {
                   className: css`
                     padding: 1em;
-                    background-color: #eee;
+                    background-color: #f3f3f3;
                   `,
                 },
                 'x-read-pretty': true,
@@ -151,23 +167,17 @@ export const TriggerConfig = () => {
   const compile = useCompile();
   const trigger = useTrigger();
 
-  const { title, executed } = workflow;
-  const typeTitle = compile(trigger.title);
-  const { fieldset, scope, components } = trigger;
-  const detailText = executed ? '{{t("View")}}' : '{{t("Configure")}}';
-  const titleText = lang('Trigger');
-
   useEffect(() => {
     if (workflow) {
-      setEditingTitle(workflow.title ?? typeTitle);
+      setEditingTitle(workflow.triggerTitle ?? workflow.title ?? compile(trigger?.title));
     }
-  }, [workflow]);
+  }, [workflow, trigger]);
 
   const form = useMemo(() => {
-    const values = cloneDeep(workflow?.config);
+    const values = cloneDeep(workflow.config);
     return createForm({
       initialValues: values,
-      disabled: workflow?.executed,
+      disabled: workflow.executed,
     });
   }, [workflow]);
 
@@ -183,20 +193,20 @@ export const TriggerConfig = () => {
 
   const onChangeTitle = useCallback(
     async function (next) {
-      const t = next || typeTitle;
+      const t = next || compile(trigger?.title);
       setEditingTitle(t);
-      if (t === title) {
+      if (t === workflow.triggerTitle) {
         return;
       }
-      await api.resource('workflows').update?.({
+      await api.resource('workflows').update({
         filterByTk: workflow.id,
         values: {
-          title: t,
+          triggerTitle: t,
         },
       });
       refresh();
     },
-    [workflow],
+    [workflow, trigger],
   );
 
   const onOpenDrawer = useCallback(function (ev) {
@@ -214,6 +224,37 @@ export const TriggerConfig = () => {
     }
   }, []);
 
+  const detailText = workflow.executed ? '{{t("View")}}' : '{{t("Configure")}}';
+  const titleText = lang('Trigger');
+
+  if (!trigger) {
+    return (
+      <Tooltip
+        title={lang(
+          'Workflow with unknown type will cause error. Please delete it or check plugin which provide this type.',
+        )}
+      >
+        <div
+          role="button"
+          aria-label={`${titleText}-${editingTitle}`}
+          className={cx(styles.nodeCardClass, 'invalid')}
+          onClick={onOpenDrawer}
+        >
+          <div className={styles.nodeHeaderClass}>
+            <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
+              <Tag color="error">{lang('Unknown trigger')}</Tag>
+            </div>
+          </div>
+          <div className="workflow-node-title">
+            <Input.TextArea value={editingTitle} disabled autoSize />
+          </div>
+        </div>
+      </Tooltip>
+    );
+  }
+
+  const { fieldset, scope, components } = trigger;
+
   return (
     <div
       role="button"
@@ -221,18 +262,26 @@ export const TriggerConfig = () => {
       className={cx(styles.nodeCardClass)}
       onClick={onOpenDrawer}
     >
-      <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
-        <Tag color="gold">{titleText}</Tag>
+      <div className={styles.nodeHeaderClass}>
+        <div className={cx(styles.nodeMetaClass, 'workflow-node-meta')}>
+          <Tag color="gold">
+            <ThunderboltOutlined />
+            <span className="type">{compile(trigger.title)}</span>
+          </Tag>
+        </div>
+        <div className="workflow-node-actions">
+          <TriggerExecution />
+        </div>
       </div>
-      <div>
+      <div className="workflow-node-title">
         <Input.TextArea
           value={editingTitle}
           onChange={(ev) => setEditingTitle(ev.target.value)}
           onBlur={(ev) => onChangeTitle(ev.target.value)}
           autoSize
+          disabled={workflow.executed}
         />
       </div>
-      <TriggerExecution />
       <ActionContextProvider
         value={{
           visible: editingConfig,
@@ -266,10 +315,7 @@ export const TriggerConfig = () => {
                   title: titleText,
                   'x-component': 'Action.Drawer',
                   'x-decorator': 'FormV2',
-                  'x-decorator-props': {
-                    // form,
-                    useProps: '{{ useFormProviderProps }}',
-                  },
+                  'x-use-decorator-props': 'useFormProviderProps',
                   properties: {
                     ...(trigger.description
                       ? {
@@ -298,7 +344,7 @@ export const TriggerConfig = () => {
                       properties: fieldset,
                     },
                     actions: {
-                      ...(executed
+                      ...(workflow.executed
                         ? {}
                         : {
                             type: 'void',
@@ -333,6 +379,9 @@ export const TriggerConfig = () => {
   );
 };
 
+/**
+ * @experimental
+ */
 export function useTrigger() {
   const workflowPlugin = usePlugin(WorkflowPlugin);
   const { workflow } = useFlowContext();

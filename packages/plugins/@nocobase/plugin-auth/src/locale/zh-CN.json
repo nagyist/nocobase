@@ -16,8 +16,18 @@
   "Please enter a valid username": "请输入有效的用户名",
   "Please enter a valid email": "请输入有效的邮箱",
   "Please enter your username or email": "请输入用户名或邮箱",
-  "SMS": "短信",
+  "Please enter a password": "请输入密码",
   "Username/Email": "用户名/邮箱",
   "Auth UID": "认证标识",
-  "The authentication allows users to sign in via username or email.": "该认证方式支持用户通过用户名或邮箱登录。"
+  "The authentication allows users to sign in via username or email.": "该认证方式支持用户通过用户名或邮箱登录。",
+  "No authentication methods available.": "没有可用的认证方式。",
+  "The password is inconsistent, please re-enter": "密码不一致，请重新输入",
+  "Sign-in": "登录",
+  "Password": "密码",
+  "The username/email or password is incorrect, please re-enter": "用户名/邮箱或密码有误，请重新输入",
+  "Show": "显示",
+  "Sign up settings": "注册设置",
+  "Sign up form": "注册表单",
+  "At least one of the username or email fields is required": "至少需要设置用户名或邮箱中的一个字段为必填字段",
+  "Password is not allowed to be changed": "密码不允许修改"
 }

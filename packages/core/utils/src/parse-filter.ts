@@ -1,5 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import _ from 'lodash';
 import set from 'lodash/set';
+import moment from 'moment';
 import { offsetFromString } from './date';
 import { dayjs } from './dayjs';
 import { getValuesByPath } from './getValuesByPath';
@@ -97,6 +107,7 @@ const dateValueWrapper = (value: any, timezone?: string) => {
   if (!value) {
     return null;
   }
+
   if (Array.isArray(value)) {
     if (value.length === 2) {
       value.push('[]', timezone);
@@ -172,6 +183,11 @@ export const parseFilter = async (filter: any, opts: ParseFilterOptions = {}) =>
       }
       if (isDateOperator(operator)) {
         const field = getField?.(path);
+
+        if (field?.constructor.name === 'DateOnlyField' || field?.constructor.name === 'DatetimeNoTzField') {
+          return value;
+        }
+
         return dateValueWrapper(value, field?.timezone || timezone);
       }
       return value;
@@ -212,14 +228,14 @@ export function getDayRange(options: GetDayRangeOptions) {
   ];
 }
 
-function toMoment(value) {
+function toMoment(value, useMoment = false) {
   if (!value) {
-    return dayjs();
+    return (useMoment ? moment() : dayjs()) as dayjs.Dayjs;
   }
   if (dayjs.isDayjs(value)) {
     return value;
   }
-  return dayjs(value);
+  return (useMoment ? moment(value) : dayjs(value)) as dayjs.Dayjs;
 }
 
 export type Utc2unitOptions = {
@@ -231,7 +247,7 @@ export type Utc2unitOptions = {
 
 export function utc2unit(options: Utc2unitOptions) {
   const { now, unit, timezone = '+00:00', offset } = options;
-  let m = toMoment(now);
+  let m = toMoment(now, unit === 'isoWeek');
   m = m.utcOffset(offsetFromString(timezone));
   m = m.startOf(unit);
   if (offset > 0) {
@@ -250,9 +266,15 @@ export function utc2unit(options: Utc2unitOptions) {
   const r = fn[unit]?.();
   return timezone ? r + timezone : r;
 }
-
-const toUnit = (unit, offset?: number) => {
-  return ({ now, timezone, field }) => {
+type ToUnitParams = {
+  now?: any;
+  timezone?: string | number;
+  field?: {
+    timezone?: string | number;
+  };
+};
+export const toUnit = (unit, offset?: number) => {
+  return ({ now, timezone, field }: ToUnitParams) => {
     if (field?.timezone) {
       timezone = field?.timezone;
     }
@@ -261,7 +283,7 @@ const toUnit = (unit, offset?: number) => {
 };
 
 const toDays = (offset: number) => {
-  return ({ now, timezone, field }) => {
+  return ({ now, timezone, field }: ToUnitParams) => {
     if (field?.timezone) {
       timezone = field?.timezone;
     }

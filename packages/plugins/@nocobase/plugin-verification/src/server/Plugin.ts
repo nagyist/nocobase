@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import path from 'path';
 
 import { Context } from '@nocobase/actions';
@@ -6,11 +15,10 @@ import { HandlerType } from '@nocobase/resourcer';
 import { Plugin } from '@nocobase/server';
 import { Registry } from '@nocobase/utils';
 
-import { namespace } from '.';
+import { Provider, namespace } from '.';
 import initActions from './actions';
 import { CODE_STATUS_UNUSED, CODE_STATUS_USED, PROVIDER_TYPE_SMS_ALIYUN } from './constants';
-import { zhCN } from './locale';
-import initProviders, { Provider } from './providers';
+import initProviders from './providers';
 
 export interface Interceptor {
   manual?: boolean;
@@ -23,7 +31,7 @@ export interface Interceptor {
   validate?(ctx: Context, receiver: string): boolean | Promise<boolean>;
 }
 
-export default class VerificationPlugin extends Plugin {
+export default class PluginVerficationServer extends Plugin {
   providers: Registry<typeof Provider> = new Registry();
   interceptors: Registry<Interceptor> = new Registry();
 
@@ -125,23 +133,22 @@ export default class VerificationPlugin extends Plugin {
   async load() {
     const { app, db, options } = this;
 
-    app.i18n.addResources('zh-CN', namespace, zhCN);
-
     await this.importCollections(path.resolve(__dirname, 'collections'));
 
-    initProviders(this);
+    await initProviders(this);
     initActions(this);
 
+    const self = this;
     // add middleware to action
-    app.resourcer.use(async (context, next) => {
+    app.resourceManager.use(async function verificationIntercept(context, next) {
       const { resourceName, actionName, values } = context.action.params;
       const key = `${resourceName}:${actionName}`;
-      const interceptor = this.interceptors.get(key);
+      const interceptor = self.interceptors.get(key);
       if (!interceptor || interceptor.manual) {
         return next();
       }
 
-      return this.intercept(context, next);
+      return self.intercept(context, next);
     });
 
     app.acl.allow('verifications', 'create', 'public');

@@ -1,12 +1,26 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Context, Next } from '@nocobase/actions';
-import { Model } from '@nocobase/database';
 import { Registry } from '@nocobase/utils';
 import { Auth, AuthExtend } from './auth';
 import { JwtOptions, JwtService } from './base/jwt-service';
 import { ITokenBlacklistService } from './base/token-blacklist-service';
 
+export interface Authenticator {
+  authType: string;
+  options: Record<string, any>;
+  [key: string]: any;
+}
+
 export interface Storer {
-  get: (name: string) => Promise<Model>;
+  get: (name: string) => Promise<Authenticator>;
 }
 
 export type AuthManagerOptions = {
@@ -18,9 +32,13 @@ export type AuthManagerOptions = {
 type AuthConfig = {
   auth: AuthExtend<Auth>; // The authentication class.
   title?: string; // The display name of the authentication type.
+  getPublicOptions?: (options: Record<string, any>) => Record<string, any>; // Get the public options.
 };
 
 export class AuthManager {
+  /**
+   * @internal
+   */
   jwt: JwtService;
   protected options: AuthManagerOptions;
   protected authTypes: Registry<AuthConfig> = new Registry();
@@ -77,9 +95,9 @@ export class AuthManager {
     if (!authenticator) {
       throw new Error(`Authenticator [${name}] is not found.`);
     }
-    const { auth } = this.authTypes.get(authenticator.authType);
+    const { auth } = this.authTypes.get(authenticator.authType) || {};
     if (!auth) {
-      throw new Error(`AuthType [${name}] is not found.`);
+      throw new Error(`AuthType [${authenticator.authType}] is not found.`);
     }
     return new auth({ authenticator, options: authenticator.options, ctx });
   }
@@ -89,20 +107,26 @@ export class AuthManager {
    * @description Auth middleware, used to check the authentication status.
    */
   middleware() {
-    return async (ctx: Context & { auth: Auth }, next: Next) => {
+    const self = this;
+
+    return async function AuthManagerMiddleware(ctx: Context & { auth: Auth }, next: Next) {
       const token = ctx.getBearerToken();
-      if (token && (await ctx.app.authManager.jwt.blacklist.has(token))) {
-        return ctx.throw(401, ctx.t('token is not available'));
+      if (token && (await ctx.app.authManager.jwt.blacklist?.has(token))) {
+        return ctx.throw(401, {
+          code: 'TOKEN_INVALID',
+          message: ctx.t('Token is invalid'),
+        });
       }
 
-      const name = ctx.get(this.options.authKey) || this.options.default;
+      const name = ctx.get(self.options.authKey) || self.options.default;
+
       let authenticator: Auth;
       try {
         authenticator = await ctx.app.authManager.get(name, ctx);
         ctx.auth = authenticator;
       } catch (err) {
         ctx.auth = {} as Auth;
-        ctx.app.logger.warn(`auth, ${err.message}`);
+        ctx.logger.warn(err.message, { method: 'check', authenticator: name });
         return next();
       }
       if (authenticator) {

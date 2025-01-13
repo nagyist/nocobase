@@ -1,12 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Schema } from '@formily/json-schema';
 import { BaseError } from '@nocobase/database';
 import { Plugin } from '@nocobase/server';
 import lodash from 'lodash';
 import { ErrorHandler } from './error-handler';
-import enUS from './locale/en_US';
-import zhCN from './locale/zh_CN';
 
-export class PluginErrorHandler extends Plugin {
+export class PluginErrorHandlerServer extends Plugin {
   errorHandler: ErrorHandler = new ErrorHandler();
   i18nNs = 'error-handler';
 
@@ -15,13 +22,22 @@ export class PluginErrorHandler extends Plugin {
   }
 
   registerSequelizeValidationErrorHandler() {
-    const findFieldTitle = (instance, path, tFunc) => {
+    const findFieldTitle = (instance, path, tFunc, ctx) => {
       if (!instance) {
         return path;
       }
 
       const model = instance.constructor;
-      const collection = this.db.modelCollection.get(model);
+      const dataSourceKey = ctx.get('x-data-source');
+      const dataSource = ctx.app.dataSourceManager.dataSources.get(dataSourceKey);
+      const database = dataSource ? dataSource.collectionManager.db : ctx.db;
+
+      const collection = database.modelCollection.get(model);
+
+      if (!collection) {
+        return path;
+      }
+
       const field = collection.getField(path);
       const fieldOptions = Schema.compile(field?.options, { t: tFunc });
       const title = lodash.get(fieldOptions, 'uiSchema.title', path);
@@ -33,10 +49,12 @@ export class PluginErrorHandler extends Plugin {
       (err, ctx) => {
         ctx.body = {
           errors: err.errors.map((err) => {
+            const t = ctx.i18n.t;
+            const title = findFieldTitle(err.instance, err.path, t, ctx);
             return {
-              message: ctx.i18n.t(err.type, {
+              message: t(err.type, {
                 ns: this.i18nNs,
-                field: findFieldTitle(err.instance, err.path, ctx.i18n.t),
+                field: t(title, { ns: ['lm-collections', 'client'] }),
               }),
             };
           }),
@@ -47,8 +65,6 @@ export class PluginErrorHandler extends Plugin {
   }
 
   async load() {
-    this.app.i18n.addResources('zh-CN', this.i18nNs, zhCN);
-    this.app.i18n.addResources('en-US', this.i18nNs, enUS);
-    this.app.use(this.errorHandler.middleware(), { before: 'cors', tag: 'errorHandler' });
+    this.app.use(this.errorHandler.middleware(), { after: 'i18n', tag: 'errorHandler', before: 'cors' });
   }
 }

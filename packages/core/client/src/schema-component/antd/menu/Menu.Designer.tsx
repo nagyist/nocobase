@@ -1,18 +1,29 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { TreeSelect } from '@formily/antd-v5';
 import { Field, onFieldChange } from '@formily/core';
 import { ISchema, Schema, useField, useFieldSchema } from '@formily/react';
-import React from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { findByUid } from '.';
-import { createDesignable } from '../..';
+import { createDesignable, useCompile } from '../..';
 import {
   GeneralSchemaDesigner,
   SchemaSettingsDivider,
   SchemaSettingsModalItem,
   SchemaSettingsRemove,
   SchemaSettingsSubMenu,
+  SchemaSettingsSwitchItem,
   useAPIClient,
   useDesignable,
+  useURLAndHTMLSchema,
 } from '../../../';
 
 const toItems = (properties = {}) => {
@@ -51,6 +62,7 @@ const InsertMenuItems = (props) => {
   const { t } = useTranslation();
   const { dn } = useDesignable();
   const fieldSchema = useFieldSchema();
+  const { urlSchema, paramsSchema } = useURLAndHTMLSchema();
   const isSubMenu = fieldSchema['x-component'] === 'Menu.SubMenu';
   if (!isSubMenu && insertPosition === 'beforeEnd') {
     return null;
@@ -147,7 +159,7 @@ const InsertMenuItems = (props) => {
                   grid: {
                     type: 'void',
                     'x-component': 'Grid',
-                    'x-initializer': 'BlockInitializers',
+                    'x-initializer': 'page:addBlock',
                     properties: {},
                   },
                 },
@@ -175,15 +187,12 @@ const InsertMenuItems = (props) => {
                 'x-component': 'IconPicker',
                 'x-decorator': 'FormItem',
               },
-              href: {
-                title: t('Link'),
-                'x-component': 'Input',
-                'x-decorator': 'FormItem',
-              },
+              href: urlSchema,
+              params: paramsSchema,
             },
           } as ISchema
         }
-        onSubmit={({ title, icon, href }) => {
+        onSubmit={({ title, icon, href, params }) => {
           dn.insertAdjacent(insertPosition, {
             type: 'void',
             title,
@@ -192,6 +201,7 @@ const InsertMenuItems = (props) => {
             'x-component-props': {
               icon,
               href,
+              params,
             },
             'x-server-hooks': serverHooks,
           });
@@ -201,6 +211,8 @@ const InsertMenuItems = (props) => {
   );
 };
 
+const components = { TreeSelect };
+
 export const MenuDesigner = () => {
   const field = useField();
   const fieldSchema = useFieldSchema();
@@ -208,55 +220,151 @@ export const MenuDesigner = () => {
   const { dn, refresh } = useDesignable();
   const { t } = useTranslation();
   const menuSchema = findMenuSchema(fieldSchema);
-  const items = toItems(menuSchema?.properties);
-  const effects = (form) => {
-    onFieldChange('target', (field: Field) => {
-      const [, component] = field?.value?.split?.('||') || [];
-      field.query('position').take((f: Field) => {
-        f.dataSource =
-          component === 'Menu.SubMenu'
-            ? [
-                { label: t('Before'), value: 'beforeBegin' },
-                { label: t('After'), value: 'afterEnd' },
-                { label: t('Inner'), value: 'beforeEnd' },
-              ]
-            : [
-                { label: t('Before'), value: 'beforeBegin' },
-                { label: t('After'), value: 'afterEnd' },
-              ];
+  const compile = useCompile();
+  const { urlSchema, paramsSchema } = useURLAndHTMLSchema();
+  const onSelect = useMemo(
+    () => compile(menuSchema?.['x-component-props']?.['onSelect']),
+    [menuSchema?.['x-component-props']?.['onSelect']],
+  );
+  const items = useMemo(() => toItems(menuSchema?.properties), [menuSchema?.properties]);
+  const effects = useCallback(
+    (form) => {
+      onFieldChange('target', (field: Field) => {
+        const [, component] = field?.value?.split?.('||') || [];
+        field.query('position').take((f: Field) => {
+          f.dataSource =
+            component === 'Menu.SubMenu'
+              ? [
+                  { label: t('Before'), value: 'beforeBegin' },
+                  { label: t('After'), value: 'afterEnd' },
+                  { label: t('Inner'), value: 'beforeEnd' },
+                ]
+              : [
+                  { label: t('Before'), value: 'beforeBegin' },
+                  { label: t('After'), value: 'afterEnd' },
+                ];
+        });
       });
-    });
-  };
-  const schema = {
-    type: 'object',
-    title: t('Edit menu item'),
-    properties: {
-      title: {
-        title: t('Menu item title'),
-        required: true,
-        'x-decorator': 'FormItem',
-        'x-component': 'Input',
-        'x-component-props': {},
-      },
-      icon: {
-        title: t('Menu item icon'),
-        'x-component': 'IconPicker',
-        'x-decorator': 'FormItem',
-      },
     },
-  };
-  const initialValues = {
-    title: field.title,
-    icon: field.componentProps.icon,
-  };
-  if (fieldSchema['x-component'] === 'Menu.URL') {
-    schema.properties['href'] = {
-      title: t('Link'),
-      'x-component': 'Input',
-      'x-decorator': 'FormItem',
+    [t],
+  );
+  const schema = useMemo(() => {
+    return {
+      type: 'object',
+      title: t('Edit menu item'),
+      properties: {
+        title: {
+          title: t('Menu item title'),
+          required: true,
+          'x-decorator': 'FormItem',
+          'x-component': 'Input',
+          'x-component-props': {},
+        },
+        icon: {
+          title: t('Menu item icon'),
+          'x-component': 'IconPicker',
+          'x-decorator': 'FormItem',
+        },
+      },
     };
+  }, [t]);
+  const initialValues = useMemo(() => {
+    return {
+      title: field.title,
+      icon: field.componentProps.icon,
+    };
+  }, [field.title, field.componentProps.icon]);
+  if (fieldSchema['x-component'] === 'Menu.URL') {
+    schema.properties['href'] = urlSchema;
+    schema.properties['params'] = paramsSchema;
     initialValues['href'] = field.componentProps.href;
+    initialValues['params'] = field.componentProps.params;
   }
+  const onEditSubmit: (values: any) => void = useCallback(
+    ({ title, icon, href, params }) => {
+      const schema = {
+        ['x-uid']: fieldSchema['x-uid'],
+        'x-server-hooks': [
+          {
+            type: 'onSelfSave',
+            method: 'extractTextToLocale',
+          },
+        ],
+      };
+      if (title) {
+        fieldSchema.title = title;
+        field.title = title;
+        schema['title'] = title;
+        refresh();
+      }
+      field.componentProps.icon = icon;
+      field.componentProps.href = href;
+      field.componentProps.params = params;
+      schema['x-component-props'] = { icon, href, params };
+      fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
+      fieldSchema['x-component-props']['icon'] = icon;
+      fieldSchema['x-component-props']['href'] = href;
+      fieldSchema['x-component-props']['params'] = params;
+      onSelect?.({ item: { props: { schema: fieldSchema } } });
+      dn.emit('patch', {
+        schema,
+      });
+    },
+    [fieldSchema, field, dn, refresh, onSelect],
+  );
+
+  const modalSchema = useMemo(() => {
+    return {
+      type: 'object',
+      title: t('Move to'),
+      properties: {
+        target: {
+          title: t('Target'),
+          enum: items,
+          required: true,
+          'x-decorator': 'FormItem',
+          'x-component': 'TreeSelect',
+          'x-component-props': {},
+        },
+        position: {
+          title: t('Position'),
+          required: true,
+          enum: [
+            { label: t('Before'), value: 'beforeBegin' },
+            { label: t('After'), value: 'afterEnd' },
+          ],
+          default: 'afterEnd',
+          'x-component': 'Radio.Group',
+          'x-decorator': 'FormItem',
+        },
+      },
+    } as ISchema;
+  }, [items, t]);
+
+  const onMoveToSubmit: (values: any) => void = useCallback(
+    ({ target, position }) => {
+      const [uid] = target?.split?.('||') || [];
+      if (!uid) {
+        return;
+      }
+      const current = findByUid(menuSchema, uid);
+      const dn = createDesignable({
+        t,
+        api,
+        refresh,
+        current,
+      });
+      dn.loadAPIClientEvents();
+      dn.insertAdjacent(position, fieldSchema);
+    },
+    [fieldSchema, menuSchema, t, api, refresh],
+  );
+
+  const removeConfirmTitle = useMemo(() => {
+    return {
+      title: t('Delete menu item'),
+    };
+  }, [t]);
   return (
     <GeneralSchemaDesigner>
       <SchemaSettingsModalItem
@@ -264,91 +372,36 @@ export const MenuDesigner = () => {
         eventKey="edit"
         schema={schema as ISchema}
         initialValues={initialValues}
-        onSubmit={({ title, icon, href }) => {
-          const schema = {
-            ['x-uid']: fieldSchema['x-uid'],
-            'x-server-hooks': [
-              {
-                type: 'onSelfSave',
-                method: 'extractTextToLocale',
-              },
-            ],
-          };
-          if (title) {
-            fieldSchema.title = title;
-            field.title = title;
-            schema['title'] = title;
-            refresh();
-          }
-          field.componentProps.icon = icon;
-          field.componentProps.href = href;
-          schema['x-component-props'] = { icon, href };
-          fieldSchema['x-component-props'] = fieldSchema['x-component-props'] || {};
-          fieldSchema['x-component-props']['icon'] = icon;
-          fieldSchema['x-component-props']['href'] = href;
+        onSubmit={onEditSubmit}
+      />
+      <SchemaSettingsSwitchItem
+        title={t('Hidden')}
+        checked={fieldSchema['x-component-props']?.hidden}
+        onChange={(v) => {
+          fieldSchema['x-component-props'].hidden = !!v;
+          field.componentProps.hidden = !!v;
           dn.emit('patch', {
-            schema,
+            schema: {
+              'x-uid': fieldSchema['x-uid'],
+              'x-component-props': fieldSchema['x-component-props'],
+            },
           });
         }}
       />
       <SchemaSettingsModalItem
         title={t('Move to')}
         eventKey="move-to"
-        components={{ TreeSelect }}
+        components={components}
         effects={effects}
-        schema={
-          {
-            type: 'object',
-            title: t('Move to'),
-            properties: {
-              target: {
-                title: t('Target'),
-                enum: items,
-                required: true,
-                'x-decorator': 'FormItem',
-                'x-component': 'TreeSelect',
-                'x-component-props': {},
-              },
-              position: {
-                title: t('Position'),
-                required: true,
-                enum: [
-                  { label: t('Before'), value: 'beforeBegin' },
-                  { label: t('After'), value: 'afterEnd' },
-                ],
-                default: 'afterEnd',
-                'x-component': 'Radio.Group',
-                'x-decorator': 'FormItem',
-              },
-            },
-          } as ISchema
-        }
-        onSubmit={({ target, position }) => {
-          const [uid] = target?.split?.('||') || [];
-          if (!uid) {
-            return;
-          }
-          const current = findByUid(menuSchema, uid);
-          const dn = createDesignable({
-            t,
-            api,
-            refresh,
-            current,
-          });
-          dn.loadAPIClientEvents();
-          dn.insertAdjacent(position, fieldSchema);
-        }}
+        schema={modalSchema}
+        onSubmit={onMoveToSubmit}
       />
       <SchemaSettingsDivider />
       <InsertMenuItems eventKey={'insertbeforeBegin'} title={t('Insert before')} insertPosition={'beforeBegin'} />
       <InsertMenuItems eventKey={'insertafterEnd'} title={t('Insert after')} insertPosition={'afterEnd'} />
       <InsertMenuItems eventKey={'insertbeforeEnd'} title={t('Insert inner')} insertPosition={'beforeEnd'} />
       <SchemaSettingsDivider />
-      <SchemaSettingsRemove
-        confirm={{
-          title: t('Delete menu item'),
-        }}
-      />
+      <SchemaSettingsRemove confirm={removeConfirmTitle} />
     </GeneralSchemaDesigner>
   );
 };

@@ -1,3 +1,5 @@
+
+
 import { FormDrawer, FormLayout } from '@formily/antd-v5';
 import { createForm } from '@formily/core';
 import { ISchema } from '@formily/json-schema';
@@ -7,9 +9,9 @@ import {
   AntdSchemaComponentProvider,
   Application,
   CardItem,
-  CollectionManagerContext,
+  CollectionManagerProvider_deprecated,
   CollectionManagerProvider,
-  CollectionProvider,
+  CollectionProvider_deprecated,
   FormItem,
   Grid,
   Input,
@@ -20,6 +22,7 @@ import {
   SchemaComponentOptions,
   SchemaInitializer,
   SchemaInitializerItem,
+  useCollectionManager_deprecated,
   useCollectionManager,
   useSchemaInitializer,
   useSchemaInitializerItem,
@@ -39,7 +42,7 @@ const schema: ISchema = {
       type: 'void',
       'x-component': Grid,
       'x-read-pretty': true,
-      'x-initializer': 'AddFieldButton',
+      'x-initializer': 'addFieldButton',
       'x-uid': uid(),
       properties: {},
     },
@@ -69,9 +72,9 @@ const form = createForm({
 
 const FormItemInitializer = () => {
   const itemConfig = useSchemaInitializerItem();
-  const { getInterface } = useCollectionManager();
+  const { getInterface } = useCollectionManager_deprecated();
   const schemaOptions = useContext(SchemaOptionsContext);
-  const cm = useContext(CollectionManagerContext);
+  const cm = useCollectionManager();
   const { insert } = useSchemaInitializer();
   return (
     <SchemaInitializerItem
@@ -90,7 +93,7 @@ const FormItemInitializer = () => {
 
         await FormDrawer('Add field', () => {
           return (
-            <CollectionManagerContext.Provider value={cm}>
+            <CollectionManagerProvider instance={cm}>
               <AntdSchemaComponentProvider>
                 <SchemaComponentOptions scope={schemaOptions.scope} components={schemaOptions.components}>
                   <FormLayout layout={'vertical'}>
@@ -102,7 +105,7 @@ const FormItemInitializer = () => {
                   </FormLayout>
                 </SchemaComponentOptions>
               </AntdSchemaComponentProvider>
-            </CollectionManagerContext.Provider>
+            </CollectionManagerProvider>
           );
         }).open({
           initialValues: {},
@@ -123,7 +126,7 @@ const FormItemInitializer = () => {
 };
 
 const addFieldButton = new SchemaInitializer({
-  name: 'AddFieldButton',
+  name: 'addFieldButton',
   // 正常情况下这个值为 false，通过点击页面左上角的设计按钮切换，这里为了显示设置为 true
   designable: true,
   //  按钮标题标题
@@ -149,15 +152,15 @@ const addFieldButton = new SchemaInitializer({
 
 const Root = () => {
   return (
-    <CollectionManagerProvider>
-      <CollectionProvider collection={collection}>
+    <CollectionManagerProvider_deprecated>
+      <CollectionProvider_deprecated collection={collection}>
         <FormContext.Provider value={form}>
           <FormLayout layout={'vertical'}>
             <SchemaComponent schema={schema} />
           </FormLayout>
         </FormContext.Provider>
-      </CollectionProvider>
-    </CollectionManagerProvider>
+      </CollectionProvider_deprecated>
+    </CollectionManagerProvider_deprecated>
   );
 };
 

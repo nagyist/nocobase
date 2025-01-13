@@ -1,25 +1,20 @@
-import { mockServer } from '@nocobase/test';
-import PluginCollectionManager from '@nocobase/plugin-collection-manager';
-import PluginMultiAppManager from '@nocobase/plugin-multi-app-manager';
-import PluginErrorHandler from '@nocobase/plugin-error-handler';
-import PluginUser from '@nocobase/plugin-users';
-import Plugin from '..';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { createMockServer } from '@nocobase/test';
 
 export async function createApp(options = {}) {
-  const app = mockServer({
+  const app = await createMockServer({
     acl: false,
     ...options,
+    plugins: ['users', 'error-handler', 'data-source-main', 'multi-app-manager', 'multi-app-share-collection'],
   });
 
-  app.plugin(PluginUser, { name: 'users' });
-  app.plugin(PluginErrorHandler, { name: 'error-handler' });
-  app.plugin(PluginCollectionManager, { name: 'collection-manager' });
-  await app.loadAndInstall({ clean: true });
-  app.plugin(PluginMultiAppManager, { name: 'multi-app-manager' });
-  app.plugin(Plugin, { name: 'multi-app-share-collection' });
-
-  await app.reload();
-  await app.install();
-  await app.start();
   return app;
 }

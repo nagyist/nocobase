@@ -1,12 +1,21 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { createForm, Form, IFormProps } from '@formily/core';
 import { FormProvider, Observer, observer, ReactFC } from '@formily/react';
-import { toJS } from '@formily/reactive';
+import { untracked } from '@formily/reactive';
 import { applyMiddleware, IMiddleware, isBool, isFn, isNum, isStr } from '@formily/shared';
 import { Modal, ModalProps, ThemeConfig } from 'antd';
 import React, { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { GlobalThemeProvider } from '../../../global-theme';
-import { createPortalProvider, createPortalRoot, loading, usePrefixCls } from '../__builtins__';
+import { createPortalProvider, createPortalRoot, loading, usePrefixCls, useToken } from '../__builtins__';
 
 type FormDialogRenderer = React.ReactElement | ((form: Form) => React.ReactElement);
 
@@ -78,36 +87,47 @@ export function FormDialog(title: any, id: any, renderer?: any, theme?: any): IF
       root.unmount();
     },
   };
-  const DialogContent = observer(() => {
-    return <Fragment>{isFn(renderer) ? renderer(env.form) : renderer}</Fragment>;
-  });
+  const DialogContent = observer(
+    () => {
+      return <Fragment>{isFn(renderer) ? renderer(env.form) : renderer}</Fragment>;
+    },
+    { displayName: 'DialogContent' },
+  );
   const renderDialog = (open = true, resolve?: () => any, reject?: () => any) => {
     const { form } = env;
     if (!form) return null;
     return (
       <GlobalThemeProvider theme={theme}>
         <Observer>
-          {() => (
-            <Modal
-              {...modal}
-              open={open}
-              confirmLoading={form.submitting}
-              onCancel={(e) => {
-                if (modal?.onCancel?.(e) !== false) {
-                  reject?.();
-                }
-              }}
-              onOk={async (e) => {
-                if (modal?.onOk?.(e) !== false) {
-                  resolve?.();
-                }
-              }}
-            >
-              <FormProvider form={form}>
-                <DialogContent />
-              </FormProvider>
-            </Modal>
-          )}
+          {() => {
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            const { token } = useToken();
+
+            return (
+              <Modal
+                // fix https://nocobase.height.app/T-2797
+                // fix https://nocobase.height.app/T-2838
+                zIndex={token.zIndexPopupBase + 1000}
+                {...modal}
+                open={open}
+                confirmLoading={form.submitting}
+                onCancel={(e) => {
+                  if (modal?.onCancel?.(e) !== false) {
+                    reject?.();
+                  }
+                }}
+                onOk={async (e) => {
+                  if (modal?.onOk?.(e) !== false) {
+                    resolve?.();
+                  }
+                }}
+              >
+                <FormProvider form={form}>
+                  <DialogContent />
+                </FormProvider>
+              </Modal>
+            );
+          }}
         </Observer>
       </GlobalThemeProvider>
     );
@@ -150,7 +170,9 @@ export function FormDialog(title: any, id: any, renderer?: any, theme?: any): IF
               env.form
                 ?.submit(async () => {
                   await applyMiddleware(env.form, env.confirmMiddlewares);
-                  resolve(toJS(env.form?.values));
+                  untracked(() => {
+                    resolve({ ...env.form?.values });
+                  });
                   formDialog.close();
                 })
                 .catch(() => {});

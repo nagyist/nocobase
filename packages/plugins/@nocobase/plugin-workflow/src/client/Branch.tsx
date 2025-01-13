@@ -1,9 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React from 'react';
 import { CloseOutlined } from '@ant-design/icons';
 
 import { css, cx } from '@nocobase/client';
 
-import { AddButton } from './AddButton';
+import { AddButton } from './AddNodeContext';
 import { useGetAriaLabelOfAddButton } from './hooks/useGetAriaLabelOfAddButton';
 import { Node } from './nodes';
 import useStyles from './style';

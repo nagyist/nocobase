@@ -1,10 +1,20 @@
-import { untracked } from '@formily/reactive';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { raw, untracked } from '@formily/reactive';
 import { getValuesByPath } from '@nocobase/utils/client';
 import _ from 'lodash';
 import React, { createContext, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAPIClient } from '../api-client';
-import type { CollectionFieldOptions } from '../collection-manager';
-import { useCollectionManager } from '../collection-manager';
+import type { CollectionFieldOptions_deprecated } from '../collection-manager';
+import { useCollectionManager_deprecated } from '../collection-manager';
+import { getDataSourceHeaders } from '../data-source/utils';
 import { useCompile } from '../schema-component';
 import useBuiltInVariables from './hooks/useBuiltinVariables';
 import { VariableOption, VariablesContextType } from './types';
@@ -16,24 +26,37 @@ import { isVariable } from './utils/isVariable';
 import { uniq } from './utils/uniq';
 
 export const VariablesContext = createContext<VariablesContextType>(null);
+VariablesContext.displayName = 'VariablesContext';
 
-const variableToCollectionName = {};
+const variablesStore: Record<string, VariableOption> = {};
 
-const getFieldPath = (variablePath: string) => {
+const getFieldPath = (variablePath: string, variablesStore: Record<string, VariableOption>) => {
+  let dataSource;
+  let variableOption: VariableOption;
   const list = variablePath.split('.');
   const result = list.map((item) => {
-    if (variableToCollectionName[item]) {
-      return variableToCollectionName[item];
+    if (variablesStore[item]) {
+      dataSource = variablesStore[item].dataSource;
+      variableOption = variablesStore[item];
+      return variablesStore[item].collectionName;
     }
     return item;
   });
-  return result.join('.');
+  return {
+    fieldPath: result.join('.'),
+    dataSource,
+    variableOption,
+  };
 };
 
-const VariablesProvider = ({ children }) => {
+/**
+ * @internal
+ * Note: There can only be one VariablesProvider in the entire context. It cannot be used in plugins.
+ */
+const VariablesProvider = ({ children, filterVariables }: any) => {
   const ctxRef = useRef<Record<string, any>>({});
   const api = useAPIClient();
-  const { getCollectionJoinField } = useCollectionManager();
+  const { getCollectionJoinField, getCollection } = useCollectionManager_deprecated();
   const compile = useCompile();
   const { builtinVariables } = useBuiltInVariables();
 
@@ -50,37 +73,68 @@ const VariablesProvider = ({ children }) => {
    * 2. 如果某个 `key` 不存在，且 `key` 是一个关联字段，则从 api 中获取数据，并缓存到 `ctx` 中
    * 3. 如果某个 `key` 不存在，且 `key` 不是一个关联字段，则返回当前值
    */
-  const getValue = useCallback(
-    async (variablePath: string) => {
+  const getResult = useCallback(
+    async (
+      variablePath: string,
+      localVariables?: VariableOption[],
+      options?: {
+        /** 第一次请求时，需要包含的关系字段 */
+        appends?: string[];
+        /** do not request when the association field is empty */
+        doNotRequest?: boolean;
+        /**
+         * The operator related to the current field, provided when parsing the default value of the field
+         */
+        fieldOperator?: string | void;
+      },
+    ) => {
       const list = variablePath.split('.');
       const variableName = list[0];
-      let current = ctxRef.current;
-      let collectionName = getFieldPath(variableName);
+      const _variableToCollectionName = mergeVariableToCollectionNameWithLocalVariables(variablesStore, localVariables);
+      let current = mergeCtxWithLocalVariables(ctxRef.current, localVariables);
+      const { fieldPath, dataSource, variableOption } = getFieldPath(variableName, _variableToCollectionName);
+      let collectionName = fieldPath;
 
-      if (process.env.NODE_ENV !== 'production' && !ctxRef.current[variableName]) {
+      const { fieldPath: fieldPathOfVariable } = getFieldPath(variablePath, _variableToCollectionName);
+      const collectionNameOfVariable =
+        list.length === 1
+          ? variableOption?.collectionName
+          : getCollectionJoinField(fieldPathOfVariable, dataSource)?.target;
+
+      if (!(variableName in current)) {
         throw new Error(`VariablesProvider: ${variableName} is not found`);
       }
 
       for (let index = 0; index < list.length; index++) {
         if (current == null) {
-          return current;
+          return {
+            value: current === undefined ? variableOption?.defaultValue : current,
+            dataSource,
+            collectionName: collectionNameOfVariable,
+          };
         }
 
         const key = list[index];
-        const associationField: CollectionFieldOptions = getCollectionJoinField(
-          getFieldPath(list.slice(0, index + 1).join('.')),
-        );
+        const { fieldPath } = getFieldPath(list.slice(0, index + 1).join('.'), _variableToCollectionName);
+        const associationField: CollectionFieldOptions_deprecated = getCollectionJoinField(fieldPath, dataSource);
+        const collectionPrimaryKey = getCollection(collectionName, dataSource)?.getPrimaryKey();
         if (Array.isArray(current)) {
           const result = current.map((item) => {
-            if (shouldToRequest(item?.[key]) && item?.id != null) {
+            if (!options?.doNotRequest && shouldToRequest(item?.[key]) && item?.[collectionPrimaryKey] != null) {
               if (associationField?.target) {
-                const url = `/${collectionName}/${item.id}/${key}:${getAction(associationField.type)}`;
+                const url = `/${collectionName}/${
+                  item[associationField.sourceKey || collectionPrimaryKey]
+                }/${key}:${getAction(associationField.type)}`;
                 if (hasRequested(url)) {
                   return getRequested(url);
                 }
                 const result = api
                   .request({
+                    headers: getDataSourceHeaders(dataSource),
                     url,
+                    params: {
+                      appends: options?.appends,
+                    },
                   })
                   .then((data) => {
                     clearRequested(url);
@@ -93,24 +147,41 @@ const VariablesProvider = ({ children }) => {
             }
             return item?.[key];
           });
-          current = _.flatten(await Promise.all(result));
-        } else if (shouldToRequest(current[key]) && current.id != null && associationField?.target) {
-          const url = `/${collectionName}/${current.id}/${key}:${getAction(associationField.type)}`;
+          current = removeThroughCollectionFields(_.flatten(await Promise.all(result)), associationField);
+        } else if (
+          !options?.doNotRequest &&
+          shouldToRequest(current[key]) &&
+          current[collectionPrimaryKey] != null &&
+          associationField?.target
+        ) {
+          const url = `/${collectionName}/${
+            current[associationField.sourceKey || collectionPrimaryKey]
+          }/${key}:${getAction(associationField.type)}`;
           let data = null;
           if (hasRequested(url)) {
             data = await getRequested(url);
           } else {
             const waitForData = api.request({
+              headers: getDataSourceHeaders(dataSource),
               url,
+              params: {
+                appends: options?.appends,
+              },
             });
             stashRequested(url, waitForData);
             data = await waitForData;
             clearRequested(url);
           }
-          current[key] = data.data.data;
-          current = getValuesByPath(current, key);
+
+          // fix https://nocobase.height.app/T-3144，使用 `raw` 方法是为了避免触发 autorun，以修复 T-3144 的错误
+          if (!raw(current)[key]) {
+            // 把接口返回的数据保存起来，避免重复请求
+            raw(current)[key] = data.data.data;
+          }
+
+          current = removeThroughCollectionFields(getValuesByPath(current, key), associationField);
         } else {
-          current = getValuesByPath(current, key);
+          current = removeThroughCollectionFields(getValuesByPath(current, key), associationField);
         }
 
         if (associationField?.target) {
@@ -118,7 +189,14 @@ const VariablesProvider = ({ children }) => {
         }
       }
 
-      return compile(_.isFunction(current) ? current() : current);
+      const _value = compile(
+        _.isFunction(current) ? current({ fieldOperator: options?.fieldOperator, isParsingVariable: true }) : current,
+      );
+      return {
+        value: _value === undefined ? variableOption.defaultValue : _value,
+        dataSource,
+        collectionName: collectionNameOfVariable,
+      };
     },
     [getCollectionJoinField],
   );
@@ -128,7 +206,7 @@ const VariablesProvider = ({ children }) => {
    */
   const registerVariable = useCallback(
     (variableOption: VariableOption) => {
-      if (process.env.NODE_ENV !== 'production' && !isVariable(`{{${variableOption.name}}}`)) {
+      if (!isVariable(`{{${variableOption.name}}}`)) {
         throw new Error(`VariablesProvider: ${variableOption.name} is not a valid name`);
       }
 
@@ -138,9 +216,10 @@ const VariablesProvider = ({ children }) => {
           [variableOption.name]: variableOption.ctx,
         };
       });
-      if (variableOption.collectionName) {
-        variableToCollectionName[variableOption.name] = variableOption.collectionName;
-      }
+      variablesStore[variableOption.name] = {
+        ...variableOption,
+        defaultValue: _.has(variableOption, 'defaultValue') ? variableOption.defaultValue : null,
+      };
     },
     [setCtx],
   );
@@ -151,56 +230,20 @@ const VariablesProvider = ({ children }) => {
     }
 
     return {
-      name: variableName,
-      ctx: ctxRef.current[variableName],
-      collectionName: variableToCollectionName[variableName],
+      ...variablesStore[variableName],
     };
   }, []);
 
-  const removeVariable = useCallback((variableName: string) => {
-    setCtx((prev) => {
-      const next = { ...prev };
-      delete next[variableName];
-      return next;
-    });
-    delete variableToCollectionName[variableName];
-  }, []);
-
-  const onLocalVariablesReady = useCallback(
-    async (localVariables: VariableOption | VariableOption[], handler: () => Promise<void>) => {
-      let old = null;
-      if (localVariables) {
-        if (Array.isArray(localVariables)) {
-          old = localVariables.map((item) => getVariable(item.name));
-          localVariables.forEach((item) => registerVariable(item));
-        } else {
-          // 1. 如果有局部变量，先把全局中同名的变量取出来
-          old = getVariable(localVariables.name);
-          // 2. 把局部变量注册到全局，这样就可以使用了
-          registerVariable(localVariables);
-        }
-      }
-
-      await handler();
-
-      // 3. 局部变量使用完成后，需要在全局中清除
-      if (localVariables) {
-        if (Array.isArray(localVariables)) {
-          localVariables.forEach((item) => removeVariable(item.name));
-        } else {
-          removeVariable(localVariables.name);
-        }
-      }
-      // 4. 如果有同名的全局变量，把它重新注册回去
-      if (old) {
-        if (Array.isArray(old)) {
-          old.filter(Boolean).forEach((item) => registerVariable(item));
-        } else {
-          registerVariable(old);
-        }
-      }
+  const removeVariable = useCallback(
+    (variableName: string) => {
+      setCtx((prev) => {
+        const next = { ...prev };
+        delete next[variableName];
+        return next;
+      });
+      delete variablesStore[variableName];
     },
-    [getVariable, registerVariable, removeVariable],
+    [setCtx],
   );
 
   const parseVariable = useCallback(
@@ -210,50 +253,75 @@ const VariablesProvider = ({ children }) => {
      * @param localVariables 局部变量，解析完成后会被清除
      * @returns
      */
-    async (str: string, localVariables?: VariableOption | VariableOption[]) => {
+    async (
+      str: string,
+      localVariables?: VariableOption | VariableOption[],
+      options?: {
+        /** 第一次请求时，需要包含的关系字段 */
+        appends?: string[];
+        /** do not request when the association field is empty */
+        doNotRequest?: boolean;
+        /**
+         * The operator related to the current field, provided when parsing the default value of the field
+         */
+        fieldOperator?: string | void;
+      },
+    ) => {
       if (!isVariable(str)) {
         return str;
       }
 
-      let value = null;
-      await onLocalVariablesReady(localVariables, async () => {
-        const path = getPath(str);
-        value = await getValue(path);
-      });
+      if (localVariables) {
+        localVariables = _.isArray(localVariables) ? localVariables : [localVariables];
+      }
 
-      return uniq(filterEmptyValues(value));
+      const path = getPath(str);
+      const result = await getResult(path, localVariables as VariableOption[], options);
+
+      return {
+        ...result,
+        value: uniq(filterEmptyValues(result.value)),
+      };
     },
-    [getValue, onLocalVariablesReady],
+    [getResult],
   );
 
   const getCollectionField = useCallback(
     async (variableString: string, localVariables?: VariableOption | VariableOption[]) => {
-      if (process.env.NODE_ENV !== 'production' && !isVariable(variableString)) {
+      if (!isVariable(variableString)) {
         throw new Error(`VariablesProvider: ${variableString} is not a variable string`);
       }
 
-      let result = null;
+      if (localVariables) {
+        localVariables = _.isArray(localVariables) ? localVariables : [localVariables];
+      }
 
-      await onLocalVariablesReady(localVariables, async () => {
-        const path = getPath(variableString);
-        result = getCollectionJoinField(getFieldPath(path));
+      const _variableToCollectionName = mergeVariableToCollectionNameWithLocalVariables(
+        variablesStore,
+        localVariables as VariableOption[],
+      );
+      const path = getPath(variableString);
+      const { fieldPath, dataSource } = getFieldPath(path, _variableToCollectionName);
+      let result = getCollectionJoinField(fieldPath, dataSource);
 
-        // 当仅有一个例如 `$user` 这样的字符串时，需要拼一个假的 `collectionField` 返回
-        if (!result && !path.includes('.')) {
-          result = {
-            target: variableToCollectionName[path],
-          };
-        }
-      });
+      // 当仅有一个例如 `$user` 这样的字符串时，需要拼一个假的 `collectionField` 返回
+      if (!result && !path.includes('.')) {
+        result = {
+          target: _variableToCollectionName[path]?.collectionName,
+        };
+      }
 
       return result;
     },
-    [getCollectionJoinField, onLocalVariablesReady],
+    [getCollectionJoinField],
   );
 
   useEffect(() => {
     builtinVariables.forEach((variableOption) => {
-      registerVariable(variableOption);
+      registerVariable({
+        ...variableOption,
+        defaultValue: _.has(variableOption, 'defaultValue') ? variableOption.defaultValue : null,
+      });
     });
   }, [builtinVariables, registerVariable]);
 
@@ -267,6 +335,7 @@ const VariablesProvider = ({ children }) => {
         getVariable,
         getCollectionField,
         removeVariable,
+        filterVariables,
       }) as VariablesContextType,
     [getCollectionField, getVariable, parseVariable, registerVariable, removeVariable, setCtx],
   );
@@ -294,4 +363,53 @@ function shouldToRequest(value) {
   });
 
   return result;
+}
+
+function mergeCtxWithLocalVariables(ctx: Record<string, any>, localVariables?: VariableOption[]) {
+  ctx = { ...ctx };
+
+  localVariables?.forEach((item) => {
+    ctx[item.name] = item.ctx;
+  });
+
+  return ctx;
+}
+
+function mergeVariableToCollectionNameWithLocalVariables(
+  variablesStore: Record<string, VariableOption>,
+  localVariables?: VariableOption[],
+) {
+  variablesStore = { ...variablesStore };
+
+  localVariables?.forEach((item) => {
+    variablesStore[item.name] = {
+      ...item,
+      defaultValue: _.has(item, 'defaultValue') ? item.defaultValue : null,
+    };
+  });
+
+  return variablesStore;
+}
+
+/**
+ * 去除关系字段中的中间表字段。
+ * 如果在创建新记录的时候，存在关系字段的中间表字段，提交的时候会报错，所以需要去除。
+ * @param value
+ * @param associationField
+ * @returns
+ */
+export function removeThroughCollectionFields(
+  value: Record<string, any> | Record<string, any>[],
+  associationField: CollectionFieldOptions_deprecated,
+) {
+  if (!associationField?.through || !value) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      return _.omit(item, associationField.through);
+    });
+  }
+  return _.omit(value, associationField.through);
 }

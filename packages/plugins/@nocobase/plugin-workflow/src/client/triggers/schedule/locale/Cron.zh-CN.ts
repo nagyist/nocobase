@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 export default {
   everyText: '每',
   emptyMonths: '每月',
@@ -19,7 +28,7 @@ export default {
   prefixMonths: '的',
   prefixMonthDays: '的',
   prefixWeekDays: '的',
-  prefixWeekDaysForMonthAndYearPeriod: '并且',
+  prefixWeekDaysForMonthAndYearPeriod: '或者',
   prefixHours: '的',
   prefixMinutes: ':',
   prefixMinutesForHourPeriod: '的',

@@ -1,16 +1,25 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema } from '@formily/react';
 import { isArr } from '@formily/shared';
 import { dayjs, getDefaultFormat, str2moment } from '@nocobase/utils/client';
 import { Tag } from 'antd';
 import React from 'react';
-import { CollectionFieldOptions, useCollectionManager } from '../../../collection-manager';
+import { CollectionFieldOptions_deprecated, useCollectionManager_deprecated } from '../../../collection-manager';
 
-export const useLabelUiSchema = (collectionField: CollectionFieldOptions, label: string): ISchema => {
-  const { getCollectionJoinField } = useCollectionManager();
+export const useLabelUiSchema = (collectionField: CollectionFieldOptions_deprecated, label: string): ISchema => {
+  const { getCollectionJoinField } = useCollectionManager_deprecated();
   if (!collectionField) {
     return;
   }
-  const labelField = getCollectionJoinField(`${collectionField.target}.${label}`) as CollectionFieldOptions;
+  const labelField = getCollectionJoinField(`${collectionField.target}.${label}`) as CollectionFieldOptions_deprecated;
   return labelField?.uiSchema;
 };
 
@@ -25,7 +34,7 @@ export const getLabelFormatValue = (labelUiSchema: ISchema, value: any, isTag = 
   if (Array.isArray(labelUiSchema?.enum) && value) {
     const opt: any = labelUiSchema.enum.find((option: any) => option.value === value);
     if (isTag) {
-      return React.createElement(Tag, { color: opt?.color, children: opt?.label });
+      return React.createElement(Tag, { color: opt?.color }, opt?.label);
     }
     return opt?.label;
   }

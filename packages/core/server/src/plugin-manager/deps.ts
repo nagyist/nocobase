@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 // @ts-ignore
 import { version } from '../../package.json';
 
@@ -7,7 +16,7 @@ const deps: Record<string, string> = {
 
   '@formily/antd-v5': '1.x',
   jsonwebtoken: '8.x',
-  'cache-manager': '4.x',
+  'cache-manager': '5.x',
   sequelize: '6.x',
   umzug: '3.x',
   'async-mutex': '0.3.x',
@@ -34,17 +43,17 @@ const deps: Record<string, string> = {
   i18next: '22.x',
   'react-i18next': '11.x',
   '@dnd-kit/accessibility': '3.x',
-  '@dnd-kit/core': '5.x',
+  '@dnd-kit/core': '6.x',
   '@dnd-kit/modifiers': '6.x',
   '@dnd-kit/sortable': '6.x',
   '@dnd-kit/utilities': '3.x',
   dayjs: '1.x',
-  mysql2: '2.x',
+  mysql2: '3.x',
   pg: '8.x',
   'pg-hstore': '2.x',
   sqlite3: '5.x',
   supertest: '6.x',
-  axios: '0.26.x',
+  axios: '1.7.x',
   '@emotion/css': '11.x',
   ahooks: '3.x',
   lodash: '4.x',

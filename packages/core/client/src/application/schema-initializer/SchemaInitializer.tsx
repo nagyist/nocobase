@@ -1,4 +1,13 @@
-import { ButtonProps } from 'antd';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import type { ButtonProps } from 'antd';
 import { SchemaInitializerItemType, SchemaInitializerItemTypeWithoutName, SchemaInitializerOptions } from './types';
 
 export class SchemaInitializer<P1 = ButtonProps, P2 = {}> {
@@ -15,14 +24,20 @@ export class SchemaInitializer<P1 = ButtonProps, P2 = {}> {
 
   add(name: string, item: SchemaInitializerItemTypeWithoutName) {
     const arr = name.split('.');
-    const data: any = { ...item, name: arr[arr.length - 1] };
-    if (arr.length === 1) {
+    const itemName = arr[arr.length - 1];
+    const data: any = { ...item, name: itemName };
+
+    const pushData = (name: string, data: any) => {
       const index = this.items.findIndex((item: any) => item.name === name);
       if (index === -1) {
         this.items.push(data);
       } else {
         this.items[index] = data;
       }
+    };
+
+    if (arr.length === 1) {
+      pushData(itemName, data);
       return;
     }
 
@@ -32,34 +47,37 @@ export class SchemaInitializer<P1 = ButtonProps, P2 = {}> {
       if (!parentItem.children) {
         parentItem.children = [];
       }
-      const index = parentItem.children.findIndex((item: any) => item.name === name);
+      const childrenName = name.replace(`${parentItem.name}.`, '');
+      const index = parentItem.children.findIndex((item: any) => item.name === childrenName);
       if (index === -1) {
         parentItem.children.push(data);
       } else {
         parentItem.children[index] = data;
       }
+
+      // 这里是为了兼容这个改动：https://nocobase.feishu.cn/wiki/O7pjwSbBEigpOWkY9s5c03Yenkh
+    } else {
+      pushData(itemName, data);
     }
   }
 
   get(nestedName: string): SchemaInitializerItemType | undefined {
+    if (!nestedName) return undefined;
     const arr = nestedName.split('.');
-    let current: any = this.items;
+    let current: any = { children: this.items };
 
     for (let i = 0; i < arr.length; i++) {
       const name = arr[i];
-      current = current.find((item) => item.name === name);
-      if (!current || i === arr.length - 1) {
-        return current;
+      const _current = current.children?.find((item) => item.name === name);
+
+      if (_current) {
+        current = _current;
       }
 
-      if (current.children) {
-        current = current.children;
-      } else {
-        return undefined;
+      if (i === arr.length - 1) {
+        return _current;
       }
     }
-
-    return current;
   }
 
   remove(nestedName: string) {

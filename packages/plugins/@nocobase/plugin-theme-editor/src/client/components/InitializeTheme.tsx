@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { defaultTheme as presetTheme, useAPIClient, useCurrentUserContext, useGlobalTheme } from '@nocobase/client';
 import { error } from '@nocobase/utils/client';
 import { Spin } from 'antd';
@@ -67,7 +76,11 @@ const InitializeTheme: React.FC = ({ children }) => {
   }, [api.auth, currentUser?.data?.data?.systemSettings?.themeId, data, run, setTheme, defaultTheme]);
 
   if (loading && !data) {
-    return <Spin />;
+    return (
+      <div style={{ textAlign: 'center', marginTop: 20 }}>
+        <Spin />
+      </div>
+    );
   }
 
   return (

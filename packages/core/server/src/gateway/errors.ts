@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { AppSupervisor } from '../app-supervisor';
 import lodash from 'lodash';
 
@@ -25,8 +34,20 @@ export const errors: AppErrors = {
   APP_ERROR: {
     status: 503,
     message: ({ app }) => {
-      return AppSupervisor.getInstance().appErrors[app.name]?.message;
+      const error = AppSupervisor.getInstance().appErrors[app.name];
+      if (!error) {
+        return '';
+      }
+
+      let message = error.message;
+
+      if ((error as any).cause) {
+        message = `${message}: ${(error as any).cause.message}`;
+      }
+
+      return message;
     },
+
     code: ({ app }): string => {
       const error = AppSupervisor.getInstance().appErrors[app.name];
       return error['code'] || 'APP_ERROR';

@@ -1,12 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayTable } from '@formily/antd-v5';
 import { observer, useField } from '@formily/react';
 import {
-  CollectionManagerContext,
-  CollectionManagerProvider,
+  ExtendCollectionsProvider,
   FormProvider,
   SchemaComponent,
   TableBlockProvider,
-  useCollection,
+  useCollection_deprecated,
   useCompile,
   useRecord,
 } from '@nocobase/client';
@@ -104,6 +112,7 @@ const Value = observer(
 );
 
 const IsAssociationBlock = createContext(null);
+IsAssociationBlock.displayName = 'IsAssociationBlock';
 
 export const AuditLogs: any = () => {
   const isAssoc = useContext(IsAssociationBlock);
@@ -145,9 +154,9 @@ export const AuditLogs: any = () => {
                 'x-action': 'filter',
                 // 'x-designer': 'Filter.Action.Designer',
                 'x-component': 'Filter.Action',
+                'x-use-component-props': 'useFilterActionProps',
                 'x-component-props': {
                   icon: 'FilterOutlined',
-                  useProps: '{{ useFilterActionProps }}',
                 },
                 'x-align': 'left',
               },
@@ -156,12 +165,12 @@ export const AuditLogs: any = () => {
           y84dlntcaup: {
             type: 'array',
             'x-component': 'TableV2',
+            'x-use-component-props': 'useTableBlockProps',
             'x-component-props': {
               rowKey: 'id',
               rowSelection: {
                 type: 'checkbox',
               },
-              useProps: '{{ useTableBlockProps }}',
             },
             properties: {
               actions: {
@@ -170,8 +179,12 @@ export const AuditLogs: any = () => {
                 'x-action-column': 'actions',
                 'x-decorator': 'TableV2.Column.ActionBar',
                 'x-component': 'TableV2.Column',
-                'x-designer': 'TableV2.ActionColumnDesigner',
-                'x-initializer': 'TableActionColumnInitializers',
+                'x-toolbar': 'TableColumnSchemaToolbar',
+                'x-initializer': 'table:configureItemActions',
+                'x-settings': 'fieldSettings:TableColumn',
+                'x-toolbar-props': {
+                  initializer: 'table:configureItemActions',
+                },
                 properties: {
                   actions: {
                     type: 'void',
@@ -184,7 +197,9 @@ export const AuditLogs: any = () => {
                       o80rypwmeeg: {
                         type: 'void',
                         title: '{{ t("View") }}',
-                        'x-designer': 'Action.Designer',
+                        // 'x-designer': 'Action.Designer',
+                        'x-toolbar': 'ActionSchemaToolbar',
+                        'x-settings': 'actionSettings:view',
                         'x-component': 'Action.Link',
                         'x-component-props': {
                           openMode: 'drawer',
@@ -230,10 +245,8 @@ export const AuditLogs: any = () => {
                                               mevpuonrda0: {
                                                 type: 'void',
                                                 'x-component': 'FormV2',
+                                                'x-use-component-props': 'useFormBlockProps',
                                                 'x-read-pretty': true,
-                                                'x-component-props': {
-                                                  useProps: '{{ useFormBlockProps }}',
-                                                },
                                                 properties: {
                                                   grid: {
                                                     type: 'void',
@@ -460,9 +473,8 @@ export const AuditLogs: any = () => {
 
 AuditLogs.Decorator = observer(
   (props: any) => {
-    const parent = useCollection();
+    const parent = useCollection_deprecated();
     const record = useRecord();
-    const { interfaces } = useContext(CollectionManagerContext);
     let filter = props?.params?.filter;
     if (parent.name) {
       const filterByTk = record?.[parent.filterTargetKey || 'id'];
@@ -500,9 +512,9 @@ AuditLogs.Decorator = observer(
     };
     return (
       <IsAssociationBlock.Provider value={!!parent.name}>
-        <CollectionManagerProvider collections={[collection]} interfaces={interfaces}>
+        <ExtendCollectionsProvider collections={[collection]}>
           <TableBlockProvider {...defaults}>{props.children}</TableBlockProvider>
-        </CollectionManagerProvider>
+        </ExtendCollectionsProvider>
       </IsAssociationBlock.Provider>
     );
   },

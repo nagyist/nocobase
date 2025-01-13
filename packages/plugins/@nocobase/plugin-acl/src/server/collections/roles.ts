@@ -1,11 +1,17 @@
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export default {
-  namespace: 'acl.acl',
-  duplicator: {
-    dumpable: 'required',
-    with: 'uiSchemas',
-  },
+import { defineCollection } from '@nocobase/database';
+
+export default defineCollection({
+  origin: '@nocobase/plugin-acl',
+  dumpRules: 'required',
   name: 'roles',
   title: '{{t("Roles")}}',
   autoGenId: false,
@@ -77,9 +83,9 @@ export default {
     {
       type: 'hasMany',
       name: 'resources',
-      target: 'rolesResources',
+      target: 'dataSourcesRolesResources',
       sourceKey: 'name',
-      targetKey: 'name',
+      foreignKey: 'roleName',
     },
     {
       type: 'set',
@@ -98,4 +104,4 @@ export default {
       through: 'rolesUsers',
     },
   ],
-} as CollectionOptions;
+});

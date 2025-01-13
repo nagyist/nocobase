@@ -1,10 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { CollectionOptions } from '@nocobase/database';
 
 export default function () {
   return {
-    namespace: 'workflow.workflowConfig',
-    duplicator: 'required',
+    dumpRules: 'required',
     name: 'workflows',
+    shared: true,
     fields: [
       {
         name: 'key',
@@ -30,15 +39,14 @@ export default function () {
         required: true,
       },
       {
-        type: 'json',
+        type: 'string',
+        name: 'triggerTitle',
+      },
+      {
+        type: 'jsonb',
         name: 'config',
         required: true,
         defaultValue: {},
-      },
-      {
-        type: 'boolean',
-        name: 'useTransaction',
-        // defaultValue: true,
       },
       {
         type: 'hasMany',
@@ -49,7 +57,6 @@ export default function () {
       {
         type: 'hasMany',
         name: 'executions',
-        onDelete: 'CASCADE',
       },
       {
         type: 'integer',
@@ -64,6 +71,11 @@ export default function () {
       {
         type: 'boolean',
         name: 'current',
+        defaultValue: false,
+      },
+      {
+        type: 'boolean',
+        name: 'sync',
         defaultValue: false,
       },
       {

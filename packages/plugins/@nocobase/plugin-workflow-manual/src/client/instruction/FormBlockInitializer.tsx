@@ -1,10 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React from 'react';
 
 import {
-  CollectionProvider,
+  CollectionProvider_deprecated,
   SchemaInitializerItem,
   SchemaInitializerItemType,
-  createFormBlockSchema,
   useRecordCollectionDataSourceItems,
   useSchemaInitializer,
   useSchemaInitializerItem,
@@ -14,6 +22,7 @@ import {
 import { JOB_STATUS, traverseSchema } from '@nocobase/plugin-workflow/client';
 
 import { NAMESPACE } from '../../locale';
+import { createManualFormBlockUISchema } from './createManualFormBlockUISchema';
 
 function InternalFormBlockInitializer({ schema, ...others }) {
   const { getTemplateSchemaByMode } = useSchemaTemplateManager();
@@ -21,8 +30,8 @@ function InternalFormBlockInitializer({ schema, ...others }) {
   const items = useRecordCollectionDataSourceItems('FormItem') as SchemaInitializerItemType[];
   async function onConfirm({ item }) {
     const template = item.template ? await getTemplateSchemaByMode(item) : null;
-    const result = createFormBlockSchema({
-      actionInitializers: 'AddActionButton',
+    const result = createManualFormBlockUISchema({
+      actionInitializers: 'workflowManual:form:configureActions',
       actions: {
         resolve: {
           type: 'void',
@@ -46,8 +55,12 @@ function InternalFormBlockInitializer({ schema, ...others }) {
     delete result['x-acl-action-props'];
     delete result['x-acl-action'];
     const [formKey] = Object.keys(result.properties);
-    result.properties[formKey].properties.actions['x-decorator'] = 'ActionBarProvider';
-    result.properties[formKey].properties.actions['x-component-props'].style = {
+    //获取actionBar的schemakey
+    const actionKey =
+      Object.entries(result.properties[formKey].properties).find(([key, f]) => f['x-component'] === 'ActionBar')?.[0] ||
+      'actions';
+    result.properties[formKey].properties[actionKey]['x-decorator'] = 'ActionBarProvider';
+    result.properties[formKey].properties[actionKey]['x-component-props'].style = {
       marginTop: '1.5em',
       flexWrap: 'wrap',
     };
@@ -65,8 +78,11 @@ function InternalFormBlockInitializer({ schema, ...others }) {
 export function FormBlockInitializer() {
   const itemConfig = useSchemaInitializerItem();
   return (
-    <CollectionProvider collection={itemConfig.schema?.collection}>
+    <CollectionProvider_deprecated
+      dataSource={itemConfig.schema?.dataSource}
+      collection={itemConfig.schema?.collection}
+    >
       <InternalFormBlockInitializer {...itemConfig} />
-    </CollectionProvider>
+    </CollectionProvider_deprecated>
   );
 }

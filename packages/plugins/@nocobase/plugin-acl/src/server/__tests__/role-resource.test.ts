@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database, Model } from '@nocobase/database';
-import { CollectionRepository } from '@nocobase/plugin-collection-manager';
+import { CollectionRepository } from '@nocobase/plugin-data-source-main';
 import UsersPlugin from '@nocobase/plugin-users';
 import { MockServer } from '@nocobase/test';
 import { prepareApp } from './prepare';
@@ -136,9 +145,10 @@ describe('role resource api', () => {
     expect(response.statusCode).toEqual(200);
 
     // get collections list
-    response = await adminAgent.resource('roles.collections').list({
+    response = await adminAgent.resource('roles.dataSourcesCollections').list({
       associatedIndex: role.get('name') as string,
       filter: {
+        dataSourceKey: 'main',
         name: 'c1',
       },
     });
@@ -159,6 +169,9 @@ describe('role resource api', () => {
     // update resource actions
     response = await adminAgent.resource('roles.resources').update({
       associatedIndex: role.get('name') as string,
+      filter: {
+        name: 'c1',
+      },
       values: {
         name: 'c1',
         usingActionsConfig: true,

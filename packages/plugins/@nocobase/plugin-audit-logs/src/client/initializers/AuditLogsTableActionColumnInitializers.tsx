@@ -1,11 +1,25 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { MenuOutlined } from '@ant-design/icons';
 import { useFieldSchema } from '@formily/react';
-import { createDesignable, Resizable, SchemaInitializer, useAPIClient, useDesignable } from '@nocobase/client';
+import {
+  CompatibleSchemaInitializer,
+  createDesignable,
+  Resizable,
+  useAPIClient,
+  useDesignable,
+} from '@nocobase/client';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
-export const auditLogsTableActionColumnInitializers = new SchemaInitializer({
-  name: 'AuditLogsTableActionColumnInitializers',
+const commonOptions = {
   insertPosition: 'beforeEnd',
   Component: (props: any) => <MenuOutlined {...props} style={{ cursor: 'pointer' }} />,
   useInsert() {
@@ -64,4 +78,21 @@ export const auditLogsTableActionColumnInitializers = new SchemaInitializer({
       Component: Resizable,
     },
   ],
+};
+
+/**
+ * @deprecated
+ * use `auditLogsTableActionColumnInitializers` instead
+ */
+export const auditLogsTableActionColumnInitializers_deprecated = new CompatibleSchemaInitializer({
+  name: 'AuditLogsTableActionColumnInitializers',
+  ...commonOptions,
 });
+
+export const auditLogsTableActionColumnInitializers = new CompatibleSchemaInitializer(
+  {
+    name: 'auditLogsTable:configureItemActions',
+    ...commonOptions,
+  },
+  auditLogsTableActionColumnInitializers_deprecated,
+);

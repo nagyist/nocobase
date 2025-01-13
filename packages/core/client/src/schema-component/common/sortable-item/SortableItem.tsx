@@ -1,12 +1,23 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { TinyColor } from '@ctrl/tinycolor';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { cx } from '@emotion/css';
 import { Schema, observer, useField, useFieldSchema } from '@formily/react';
-import React, { HTMLAttributes, createContext, useContext } from 'react';
+import React, { HTMLAttributes, createContext, useContext, useMemo } from 'react';
 import { useToken } from '../../antd/__builtins__';
 
 export const DraggableContext = createContext(null);
+DraggableContext.displayName = 'DraggableContext';
 export const SortableContext = createContext(null);
+SortableContext.displayName = 'SortableContext';
 
 export const SortableProvider = (props) => {
   const { id, data, children } = props;
@@ -74,15 +85,17 @@ interface SortableItemProps extends HTMLAttributes<HTMLDivElement> {
 export const SortableItem: React.FC<SortableItemProps> = observer(
   (props) => {
     const { schema, id, eid, removeParentsIfNoChildren, ...others } = useSortableItemProps(props);
+
+    const data = useMemo(() => {
+      return {
+        insertAdjacent: 'afterEnd',
+        schema: schema,
+        removeParentsIfNoChildren: removeParentsIfNoChildren ?? true,
+      };
+    }, [schema, removeParentsIfNoChildren]);
+
     return (
-      <SortableProvider
-        id={id}
-        data={{
-          insertAdjacent: 'afterEnd',
-          schema: schema,
-          removeParentsIfNoChildren: removeParentsIfNoChildren ?? true,
-        }}
-      >
+      <SortableProvider id={id} data={data}>
         <Sortable id={eid} {...others}>
           {props.children}
         </Sortable>

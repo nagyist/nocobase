@@ -1,16 +1,24 @@
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export default {
-  namespace: 'snapshot-field.snapshot-field',
-  duplicator: 'required',
+import { defineCollection } from '@nocobase/database';
+
+export default defineCollection({
+  dumpRules: 'required',
   name: 'collectionsHistory',
-  title: '数据表历史',
   sortable: 'sort',
   autoGenId: false,
   model: 'CollectionModel',
   repository: 'CollectionRepository',
   timestamps: false,
   filterTargetKey: 'name',
+  shared: true,
   fields: [
     {
       type: 'uid',
@@ -54,4 +62,4 @@ export default {
       sortBy: 'sort',
     },
   ],
-} as CollectionOptions;
+});

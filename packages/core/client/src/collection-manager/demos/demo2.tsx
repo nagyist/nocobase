@@ -1,9 +1,11 @@
+
+
 import { FormItem, Input } from '@formily/antd-v5';
 import { ISchema, observer, useForm } from '@formily/react';
 import {
   Action,
   CollectionField,
-  CollectionProvider,
+  CollectionProvider_deprecated,
   Form,
   SchemaComponent,
   SchemaComponentProvider,
@@ -115,9 +117,9 @@ export default observer(() => {
 
   return (
     <SchemaComponentProvider scope={{ useSubmit }} components={{ Action, Form, CollectionField, Input, FormItem }}>
-      <CollectionProvider collection={collection}>
+      <CollectionProvider_deprecated collection={collection}>
         <SchemaComponent schema={schema} />
-      </CollectionProvider>
+      </CollectionProvider_deprecated>
     </SchemaComponentProvider>
   );
 });

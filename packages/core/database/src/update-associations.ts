@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import lodash from 'lodash';
 import {
   Association,
@@ -11,6 +20,8 @@ import {
 } from 'sequelize';
 import { Model } from './model';
 import { UpdateGuard } from './update-guard';
+import { TargetKey } from './repository';
+import Database from './database';
 
 function isUndefinedOrNull(value: any) {
   return typeof value === 'undefined' || value === null;
@@ -48,7 +59,7 @@ type UpdateValue = { [key: string]: any };
 
 interface UpdateOptions extends Transactionable {
   filter?: any;
-  filterByTk?: number | string;
+  filterByTk?: TargetKey;
   // 字段白名单
   whitelist?: string[];
   // 字段黑名单
@@ -285,6 +296,22 @@ export async function updateSingleAssociation(
     return await removeAssociation();
   }
 
+  // @ts-ignore
+  if (association.associationType === 'HasOne' && !model.get(association.sourceKeyAttribute)) {
+    // @ts-ignore
+    throw new Error(`The source key ${association.sourceKeyAttribute} is not set in ${model.constructor.name}`);
+  }
+
+  const checkBelongsToForeignKeyValue = () => {
+    // @ts-ignore
+    if (association.associationType === 'BelongsTo' && !model.get(association.foreignKey)) {
+      throw new Error(
+        // @ts-ignore
+        `The target key ${association.targetKey} is not set in ${association.target.name}`,
+      );
+    }
+  };
+
   if (isStringOrNumber(value)) {
     await model[setAccessor](value, { context, transaction });
     return true;
@@ -324,7 +351,13 @@ export async function updateSingleAssociation(
       }
 
       if (updateAssociationValues.includes(key)) {
-        await instance.update(value, { ...options, transaction });
+        const updateValues = { ...value };
+
+        if (association.associationType === 'HasOne') {
+          delete updateValues[association.foreignKey];
+        }
+
+        await instance.update(updateValues, { ...options, transaction });
       }
 
       await updateAssociations(instance, value, {
@@ -352,6 +385,9 @@ export async function updateSingleAssociation(
   if (association.targetKey) {
     model.setDataValue(association.foreignKey, instance[dataKey]);
   }
+
+  // must have foreign key value
+  checkBelongsToForeignKeyValue();
 }
 
 /**
@@ -385,13 +421,19 @@ export async function updateMultipleAssociation(
   const createAccessor = association.accessors.create;
 
   if (isUndefinedOrNull(value)) {
-    await model[setAccessor](null, { transaction, context, individualHooks: true });
+    await model[setAccessor](null, { transaction, context, individualHooks: true, validate: false });
     model.setDataValue(key, null);
     return;
   }
 
+  // @ts-ignore
+  if (association.associationType === 'HasMany' && !model.get(association.sourceKeyAttribute)) {
+    // @ts-ignore
+    throw new Error(`The source key ${association.sourceKeyAttribute} is not set in ${model.constructor.name}`);
+  }
+
   if (isStringOrNumber(value)) {
-    await model[setAccessor](value, { transaction, context, individualHooks: true });
+    await model[setAccessor](value, { transaction, context, individualHooks: true, validate: false });
     return;
   }
 
@@ -413,10 +455,16 @@ export async function updateMultipleAssociation(
     } else if (item.sequelize) {
       setItems.push(item);
     } else if (typeof item === 'object') {
-      const targetKey = (association as any).targetKey || 'id';
+      // @ts-ignore
+      const targetKey = (association as any).targetKey || association.options.targetKey || 'id';
 
       if (item[targetKey]) {
-        setItems.push(item[targetKey]);
+        const attributes = {
+          [targetKey]: item[targetKey],
+        };
+
+        const instance = association.target.build(attributes, { isNewRecord: false });
+        setItems.push(instance);
       }
 
       objectItems.push(item);
@@ -424,13 +472,23 @@ export async function updateMultipleAssociation(
   }
 
   // associate targets in lists1
-  await model[setAccessor](setItems, { transaction, context, individualHooks: true });
+  await model[setAccessor](setItems, { transaction, context, individualHooks: true, validate: false });
 
   const newItems = [];
 
-  for (const item of objectItems) {
-    const pk = association.target.primaryKeyAttribute;
+  const pk = association.target.primaryKeyAttribute;
+  let targetKey = pk;
+  const db = model.constructor['database'] as Database;
 
+  const tmpKey = association['options']?.['targetKey'];
+  if (tmpKey !== pk) {
+    const targetKeyFieldOptions = db.getFieldByPath(`${association.target.name}.${tmpKey}`)?.options;
+    if (targetKeyFieldOptions?.unique) {
+      targetKey = tmpKey;
+    }
+  }
+
+  for (const item of objectItems) {
     const through = (<any>association).through ? (<any>association).through.model.name : null;
 
     const accessorOptions = {
@@ -444,7 +502,11 @@ export async function updateMultipleAssociation(
       accessorOptions['through'] = throughValue;
     }
 
-    if (isUndefinedOrNull(item[pk])) {
+    if (pk !== targetKey && !isUndefinedOrNull(item[pk]) && isUndefinedOrNull(item[targetKey])) {
+      throw new Error(`${targetKey} field value is empty`);
+    }
+
+    if (isUndefinedOrNull(item[targetKey])) {
       // create new record
       const instance = await model[createAccessor](item, accessorOptions);
 
@@ -457,20 +519,37 @@ export async function updateMultipleAssociation(
       newItems.push(instance);
     } else {
       // set & update record
-      const instance = await association.target.findByPk<any>(item[pk], {
+      const where = {
+        [targetKey]: item[targetKey],
+      };
+      let instance = await association.target.findOne<any>({
+        where,
         transaction,
       });
       if (!instance) {
+        // create new record
+        instance = await model[createAccessor](item, accessorOptions);
+        await updateAssociations(instance, item, {
+          ...options,
+          transaction,
+          associationContext: association,
+          updateAssociationValues: keys,
+        });
+        newItems.push(instance);
         continue;
       }
       const addAccessor = association.accessors.add;
 
-      await model[addAccessor](item[pk], accessorOptions);
+      await model[addAccessor](instance, accessorOptions);
 
       if (!recursive) {
         continue;
       }
       if (updateAssociationValues.includes(key)) {
+        if (association.associationType === 'HasMany') {
+          delete item[association.foreignKey];
+        }
+
         await instance.update(item, { ...options, transaction });
       }
       await updateAssociations(instance, item, {
@@ -479,9 +558,23 @@ export async function updateMultipleAssociation(
         associationContext: association,
         updateAssociationValues: keys,
       });
+
       newItems.push(instance);
     }
   }
 
-  model.setDataValue(key, setItems.concat(newItems));
+  for (const newItem of newItems) {
+    // @ts-ignore
+    const findTargetKey = (association as any).targetKey || association.options.targetKey || targetKey;
+
+    const existIndexInSetItems = setItems.findIndex((setItem) => setItem[findTargetKey] === newItem[findTargetKey]);
+
+    if (existIndexInSetItems !== -1) {
+      setItems[existIndexInSetItems] = newItem;
+    } else {
+      setItems.push(newItem);
+    }
+  }
+
+  model.setDataValue(key, setItems);
 }

@@ -1,23 +1,20 @@
 import { ISchema } from '@formily/react';
+import { default as React } from 'react';
+import { Action, FormItem, FormV2, Grid, Input, Password } from '../../..';
+import { Application } from '../../../../application/Application';
+import { Plugin } from '../../../../application/Plugin';
+import { BlockSchemaComponentProvider } from '../../../../block-provider/BlockSchemaComponentProvider';
+import { FormBlockProvider } from '../../../../block-provider/FormBlockProvider';
+import { CollectionPlugin } from '../../../../collection-manager/collectionPlugin';
+import { CollectionField } from '../../../../data-source/collection-field/CollectionField';
+import { LocalDataSource } from '../../../../data-source/data-source/DataSource';
 import {
-  APIClientProvider,
-  Action,
-  Application,
-  BlockSchemaComponentProvider,
-  CollectionField,
-  CollectionManagerProvider,
-  CurrentUserProvider,
-  FormBlockProvider,
-  FormItem,
-  FormV2,
-  Grid,
-  Input,
-  Password,
-  SchemaComponent,
-  SchemaComponentProvider,
-} from '@nocobase/client';
-import React from 'react';
+  DEFAULT_DATA_SOURCE_KEY,
+  DEFAULT_DATA_SOURCE_TITLE,
+} from '../../../../data-source/data-source/DataSourceManager';
 import { mockAPIClient } from '../../../../testUtils';
+import { CurrentUserProvider } from '../../../../user/CurrentUserProvider';
+import { SchemaComponent } from '../../../core/SchemaComponent';
 import collections from './collections';
 
 const { apiClient, mockRequest } = mockAPIClient();
@@ -43,15 +40,14 @@ const schema: ISchema = {
         collection: 'users',
         resource: 'users',
         action: 'get',
+        filterByTk: 1,
       },
       properties: {
         form: {
           type: 'void',
           'x-component': 'FormV2',
+          'x-use-component-props': 'useFormBlockProps',
           'x-read-pretty': true,
-          'x-component-props': {
-            useProps: '{{ useFormBlockProps }}',
-          },
           properties: {
             grid: {
               type: 'void',
@@ -96,26 +92,39 @@ const schema: ISchema = {
   },
 };
 
-const Root = () => {
+const Demo = () => {
   return (
-    <APIClientProvider apiClient={apiClient}>
-      <CurrentUserProvider>
-        <CollectionManagerProvider collections={collections}>
-          <SchemaComponentProvider
-            components={{ FormBlockProvider, FormItem, CollectionField, Input, Action, FormV2, Password, Grid }}
-          >
-            <BlockSchemaComponentProvider>
-              <SchemaComponent schema={schema} />
-            </BlockSchemaComponentProvider>
-          </SchemaComponentProvider>
-        </CollectionManagerProvider>
-      </CurrentUserProvider>
-    </APIClientProvider>
+    <CurrentUserProvider>
+      <BlockSchemaComponentProvider>
+        <SchemaComponent schema={schema} />
+      </BlockSchemaComponentProvider>
+    </CurrentUserProvider>
   );
 };
 
+class MyPlugin extends Plugin {
+  async load() {
+    this.app.dataSourceManager.addDataSource(LocalDataSource, {
+      key: DEFAULT_DATA_SOURCE_KEY,
+      displayName: DEFAULT_DATA_SOURCE_TITLE,
+      collections: collections as any,
+    });
+  }
+}
 const app = new Application({
-  providers: [Root],
+  apiClient,
+  plugins: [CollectionPlugin, MyPlugin],
+  components: {
+    FormBlockProvider,
+    FormItem,
+    CollectionField,
+    Input,
+    Action,
+    FormV2,
+    Password,
+    Grid,
+  },
+  providers: [Demo],
 });
 
 export default app.getRootComponent();

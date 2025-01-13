@@ -1,16 +1,28 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css, cx } from '@emotion/css';
 import { ArrayField } from '@formily/core';
+import { FormLayout } from '@formily/antd-v5';
 import { RecursionField, Schema, useField, useFieldSchema } from '@formily/react';
 import { List as AntdList, Col, PaginationProps } from 'antd';
 import React, { useCallback, useState } from 'react';
+import { withDynamicSchemaProps } from '../../../hoc/withDynamicSchemaProps';
 import { SortableItem } from '../../common';
 import { SchemaComponentOptions } from '../../core';
 import { useDesigner, useProps } from '../../hooks';
 import { GridCardBlockProvider, useGridCardBlockContext, useGridCardItemProps } from './GridCard.Decorator';
 import { GridCardDesigner } from './GridCard.Designer';
 import { GridCardItem } from './GridCard.Item';
-import { useGridCardActionBarProps } from './hooks';
+import { useGridCardActionBarProps, useGridCardBodyHeight } from './hooks';
 import { defaultColumnCount, pageSizeOptions } from './options';
+import { getCardItemSchema } from '../../../block-provider';
 
 const rowGutter = {
   md: 12,
@@ -55,7 +67,55 @@ const designerCss = css`
   }
 `;
 
-const InternalGridCard = (props) => {
+export interface GridCardProps {
+  columnCount?: {
+    xs?: number;
+    sm?: number;
+    md?: number;
+    lg?: number;
+    xl?: number;
+    xxl?: number;
+  };
+  pagination?: PaginationProps;
+}
+
+const usePaginationProps = () => {
+  const field = useField<ArrayField>();
+  const { service, columnCount: _columnCount = defaultColumnCount } = useGridCardBlockContext();
+  const meta = service?.data?.meta;
+  const { count, pageSize, page, hasNext } = meta || {};
+  if (count) {
+    return {
+      total: count || 0,
+      pageSize: pageSize || 10,
+      current: page || 1,
+      pageSizeOptions,
+      showSizeChanger: true,
+    };
+  } else {
+    return {
+      showTotal: false,
+      pageSizeOptions,
+      simple: { readOnly: true },
+      pageSize: pageSize || 10,
+      showTitle: false,
+      showSizeChanger: true,
+      hideOnSinglePage: false,
+      total: field.value?.length < pageSize || !hasNext ? pageSize * page : pageSize * page + 1,
+      className: css`
+        .ant-pagination-simple-pager {
+          display: none !important;
+        }
+        li {
+          line-height: 32px !important;
+        }
+      `,
+    };
+  }
+};
+
+const InternalGridCard = (props: GridCardProps) => {
+  // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
   const { columnCount: columnCountProp, pagination } = useProps(props);
   const { service, columnCount: _columnCount = defaultColumnCount } = useGridCardBlockContext();
   const columnCount = columnCountProp || _columnCount;
@@ -64,6 +124,7 @@ const InternalGridCard = (props) => {
   const fieldSchema = useFieldSchema();
   const field = useField<ArrayField>();
   const Designer = useDesigner();
+  const height = useGridCardBodyHeight();
   const [schemaMap] = useState(new Map());
   const getSchema = useCallback(
     (key) => {
@@ -95,6 +156,18 @@ const InternalGridCard = (props) => {
     },
     [run, params],
   );
+  const gridCardProps = {
+    ...usePaginationProps(),
+    ...pagination,
+    onChange: onPaginationChange,
+  };
+  const cardItemSchema = getCardItemSchema?.(fieldSchema);
+  const {
+    layout = 'vertical',
+    labelAlign = 'left',
+    labelWidth = 120,
+    labelWrap = true,
+  } = cardItemSchema?.['x-component-props'] || {};
 
   return (
     <SchemaComponentOptions
@@ -103,49 +176,66 @@ const InternalGridCard = (props) => {
         useGridCardActionBarProps,
       }}
     >
-      <SortableItem className={cx('nb-card-list', designerCss)}>
-        <AntdList
-          pagination={
-            !meta || meta.count <= meta.pageSize
-              ? false
-              : {
-                  ...pagination,
-                  onChange: onPaginationChange,
-                  total: meta?.count || 0,
-                  pageSize: meta?.pageSize || 10,
-                  current: meta?.page || 1,
-                  pageSizeOptions,
-                }
-          }
-          dataSource={field.value}
-          grid={{
-            ...columnCount,
-            sm: columnCount.xs,
-            xl: columnCount.lg,
-            gutter: [rowGutter, rowGutter],
-          }}
-          renderItem={(item, index) => {
-            return (
-              <Col style={{ height: '100%' }}>
-                <RecursionField
-                  key={index}
-                  basePath={field.address}
-                  name={index}
-                  onlyRenderProperties
-                  schema={getSchema(index)}
-                ></RecursionField>
-              </Col>
-            );
-          }}
-          loading={service?.loading}
-        />
+      <SortableItem
+        className={cx(
+          'nb-card-list',
+          designerCss,
+          css`
+            .ant-spin-nested-loading {
+              height: ${height ? height + `px` : '100%'};
+              overflow-y: ${height ? 'auto' : null};
+              overflow-x: clip;
+              .nb-action-bar {
+                margin-top: 0px !important;
+              }
+            }
+          `,
+        )}
+      >
+        <FormLayout
+          layout={layout}
+          labelAlign={labelAlign}
+          labelWidth={layout === 'horizontal' ? labelWidth : null}
+          labelWrap={labelWrap}
+        >
+          <AntdList
+            pagination={
+              !meta || meta.count <= meta.pageSize
+                ? false
+                : {
+                    ...gridCardProps,
+                  }
+            }
+            dataSource={field.value}
+            grid={{
+              ...columnCount,
+              sm: columnCount.xs,
+              xl: columnCount.lg,
+              gutter: [rowGutter, rowGutter],
+            }}
+            renderItem={(item, index) => {
+              return (
+                <Col style={{ height: '100%' }} className="nb-card-item-warper">
+                  <RecursionField
+                    key={index}
+                    basePath={field.address}
+                    name={index}
+                    onlyRenderProperties
+                    schema={getSchema(index)}
+                  ></RecursionField>
+                </Col>
+              );
+            }}
+            loading={service?.loading}
+          />
+        </FormLayout>
         <Designer />
       </SortableItem>
     </SchemaComponentOptions>
   );
 };
 
-export const GridCard = InternalGridCard as typeof InternalGridCard & {
+export const GridCard = withDynamicSchemaProps(InternalGridCard) as typeof InternalGridCard & {
   Item: typeof GridCardItem;
   Designer: typeof GridCardDesigner;
   Decorator: typeof GridCardBlockProvider;

@@ -1,26 +1,46 @@
-import { useForm } from '@formily/react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { useFieldSchema, useForm } from '@formily/react';
 import React, { useMemo } from 'react';
-import { SchemaComponent, useActionContext, useDesignable, useRecordIndex } from '../..';
+import { SchemaComponent, useActionContext, useDesignable, useRecord } from '../..';
 import { SchemaInitializer } from '../../application/schema-initializer/SchemaInitializer';
 import { useGetAriaLabelOfSchemaInitializer } from '../hooks/useGetAriaLabelOfSchemaInitializer';
+import { useOpenModeContext } from '../../modules/popup/OpenModeProvider';
+import { useCollection } from '../../data-source';
 
-export const TabPaneInitializers = (props?: any) => {
+const TabPaneInitializers = (props?: any) => {
   const { designable, insertBeforeEnd } = useDesignable();
   const { isCreate, isBulkEdit, options } = props;
   const { gridInitializer } = options;
   const { getAriaLabel } = useGetAriaLabelOfSchemaInitializer();
+  const { isMobile } = useOpenModeContext() || {};
+  const record = useRecord();
+  const collection = useCollection();
 
   const useSubmitAction = () => {
     const form = useForm();
     const ctx = useActionContext();
-    const index = useRecordIndex();
     let initializer = gridInitializer;
+    if (!collection) {
+      initializer = 'page:addBlock';
+      if (isMobile) {
+        initializer = 'mobile:addBlock';
+      }
+    }
     if (!initializer) {
-      initializer = 'RecordBlockInitializers';
-      if (isCreate || index === null) {
-        initializer = 'CreateFormBlockInitializers';
+      initializer = 'popup:common:addBlock';
+
+      if (isCreate || !record) {
+        initializer = 'popup:addNew:addBlock';
       } else if (isBulkEdit) {
-        initializer = 'CreateFormBulkEditBlockInitializers';
+        initializer = 'popup:bulkEdit:addBlock';
       }
     }
     return {
@@ -72,6 +92,7 @@ export const TabPaneInitializers = (props?: any) => {
               'x-component': 'Action.Modal',
               'x-component-props': {
                 width: 520,
+                zIndex: 2000,
               },
               type: 'void',
               title: '{{t("Add tab")}}',
@@ -130,26 +151,47 @@ export const TabPaneInitializers = (props?: any) => {
   return <SchemaComponent schema={schema} />;
 };
 
-export const TabPaneInitializersForCreateFormBlock = (props) => {
+const TabPaneInitializersForCreateFormBlock = (props) => {
   return <TabPaneInitializers {...props} isCreate />;
 };
 
-export const TabPaneInitializersForBulkEditFormBlock = (props) => {
+const TabPaneInitializersForBulkEditFormBlock = (props) => {
   return <TabPaneInitializers {...props} isBulkEdit />;
 };
 
-export const tabPaneInitializers = new SchemaInitializer({
-  name: 'TabPaneInitializers',
+const commonOptions = {
   Component: TabPaneInitializers,
   popover: false,
+};
+
+/**
+ * @deprecated
+ * use `tabPaneInitializers` instead
+ */
+export const tabPaneInitializers_deprecated = new SchemaInitializer({
+  name: 'TabPaneInitializers',
+  ...commonOptions,
 });
 
+export const tabPaneInitializers = new SchemaInitializer({
+  name: 'popup:addTab',
+  ...commonOptions,
+});
+
+/**
+ * @deprecated
+ * use `tabPaneInitializers` instead
+ */
 export const tabPaneInitializersForRecordBlock = new SchemaInitializer({
   name: 'TabPaneInitializersForCreateFormBlock',
   Component: TabPaneInitializersForCreateFormBlock,
   popover: false,
 });
 
+/**
+ * @deprecated
+ * use `tabPaneInitializers` instead
+ */
 export const tabPaneInitializersForBulkEditFormBlock = new SchemaInitializer({
   name: 'TabPaneInitializersForBulkEditFormBlock',
   Component: TabPaneInitializersForBulkEditFormBlock,

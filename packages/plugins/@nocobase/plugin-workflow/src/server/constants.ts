@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 export const EXECUTION_STATUS = {
   QUEUEING: null,
   STARTED: 0,
@@ -8,7 +17,7 @@ export const EXECUTION_STATUS = {
   CANCELED: -4,
   REJECTED: -5,
   RETRY_NEEDED: -6,
-};
+} as const;
 
 export const JOB_STATUS = {
   PENDING: 0,
@@ -19,10 +28,4 @@ export const JOB_STATUS = {
   CANCELED: -4,
   REJECTED: -5,
   RETRY_NEEDED: -6,
-};
-
-export const BRANCH_INDEX = {
-  DEFAULT: null,
-  ON_TRUE: 1,
-  ON_FALSE: 0,
-};
+} as const;

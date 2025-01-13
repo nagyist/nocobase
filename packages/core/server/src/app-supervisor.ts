@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { applyMixins, AsyncEmitter } from '@nocobase/utils';
 import { Mutex } from 'async-mutex';
 import { EventEmitter } from 'events';
@@ -22,6 +31,8 @@ export class AppSupervisor extends EventEmitter implements AsyncEmitter {
   public apps: {
     [appName: string]: Application;
   } = {};
+
+  public lastSeenAt: Map<string, number> = new Map();
 
   public appErrors: {
     [appName: string]: Error;
@@ -171,12 +182,22 @@ export class AppSupervisor extends EventEmitter implements AsyncEmitter {
     return !!this.apps[appName];
   }
 
+  touchApp(appName: string) {
+    if (!this.hasApp(appName)) {
+      return;
+    }
+
+    this.lastSeenAt.set(appName, Math.floor(Date.now() / 1000));
+  }
+
   // add app into supervisor
   addApp(app: Application) {
     // if there is already an app with the same name, throw error
     if (this.apps[app.name]) {
       throw new Error(`app ${app.name} already exists`);
     }
+
+    app.logger.info(`add app ${app.name} into supervisor`, { submodule: 'supervisor', method: 'addApp' });
 
     this.bindAppEvents(app);
 
@@ -234,6 +255,7 @@ export class AppSupervisor extends EventEmitter implements AsyncEmitter {
       delete this.appErrors[app.name];
       delete this.lastMaintainingMessage[app.name];
       delete this.statusBeforeCommanding[app.name];
+      this.lastSeenAt.delete(app.name);
     });
 
     app.on('maintainingMessageChanged', ({ message, maintainingStatus }) => {
@@ -262,9 +284,17 @@ export class AppSupervisor extends EventEmitter implements AsyncEmitter {
 
       if (
         maintainingStatus &&
-        ['install', 'upgrade', 'pm.add', 'pm.update', 'pm.enable', 'pm.disable', 'pm.remove'].includes(
-          maintainingStatus.command.name,
-        ) &&
+        [
+          'install',
+          'upgrade',
+          'refresh',
+          'restore',
+          'pm.add',
+          'pm.update',
+          'pm.enable',
+          'pm.disable',
+          'pm.remove',
+        ].includes(maintainingStatus.command.name) &&
         !startOptions.recover
       ) {
         this.setAppStatus(app.name, 'running', {

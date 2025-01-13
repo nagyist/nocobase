@@ -1,30 +1,37 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
 import { i18n } from '../../i18n';
 import { defaultProps, unique } from './properties';
-import { IField } from './types';
 
-export const password: IField = {
-  name: 'password',
-  type: 'object',
-  group: 'basic',
-  order: 9,
-  title: '{{t("Password")}}',
-  default: {
+export class PasswordFieldInterface extends CollectionFieldInterface {
+  name = 'password';
+  type = 'object';
+  group = 'basic';
+  order = 9;
+  title = '{{t("Password")}}';
+  default = {
     type: 'password',
     hidden: true,
-    // name,
     uiSchema: {
       type: 'string',
-      // title,
       'x-component': 'Password',
     },
-  },
-  availableTypes: ['password'],
-  hasDefaultValue: true,
-  properties: {
+  };
+  availableTypes = ['password', 'string'];
+  hasDefaultValue = true;
+  properties = {
     ...defaultProps,
     unique,
-  },
-  validateSchema(fieldSchema) {
+  };
+  validateSchema = (fieldSchema) => {
     return {
       max: {
         type: 'number',
@@ -64,5 +71,5 @@ export const password: IField = {
         },
       },
     };
-  },
-};
+  };
+}

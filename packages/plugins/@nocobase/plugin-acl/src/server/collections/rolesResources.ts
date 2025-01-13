@@ -1,8 +1,16 @@
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export default {
-  namespace: 'acl.acl',
-  duplicator: 'required',
+import { defineCollection } from '@nocobase/database';
+
+export default defineCollection({
+  dumpRules: 'required',
   name: 'rolesResources',
   model: 'RoleResourceModel',
   indexes: [
@@ -15,6 +23,8 @@ export default {
     {
       type: 'belongsTo',
       name: 'role',
+      foreignKey: 'roleName',
+      targetKey: 'name',
     },
     {
       type: 'string',
@@ -30,4 +40,4 @@ export default {
       target: 'rolesResourcesActions',
     },
   ],
-} as CollectionOptions;
+});

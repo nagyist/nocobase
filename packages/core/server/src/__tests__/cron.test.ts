@@ -1,3 +1,13 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { vi } from 'vitest';
 import { mockServer, MockServer, waitSecond } from '@nocobase/test';
 import { CronJobManager } from '../cron/cron-job-manager';
 
@@ -30,7 +40,7 @@ describe('cron service', () => {
 
   it('should add cron job', async () => {
     const cronManager = app.cronJobManager;
-    const jestFn = jest.fn();
+    const jestFn = vi.fn();
     cronManager.addJob({
       cronTime: '* * * * * *',
       onTick: jestFn,
@@ -45,7 +55,7 @@ describe('cron service', () => {
 
   it('should remove cron job', async () => {
     const cronManager = app.cronJobManager;
-    const jestFn = jest.fn();
+    const jestFn = vi.fn();
     const job = cronManager.addJob({
       cronTime: '* * * * * *',
       onTick: jestFn,

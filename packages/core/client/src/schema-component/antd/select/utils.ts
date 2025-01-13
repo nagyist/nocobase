@@ -1,11 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { isPlainObject } from '@nocobase/utils/client';
 import { castArray } from 'lodash';
 
 export interface FieldNames {
-  label: string;
-  value: string;
-  color: string;
-  options: string;
+  label?: string;
+  value?: string;
+  color?: string;
+  options?: string;
 }
 
 export const defaultFieldNames: FieldNames = {
@@ -34,21 +43,22 @@ function flatData(data: any[], fieldNames: FieldNames): any[] {
   return newArr;
 }
 
-export function getCurrentOptions(values: string | string[], dataSource: any[], fieldNames: FieldNames): Option[] {
-  const result = flatData(dataSource, fieldNames);
-  const arrValues = castArray(values)
-    .filter((item) => item != null)
-    .map((val) => (isPlainObject(val) ? val[fieldNames.value] : val)) as string[];
-
-  function findOptions(options: any[]): Option[] {
-    if (!options) return [];
-    const current: Option[] = [];
-    for (const value of arrValues) {
-      const option = options.find((v) => v[fieldNames.value] === value) || { value, label: value };
-      current.push(option);
-    }
-    return current;
+function findOptions(options: any[], fieldNames: FieldNames, arrValues: any[]): Option[] {
+  if (!options) return [];
+  const current: Option[] = [];
+  for (const value of arrValues) {
+    const option = options.find((v) => v[fieldNames.value] == value) || {
+      value,
+      label: value ? value.toString() : value,
+    };
+    current.push(option);
   }
+  return current;
+}
 
-  return findOptions(result);
+export function getCurrentOptions(values: any | any[], dataSource: any[], fieldNames: FieldNames): Option[] {
+  const result = flatData(dataSource, fieldNames);
+  const arrValues = castArray(values).map((val) => (isPlainObject(val) ? val[fieldNames.value] : val)) as any[];
+
+  return findOptions(result, fieldNames, arrValues);
 }

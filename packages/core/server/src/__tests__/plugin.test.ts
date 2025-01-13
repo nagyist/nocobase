@@ -1,3 +1,13 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { vi } from 'vitest';
 import { mockServer, MockServer } from '@nocobase/test';
 import { Plugin } from '../plugin';
 import Plugin1 from './plugins/plugin1';
@@ -62,7 +72,7 @@ describe('plugin', () => {
 
   describe.skip('enable', function () {
     it('should call beforeEnable', async () => {
-      const beforeEnable = jest.fn();
+      const beforeEnable = vi.fn();
 
       class TestPlugin extends Plugin {
         async beforeEnable() {

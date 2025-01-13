@@ -1,6 +1,20 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import type { Field } from '@formily/core';
 import { ISchema, useForm } from '@formily/react';
-import { IField, interfacesProperties, useCollectionManager, useRecord } from '@nocobase/client';
+import {
+  CollectionFieldInterface,
+  interfacesProperties,
+  useCollectionManager_deprecated,
+  useRecord,
+} from '@nocobase/client';
 import lodash from 'lodash';
 import { NAMESPACE } from './locale';
 
@@ -12,14 +26,14 @@ const TARGET_FIELD = 'targetField';
 export const useTopRecord = () => {
   let record = useRecord();
 
-  while (record && Object.keys(record.__parent).length > 0) {
+  while (record?.__parent && Object.keys(record.__parent).length > 0) {
     record = record.__parent;
   }
   return record;
 };
 
 function useRecordCollection() {
-  const { getCollectionField } = useCollectionManager();
+  const { getCollectionField } = useCollectionManager_deprecated();
   const record = useTopRecord();
   const formValues = useForm().values;
   return getCollectionField(`${record.name}.${formValues.targetField}`)?.target;
@@ -34,7 +48,7 @@ const onTargetFieldChange = (field: Field) => {
 };
 
 function MakeFieldsPathOptions(fields, appends = []) {
-  const { getCollection } = useCollectionManager();
+  const { getCollection } = useCollectionManager_deprecated();
   const options = [];
   fields.forEach((field) => {
     if (['belongsTo', 'hasOne', 'hasMany', 'belongsToMany'].includes(field.type)) {
@@ -73,7 +87,7 @@ const recordPickerViewer = {
       type: 'void',
       'x-component': 'Tabs',
       'x-component-props': {},
-      // 'x-initializer': 'TabPaneInitializers',
+      // 'x-initializer': 'popup:addTab',
       properties: {
         tab1: {
           type: 'void',
@@ -85,7 +99,7 @@ const recordPickerViewer = {
             grid: {
               type: 'void',
               'x-component': 'Grid',
-              'x-initializer': 'SnapshotBlockInitializers',
+              'x-initializer': 'popup:snapshot:addBlock',
               properties: {},
             },
           },
@@ -95,13 +109,13 @@ const recordPickerViewer = {
   },
 };
 
-export const snapshot: IField = {
-  name: 'snapshot',
-  type: 'object',
-  group: 'advanced',
-  title: `{{t('Snapshot', {ns: '${NAMESPACE}'})}}`,
-  description: `{{t('When adding a new record, create a snapshot for its relational record and save in the current record. The snapshot is not updated when the record is subsequently updated.', {ns: '${NAMESPACE}'})}}`,
-  default: {
+export class SnapshotFieldInterface extends CollectionFieldInterface {
+  name = 'snapshot';
+  type = 'object';
+  group = 'advanced';
+  title = `{{t('Snapshot', {ns: '${NAMESPACE}'})}}`;
+  description = `{{t('When adding a new record, create a snapshot for its relational record and save in the current record. The snapshot is not updated when the record is subsequently updated.', {ns: '${NAMESPACE}'})}}`;
+  default = {
     type: 'snapshot',
     // name,
     uiSchema: {
@@ -115,16 +129,17 @@ export const snapshot: IField = {
         },
       },
     },
-  },
+  };
   schemaInitialize(schema: ISchema, { field, readPretty, action, block }) {
     schema['properties'] = {
       viewer: lodash.cloneDeep(recordPickerViewer),
     };
-  },
-  initialize: (values: any) => {},
+  }
+  initialize(values: any) {}
   usePathOptions(field) {
     const { appends = [], targetCollection } = field;
-    const { getCollection } = useCollectionManager();
+    // eslint-disable-next-line
+    const { getCollection } = useCollectionManager_deprecated();
     const { fields } = getCollection(targetCollection);
 
     const result = MakeFieldsPathOptions(fields, appends);
@@ -136,8 +151,8 @@ export const snapshot: IField = {
         children: result,
       },
     ];
-  },
-  properties: {
+  }
+  properties = {
     ...defaultProps,
     [TARGET_FIELD]: {
       type: 'string',
@@ -182,5 +197,5 @@ export const snapshot: IField = {
         },
       ],
     },
-  },
-};
+  };
+}

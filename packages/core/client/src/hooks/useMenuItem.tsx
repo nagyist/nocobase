@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { MenuProps } from 'antd';
 import _ from 'lodash';
 import React, { createContext, ReactNode, useCallback, useContext, useRef } from 'react';
@@ -10,7 +19,9 @@ type Item = MenuProps['items'][0] & {
 };
 
 export const GetMenuItemContext = createContext<{ collectMenuItem?(item: Item): void; onChange?: () => void }>(null);
+GetMenuItemContext.displayName = 'GetMenuItemContext';
 export const GetMenuItemsContext = createContext<{ pushMenuItem?(item: Item): void }>(null);
+GetMenuItemsContext.displayName = 'GetMenuItemsContext';
 
 /**
  * 用于为 SchemaInitializer.Item 组件提供一些方法，比如收集菜单项数据

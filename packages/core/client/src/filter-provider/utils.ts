@@ -1,18 +1,26 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Schema, useFieldSchema } from '@formily/react';
 import { flatten, getValuesByPath } from '@nocobase/utils/client';
 import _ from 'lodash';
 import { useCallback, useEffect, useState } from 'react';
-import { mergeFilter } from '../block-provider';
 import { FilterTarget, findFilterTargets } from '../block-provider/hooks';
 import {
-  Collection,
-  CollectionFieldOptions,
+  CollectionFieldOptions_deprecated,
   FieldOptions,
-  useCollection,
-  useCollectionManager,
+  useCollectionManager_deprecated,
+  useCollection_deprecated,
 } from '../collection-manager';
+import { Collection } from '../data-source/collection/Collection';
+import { useCollection } from '../data-source/collection/CollectionProvider';
 import { removeNullCondition } from '../schema-component';
-import { findFilterOperators } from '../schema-component/antd/form-item/SchemaSettingOptions';
 import { DataBlock, useFilterBlock } from './FilterProvider';
 
 export enum FilterBlockType {
@@ -22,16 +30,28 @@ export enum FilterBlockType {
   COLLAPSE,
 }
 
+export const mergeFilter = (filters: any[], op = '$and') => {
+  const items = filters.filter((f) => {
+    if (f && typeof f === 'object' && !Array.isArray(f)) {
+      return Object.values(f).filter((v) => v !== undefined).length;
+    }
+  });
+  if (items.length === 0) {
+    return {};
+  }
+  if (items.length === 1) {
+    return items[0];
+  }
+  return { [op]: items };
+};
+
 export const getSupportFieldsByAssociation = (inheritCollectionsChain: string[], block: DataBlock) => {
-  return block.associatedFields?.filter((field) =>
-    inheritCollectionsChain.some((collectionName) => collectionName === field.target),
+  return block.associatedFields?.filter(
+    (field) => inheritCollectionsChain?.some((collectionName) => collectionName === field.target),
   );
 };
 
-export const getSupportFieldsByForeignKey = (
-  filterBlockCollection: ReturnType<typeof useCollection>,
-  block: DataBlock,
-) => {
+export const getSupportFieldsByForeignKey = (filterBlockCollection: Collection, block: DataBlock) => {
   return block.foreignKeyFields?.filter((foreignKeyField) => {
     return filterBlockCollection.fields.some(
       (field) => field.type !== 'belongsTo' && field.foreignKey === foreignKeyField.name,
@@ -48,7 +68,7 @@ export const useSupportedBlocks = (filterBlockType: FilterBlockType) => {
   const { getDataBlocks } = useFilterBlock();
   const fieldSchema = useFieldSchema();
   const collection = useCollection();
-  const { getAllCollectionsInheritChain } = useCollectionManager();
+  const { getAllCollectionsInheritChain } = useCollectionManager_deprecated();
 
   // Form 和 Collapse 仅支持同表的数据区块
   if (filterBlockType === FilterBlockType.FORM || filterBlockType === FilterBlockType.COLLAPSE) {
@@ -66,7 +86,8 @@ export const useSupportedBlocks = (filterBlockType: FilterBlockType) => {
       return (
         fieldSchema['x-uid'] !== block.uid &&
         (isSameCollection(block.collection, collection) ||
-          getSupportFieldsByAssociation(getAllCollectionsInheritChain(collection.name), block)?.length ||
+          getSupportFieldsByAssociation(getAllCollectionsInheritChain(collection.name, collection.dataSource), block)
+            ?.length ||
           getSupportFieldsByForeignKey(collection, block)?.length)
       );
     });
@@ -75,16 +96,26 @@ export const useSupportedBlocks = (filterBlockType: FilterBlockType) => {
 
 export const transformToFilter = (
   values: Record<string, any>,
-  fieldSchema: Schema,
-  getCollectionJoinField: (name: string) => CollectionFieldOptions,
+  operators: Record<string, string>,
+  getCollectionJoinField: (name: string) => CollectionFieldOptions_deprecated,
   collectionName: string,
 ) => {
-  const { operators } = findFilterOperators(fieldSchema);
-
   values = flatten(values, {
     breakOn({ value, path }) {
-      // 日期字段的 `$dateBetween` 操作符的值是一个数组，需要特殊处理
-      if (operators[path] === '$dateBetween') {
+      // 下面操作符的值是一个数组，需要特殊处理
+      if (
+        [
+          '$match',
+          '$notMatch',
+          '$anyOf',
+          '$noneOf',
+          '$childIn',
+          '$childNotIn',
+          '$dateBetween',
+          '$in',
+          '$notIn',
+        ].includes(operators[path])
+      ) {
         return true;
       }
 
@@ -108,12 +139,19 @@ export const transformToFilter = (
         let value = _.get(values, key);
         const collectionField = getCollectionJoinField(`${collectionName}.${key}`);
 
-        if (collectionField?.target) {
+        if (
+          collectionField?.target &&
+          ['hasOne', 'hasMany', 'belongsTo', 'belongsToMany', 'belongsToArray'].includes(collectionField.type)
+        ) {
           value = getValuesByPath(value, collectionField.targetKey || 'id');
           key = `${key}.${collectionField.targetKey || 'id'}`;
+
+          if (collectionField?.interface === 'chinaRegion') {
+            value = _.last(value);
+          }
         }
 
-        if (!value) {
+        if (!value && value !== 0 && value !== false) {
           return null;
         }
 
@@ -130,19 +168,19 @@ export const transformToFilter = (
 };
 
 export const useAssociatedFields = () => {
-  const { fields } = useCollection();
+  const { fields } = useCollection_deprecated();
 
   return fields.filter((field) => isAssocField(field)) || [];
 };
 
 export const isAssocField = (field?: FieldOptions) => {
-  return ['o2o', 'oho', 'obo', 'm2o', 'createdBy', 'updatedBy', 'o2m', 'm2m', 'linkTo', 'chinaRegion'].includes(
+  return ['o2o', 'oho', 'obo', 'm2o', 'createdBy', 'updatedBy', 'o2m', 'm2m', 'linkTo', 'chinaRegion', 'mbm'].includes(
     field?.interface,
   );
 };
 
 export const isSameCollection = (c1: Collection, c2: Collection) => {
-  return c1.name === c2.name;
+  return c1.name === c2.name && c1.dataSource === c2.dataSource;
 };
 
 export const useFilterAPI = () => {
@@ -157,7 +195,7 @@ export const useFilterAPI = () => {
 
   useEffect(() => {
     setIsConnected(targets && targets.some((target) => dataBlocks.some((dataBlock) => dataBlock.uid === target.uid)));
-  }, [targetsKeys.length, dataBlocks]);
+  }, [targetsKeys.length, targets, dataBlocks]);
 
   const doFilter = useCallback(
     (
@@ -209,7 +247,7 @@ export const useFilterAPI = () => {
         );
       });
     },
-    [dataBlocks],
+    [dataBlocks, targets, uid],
   );
 
   return {

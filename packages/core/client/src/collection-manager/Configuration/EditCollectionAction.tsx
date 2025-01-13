@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayTable } from '@formily/antd-v5';
 import { ISchema, useForm } from '@formily/react';
 import { uid } from '@formily/shared';
@@ -10,7 +19,7 @@ import { RecordProvider, useRecord } from '../../record-provider';
 import { ActionContextProvider, SchemaComponent, useActionContext, useCompile } from '../../schema-component';
 import { useResourceActionContext, useResourceContext } from '../ResourceActionProvider';
 import { useCancelAction } from '../action-hooks';
-import { useCollectionManager } from '../hooks';
+import { useCollectionManager_deprecated } from '../hooks';
 import { IField } from '../interfaces/types';
 import * as components from './components';
 
@@ -49,6 +58,17 @@ const getSchema = (schema: IField, record: any, compile, getContainer): ISchema 
         title: '{{ t("Edit collection") }}',
         properties: {
           ...properties,
+          filterTargetKey: {
+            title: `{{ t("Record unique key")}}`,
+            type: 'single',
+            description: `{{t( "If a collection lacks a primary key, you must configure a unique record key to locate row records within a block, failure to configure this will prevent the creation of data blocks for the collection.")}}`,
+            'x-decorator': 'FormItem',
+            'x-component': 'Select',
+            'x-component-props': {
+              multiple: true,
+            },
+            'x-reactions': ['{{useAsyncDataSource(loadFilterTargetKeys)}}'],
+          },
           footer: {
             type: 'void',
             'x-component': 'Action.Drawer.Footer',
@@ -101,7 +121,7 @@ export const useValuesFromRecord = (options) => {
 };
 
 export const useUpdateCollectionActionAndRefreshCM = (options) => {
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   const form = useForm();
   const ctx = useActionContext();
   const { refresh } = useResourceActionContext();
@@ -131,7 +151,7 @@ export const EditCollection = (props) => {
 
 export const EditCollectionAction = (props) => {
   const { scope, getContainer, item: record, children, ...otherProps } = props;
-  const { getTemplate } = useCollectionManager();
+  const { getTemplate } = useCollectionManager_deprecated();
   const [visible, setVisible] = useState(false);
   const [schema, setSchema] = useState({});
   const { t } = useTranslation();
@@ -143,7 +163,7 @@ export const EditCollectionAction = (props) => {
         <a
           {...otherProps}
           onClick={async () => {
-            const templateConf = getTemplate(record.template);
+            const templateConf: any = getTemplate(record.template);
             const schema = getSchema(
               {
                 ...templateConf,

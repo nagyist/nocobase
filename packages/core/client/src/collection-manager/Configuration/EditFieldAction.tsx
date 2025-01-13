@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayTable } from '@formily/antd-v5';
 import { ISchema, useForm } from '@formily/react';
 import { uid } from '@formily/shared';
@@ -7,47 +16,29 @@ import set from 'lodash/set';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAPIClient, useRequest } from '../../api-client';
+import { CollectionFieldInterface } from '../../data-source';
+import { useCollectionParentRecordData } from '../../data-source/collection-record/CollectionRecordProvider';
 import { RecordProvider, useRecord } from '../../record-provider';
 import { ActionContextProvider, SchemaComponent, useActionContext, useCompile } from '../../schema-component';
 import { useResourceActionContext, useResourceContext } from '../ResourceActionProvider';
-import { useCancelAction, useUpdateAction } from '../action-hooks';
-import { useCollectionManager } from '../hooks';
+import { useCancelAction } from '../action-hooks';
+import { useCollectionManager_deprecated } from '../hooks';
 import useDialect from '../hooks/useDialect';
-import { IField } from '../interfaces/types';
 import * as components from './components';
 
-const getSchema = (schema: IField, record: any, compile, getContainer): ISchema => {
+const getSchema = (
+  schema: CollectionFieldInterface,
+  defaultValues: any,
+  record: any,
+  compile,
+  getContainer,
+): ISchema => {
   if (!schema) {
     return;
   }
-  const properties = cloneDeep(schema.properties) as any;
+  const properties = schema.getConfigureFormProperties();
   if (properties?.name) {
     properties.name['x-disabled'] = true;
-  }
-
-  if (schema.hasDefaultValue === true) {
-    properties['defaultValue'] = cloneDeep(schema.default.uiSchema) || {};
-    properties.defaultValue.required = false;
-    properties['defaultValue']['title'] = compile('{{ t("Default value") }}');
-    properties['defaultValue']['x-decorator'] = 'FormItem';
-    properties['defaultValue']['x-reactions'] = {
-      dependencies: [
-        'uiSchema.x-component-props.gmt',
-        'uiSchema.x-component-props.showTime',
-        'uiSchema.x-component-props.dateFormat',
-        'uiSchema.x-component-props.timeFormat',
-      ],
-      fulfill: {
-        state: {
-          componentProps: {
-            gmt: '{{$deps[0]}}',
-            showTime: '{{$deps[1]}}',
-            dateFormat: '{{$deps[2]}}',
-            timeFormat: '{{$deps[3]}}',
-          },
-        },
-      },
-    };
   }
 
   return {
@@ -65,7 +56,7 @@ const getSchema = (schema: IField, record: any, compile, getContainer): ISchema 
             return useRequest(
               () =>
                 Promise.resolve({
-                  data: cloneDeep(omit(schema.default, ['uiSchema.rawTitle'])),
+                  data: cloneDeep(omit(defaultValues, ['uiSchema.rawTitle'])),
                 }),
               options,
             );
@@ -117,8 +108,7 @@ const getSchema = (schema: IField, record: any, compile, getContainer): ISchema 
 
 const useUpdateCollectionField = () => {
   const form = useForm();
-  const { run } = useUpdateAction();
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   const ctx = useActionContext();
   const { refresh } = useResourceActionContext();
   const { resource, targetKey } = useResourceContext();
@@ -144,12 +134,13 @@ const useUpdateCollectionField = () => {
 
 export const EditCollectionField = (props) => {
   const record = useRecord();
-  return <EditFieldAction item={record} {...props} />;
+  const parentRecordData = useCollectionParentRecordData();
+  return <EditFieldAction item={record} parentItem={parentRecordData} {...props} />;
 };
 
 export const EditFieldAction = (props) => {
-  const { scope, getContainer, item: record, children, ...otherProps } = props;
-  const { getInterface, collections } = useCollectionManager();
+  const { scope, getContainer, item: record, parentItem: parentRecord, children, ...otherProps } = props;
+  const { getInterface, collections, getCollection } = useCollectionManager_deprecated();
   const [visible, setVisible] = useState(false);
   const [schema, setSchema] = useState({});
   const api = useAPIClient();
@@ -157,6 +148,23 @@ export const EditFieldAction = (props) => {
   const compile = useCompile();
   const [data, setData] = useState<any>({});
   const { isDialect } = useDialect();
+  const { template } = parentRecord || {};
+
+  const scopeKeyOptions = useMemo(() => {
+    return (
+      record?.fields ||
+      getCollection(record.collectionName)
+        ?.options.fields.filter((v) => {
+          return ['string', 'bigInt', 'integer'].includes(v.type);
+        })
+        .map((k) => {
+          return {
+            value: k.name,
+            label: compile(k.uiSchema?.title),
+          };
+        })
+    );
+  }, [record.name]);
 
   const currentCollections = useMemo(() => {
     return collections.map((v) => {
@@ -168,7 +176,7 @@ export const EditFieldAction = (props) => {
   }, []);
 
   return (
-    <RecordProvider record={record}>
+    <RecordProvider record={record} parent={parentRecord}>
       <ActionContextProvider value={{ visible, setVisible }}>
         <a
           {...otherProps}
@@ -184,17 +192,9 @@ export const EditFieldAction = (props) => {
               defaultValues.autoCreateReverseField = false;
               defaultValues.reverseField = interfaceConf?.default?.reverseField;
               set(defaultValues.reverseField, 'name', `f_${uid()}`);
-              set(defaultValues.reverseField, 'uiSchema.title', record.__parent.title);
+              set(defaultValues.reverseField, 'uiSchema.title', record.__parent?.title);
             }
-            const schema = getSchema(
-              {
-                ...interfaceConf,
-                default: defaultValues,
-              },
-              record,
-              compile,
-              getContainer,
-            );
+            const schema = getSchema(interfaceConf, defaultValues, record, compile, getContainer);
             setSchema(schema);
             setVisible(true);
           }}
@@ -203,6 +203,7 @@ export const EditFieldAction = (props) => {
         </a>
         <SchemaComponent
           schema={schema}
+          distributed={false}
           components={{ ...components, ArrayTable }}
           scope={{
             getContainer,
@@ -212,6 +213,8 @@ export const EditFieldAction = (props) => {
             collections: currentCollections,
             isDialect,
             disabledJSONB: true,
+            scopeKeyOptions,
+            createMainOnly: false,
             ...scope,
           }}
         />

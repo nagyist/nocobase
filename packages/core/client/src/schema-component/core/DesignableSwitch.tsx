@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { HighlightOutlined } from '@ant-design/icons';
 import { Button, Tooltip } from 'antd';
 import React from 'react';
@@ -13,6 +22,8 @@ export const DesignableSwitch = () => {
   const style = {};
   if (designable) {
     style['backgroundColor'] = 'var(--colorSettings)';
+  } else {
+    style['backgroundColor'] = 'transparent';
   }
 
   // 快捷键切换编辑状态

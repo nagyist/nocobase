@@ -1,9 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import type { Application } from './Application';
 import type { Plugin } from './Plugin';
 import { getPlugins } from './utils/remotePlugins';
 
-export type PluginOptions<T = any> = { name?: string; config?: T };
-export type PluginType<Opts = any> = typeof Plugin | [typeof Plugin, PluginOptions<Opts>];
+export type PluginOptions<T = any> = { name?: string; packageName?: string; config?: T };
+export type PluginType<Opts = any> = typeof Plugin | [typeof Plugin<Opts>, PluginOptions<Opts>];
 export type PluginData = {
   name: string;
   packageName: string;
@@ -26,6 +35,9 @@ export class PluginManager {
     this.initPlugins = this.init(_plugins);
   }
 
+  /**
+   * @internal
+   */
   async init(_plugins: PluginType[]) {
     await this.initStaticPlugins(_plugins);
     if (this.loadRemotePlugins) {
@@ -42,24 +54,16 @@ export class PluginManager {
   }
 
   private async initRemotePlugins() {
-    try {
-      const res = await this.app.apiClient.request({ url: 'pm:listEnabled' });
-      const pluginList: PluginData[] = res?.data?.data || [];
-      const plugins = await getPlugins({
-        requirejs: this.app.requirejs,
-        pluginData: pluginList,
-        devDynamicImport: this.app.devDynamicImport,
-      });
-      for await (const [name, pluginClass] of plugins) {
-        await this.add(pluginClass, { name });
-      }
-    } catch (error) {
-      if (401 === error?.response?.status) {
-        this.app.apiClient.auth.setRole(null);
-        window.location.reload();
-      } else {
-        throw error;
-      }
+    const res = await this.app.apiClient.request({ url: 'pm:listEnabled' });
+    const pluginList: PluginData[] = res?.data?.data || [];
+    const plugins = await getPlugins({
+      requirejs: this.app.requirejs,
+      pluginData: pluginList,
+      devDynamicImport: this.app.devDynamicImport,
+    });
+    for await (const [name, pluginClass] of plugins) {
+      const info = pluginList.find((item) => item.name === name);
+      await this.add(pluginClass, info);
     }
   }
 
@@ -71,6 +75,11 @@ export class PluginManager {
     if (opts.name) {
       this.pluginsAliases[opts.name] = instance;
     }
+
+    if (opts.packageName) {
+      this.pluginsAliases[opts.packageName] = instance;
+    }
+
     await instance.afterAdd();
   }
 
@@ -87,6 +96,9 @@ export class PluginManager {
     return new plugin(opts, this.app);
   }
 
+  /**
+   * @internal
+   */
   async load() {
     await this.initPlugins;
 

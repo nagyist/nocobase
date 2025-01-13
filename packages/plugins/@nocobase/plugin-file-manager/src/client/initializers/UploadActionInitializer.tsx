@@ -1,9 +1,16 @@
-import { ActionInitializer, useCollection } from '@nocobase/client';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { ActionInitializerItem } from '@nocobase/client';
 import React from 'react';
 
 export const UploadActionInitializer = (props) => {
-  const collection = useCollection();
-
   const schema = {
     type: 'void',
     'x-action': 'create',
@@ -26,10 +33,9 @@ export const UploadActionInitializer = (props) => {
             type: 'void',
             title: '{{ t("Upload files") }}',
             'x-component': 'Upload.DraggerV2',
+            'x-use-component-props': 'useUploadFiles',
             'x-component-props': {
               height: '50vh',
-              action: `${collection.name}:create`,
-              useProps: '{{useUploadFiles}}',
               multiple: true,
               listType: 'picture',
             },
@@ -38,5 +44,5 @@ export const UploadActionInitializer = (props) => {
       },
     },
   };
-  return <ActionInitializer {...props} schema={schema} />;
+  return <ActionInitializerItem {...props} schema={schema} />;
 };

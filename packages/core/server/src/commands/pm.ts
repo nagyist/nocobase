@@ -1,4 +1,15 @@
-import _ from 'lodash';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+/* istanbul ignore file -- @preserve */
+
+import { AppSupervisor } from '../app-supervisor';
 import Application from '../application';
 import { PluginCommandError } from '../errors/plugin-command-error';
 
@@ -6,71 +17,108 @@ export default (app: Application) => {
   const pm = app.command('pm');
 
   pm.command('create')
-    .ipc()
-    .arguments('plugin')
-    .action(async (plugin) => {
-      await app.pm.create(plugin);
+    .argument('plugin')
+    .option('--force-recreate')
+    .action(async (plugin, options) => {
+      await app.pm.create(plugin, options);
     });
 
   pm.command('add')
     .ipc()
-    .argument('<pkg>')
+    .preload()
+    .arguments('<packageNames...>')
     .option('--registry [registry]')
     .option('--auth-token [authToken]')
     .option('--version [version]')
-    .action(async (name, options, cli) => {
+    .action(async (packageNames, options, cli) => {
       try {
-        await app.pm.addViaCLI(name, _.cloneDeep(options));
+        let name = packageNames;
+        if (Array.isArray(packageNames) && packageNames.length === 1) {
+          name = packageNames[0];
+        }
+        await app.pm.addViaCLI(name, { ...options });
       } catch (error) {
-        throw new PluginCommandError(`Failed to add plugin: ${error.message}`);
+        throw new PluginCommandError(`Failed to add plugin`, { cause: error });
       }
     });
 
   pm.command('update')
-    .ipc()
-    .argument('<packageName>')
-    .option('--path [path]')
-    .option('--url [url]')
+    .argument('<packageNames...>')
+    // .option('--path [path]')
+    // .option('--url [url]')
     .option('--registry [registry]')
     .option('--auth-token [authToken]')
     .option('--version [version]')
-    .action(async (packageName, options) => {
+    .action(async (packageNames, options) => {
       try {
-        await app.pm.update({
+        await app.pm.update(packageNames, {
           ...options,
-          packageName,
         });
       } catch (error) {
-        throw new PluginCommandError(`Failed to update plugin: ${error.message}`);
+        throw new PluginCommandError(`Failed to update plugin`, { cause: error });
+      }
+    });
+
+  pm.command('enable-all')
+    .ipc()
+    .preload()
+    .action(async () => {
+      try {
+        await app.pm.enable('*');
+      } catch (error) {
+        throw new PluginCommandError(`Failed to enable plugin`, { cause: error });
       }
     });
 
   pm.command('enable')
     .ipc()
+    .preload()
     .arguments('<plugins...>')
     .action(async (plugins) => {
       try {
         await app.pm.enable(plugins);
       } catch (error) {
-        throw new PluginCommandError(`Failed to enable plugin: ${error.message}`);
+        await app.tryReloadOrRestart({
+          recover: true,
+        });
+        throw new PluginCommandError(`Failed to enable plugin`, { cause: error });
       }
     });
 
   pm.command('disable')
     .ipc()
+    .preload()
     .arguments('<plugins...>')
     .action(async (plugins) => {
       try {
         await app.pm.disable(plugins);
       } catch (error) {
-        throw new PluginCommandError(`Failed to disable plugin: ${error.message}`);
+        throw new PluginCommandError(`Failed to disable plugin`, { cause: error });
       }
     });
 
   pm.command('remove')
-    .ipc()
+    .auth()
+    // .ipc()
+    // .preload()
     .arguments('<plugins...>')
-    .action(async (plugins) => {
-      await app.pm.remove(plugins);
+    .option('--force')
+    .option('--remove-dir')
+    .option('--app [app]')
+    .action(async (plugins, options) => {
+      if (options.app) {
+        await app.load();
+        const subApp = await AppSupervisor.getInstance().getApp(options.app, { upgrading: true });
+        const args = [];
+        if (options.force) {
+          args.push('--force');
+        }
+        if (options.removeDir) {
+          args.push('--remove-dir');
+        }
+        await subApp.runCommand('pm', 'remove', ...plugins, ...args);
+      } else {
+        await app.pm.remove(plugins, options);
+      }
     });
 };

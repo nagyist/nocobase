@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayTable } from '@formily/antd-v5';
 import { ISchema, useForm } from '@formily/react';
 import { uid } from '@formily/shared';
@@ -6,12 +15,13 @@ import cloneDeep from 'lodash/cloneDeep';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAPIClient, useRequest } from '../../api-client';
+import { useCollectionParentRecordData } from '../../data-source';
 import { RecordProvider, useRecord } from '../../record-provider';
 import { ActionContextProvider, SchemaComponent, useActionContext, useCompile } from '../../schema-component';
-import { useCancelAction } from '../action-hooks';
-import { useCollectionManager } from '../hooks';
-import { IField } from '../interfaces/types';
 import { useResourceActionContext, useResourceContext } from '../ResourceActionProvider';
+import { useCancelAction } from '../action-hooks';
+import { useCollectionManager_deprecated } from '../hooks';
+import { IField } from '../interfaces/types';
 import * as components from './components';
 
 const getSchema = (schema: IField, record: any, compile, getContainer): ISchema => {
@@ -88,54 +98,23 @@ const getSchema = (schema: IField, record: any, compile, getContainer): ISchema 
   };
 };
 
-const useOverridingCollectionField = () => {
-  const form = useForm();
-  const { refreshCM } = useCollectionManager();
-  const ctx = useActionContext();
-  const { refresh } = useResourceActionContext();
-  const { resource } = useResourceContext();
-  return {
-    async run() {
-      await form.submit();
-      const values = cloneDeep(form.values);
-      const data = omit(values, [
-        'key',
-        'uiSchemaUid',
-        'collectionName',
-        'autoCreateReverseField',
-        'uiSchema.x-uid',
-        'reverseField',
-        'reverseKey',
-        'parentKey',
-        // 'reverseField.key',
-        // 'reverseField.uiSchemaUid',
-      ]);
-      await resource.create({
-        values: data,
-      });
-      ctx.setVisible(false);
-      await form.reset();
-      refresh();
-      await refreshCM();
-    },
-  };
-};
-
 export const OverridingCollectionField = (props) => {
   const record = useRecord();
-  return <OverridingFieldAction item={record} {...props} />;
+  const parentRecordData = useCollectionParentRecordData();
+  return <OverridingFieldAction item={record} parentItem={parentRecordData} {...props} />;
 };
 
-const getIsOverriding = (currentFields, record) => {
-  const flag = currentFields.find((v) => {
+const getIsOverriding = (currentCollection, currentFields, record) => {
+  const targetField = currentFields.find((v) => {
     return v.name === record.name;
   });
-  return flag;
+  return targetField.collectionName === currentCollection;
 };
 export const OverridingFieldAction = (props) => {
-  const { scope, getContainer, item: record, children, currentCollection } = props;
+  const { scope, getContainer, item: record, parentItem: parentRecord, children, currentCollection } = props;
   const { target, through } = record;
-  const { getInterface, getCurrentCollectionFields, getChildrenCollections, collections } = useCollectionManager();
+  const { getInterface, getCollection, getCurrentCollectionFields, getChildrenCollections, collections } =
+    useCollectionManager_deprecated();
   const [visible, setVisible] = useState(false);
   const [schema, setSchema] = useState({});
   const api = useAPIClient();
@@ -151,7 +130,8 @@ export const OverridingFieldAction = (props) => {
   };
   const [data, setData] = useState<any>({});
   const currentFields = getCurrentCollectionFields(currentCollection);
-  const disabled = getIsOverriding(currentFields, record);
+  const disabled = getIsOverriding(currentCollection, currentFields, record);
+
   const currentCollections = useMemo(() => {
     return collections.map((v) => {
       return {
@@ -160,8 +140,57 @@ export const OverridingFieldAction = (props) => {
       };
     });
   }, []);
+  const useOverridingCollectionField = () => {
+    const form = useForm();
+    const { refresh } = useResourceActionContext();
+    const { refreshCM } = useCollectionManager_deprecated();
+    const ctx = useActionContext();
+    const { resource } = useResourceContext();
+    return {
+      async run() {
+        await form.submit();
+        const values = cloneDeep(form.values);
+        const data = omit(values, [
+          'key',
+          'uiSchemaUid',
+          'collectionName',
+          'autoCreateReverseField',
+          'uiSchema.x-uid',
+          'reverseField',
+          'reverseKey',
+          'parentKey',
+          // 'reverseField.key',
+          // 'reverseField.uiSchemaUid',
+        ]);
+        await resource.create({
+          values: data,
+        });
+        await form.reset();
+        await refreshCM();
+        await refresh();
+        ctx.setVisible(false);
+      },
+    };
+  };
+
+  const scopeKeyOptions = useMemo(() => {
+    return (
+      record?.fields ||
+      getCollection(record.collectionName)
+        ?.options.fields.filter((v) => {
+          return ['string', 'bigInt', 'integer'].includes(v.type);
+        })
+        .map((k) => {
+          return {
+            value: k.name,
+            label: compile(k.uiSchema?.title),
+          };
+        })
+    );
+  }, [record.name]);
+
   return (
-    <RecordProvider record={{ ...record, collectionName: record.__parent.name }}>
+    <RecordProvider record={{ ...record, collectionName: parentRecord.name }} parent={parentRecord}>
       <ActionContextProvider value={{ visible, setVisible }}>
         <a
           //@ts-ignore
@@ -210,7 +239,7 @@ export const OverridingFieldAction = (props) => {
             isOverride: true,
             targetScope: { target: getFilterCollections(target), through: getFilterCollections(through) },
             collections: currentCollections,
-
+            scopeKeyOptions,
             ...scope,
           }}
         />

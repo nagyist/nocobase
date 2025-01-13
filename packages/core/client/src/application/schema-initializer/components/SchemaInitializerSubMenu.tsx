@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import Icon, { RightOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { uid } from '@formily/shared';
@@ -10,15 +19,20 @@ import { SchemaInitializerOptions } from '../types';
 import { useSchemaInitializerStyles } from './style';
 
 export interface SchemaInitializerSubMenuProps {
-  name: string;
+  name?: string;
   title?: string;
   onClick?: (args: any) => void;
+  onOpenChange?: (openKeys: string[]) => void;
   icon?: string | ReactNode;
   children?: SchemaInitializerOptions['items'];
+  items?: SchemaInitializerOptions['items'];
 }
 
 const SchemaInitializerSubMenuContext = React.createContext<{ isInMenu?: true }>({});
-const SchemaInitializerMenuProvider = (props) => {
+/**
+ * @internal
+ */
+export const SchemaInitializerMenuProvider = (props) => {
   return (
     <SchemaInitializerSubMenuContext.Provider value={{ isInMenu: true }}>
       {props.children}
@@ -34,7 +48,11 @@ export const SchemaInitializerMenu: FC<MenuProps> = (props) => {
   const { items, ...others } = props;
   const { token } = theme.useToken();
   const itemsWithPopupClass = useMemo(
-    () => items.map((item) => ({ ...item, popupClassName: `${hashId} ${componentCls}-menu-sub` })),
+    () =>
+      items.map((item) => ({
+        ...item,
+        popupClassName: `${hashId} ${componentCls}-menu-sub`,
+      })),
     [componentCls, hashId, items],
   );
   // selectedKeys 为了不让有选中效果
@@ -48,10 +66,28 @@ export const SchemaInitializerMenu: FC<MenuProps> = (props) => {
           border-inline-end: 0 !important;
           .ant-menu-sub {
             max-height: 50vh !important;
+            padding: ${token.paddingXXS}px !important;
+          }
+          .ant-menu-item {
+            margin-inline: ${token.marginXXS}px !important;
+            margin-block: 0 !important;
+            width: auto !important;
+            padding: 0 ${token.paddingSM}px 0 ${token.padding}px !important;
+          }
+          .ant-menu-item-group-title {
+            padding: 0 ${token.padding}px;
+            margin-inline: 0;
+            line-height: 32px;
+          }
+          .ant-menu-submenu-title {
+            margin: 0 ${token.marginXXS}px !important;
+            padding-left: ${token.padding}px !important;
+            width: auto !important;
           }
           .ant-menu-root {
             margin: 0 -${token.margin}px;
-            .ant-menu-submenu-title {
+            .ant-menu-submenu-title,
+            .ant-menu-item-only-child {
               margin-inline: 0;
               margin-block: 0;
               width: 100%;
@@ -66,23 +102,30 @@ export const SchemaInitializerMenu: FC<MenuProps> = (props) => {
 };
 
 export const SchemaInitializerSubMenu: FC<SchemaInitializerSubMenuProps> = (props) => {
-  const { children, title, name = uid(), icon, ...others } = props;
+  const { children, items: propItems, title, name, onOpenChange, icon, ...others } = props;
   const compile = useCompile();
-  const childrenItems = useSchemaInitializerMenuItems(children, name);
+  const schemaInitializerItem = useSchemaInitializerItem();
+  const nameValue = useMemo(() => name || schemaInitializerItem?.name || uid(), [name, schemaInitializerItem]);
+  const validChildren = (propItems || children)?.filter((item) => (item.useVisible ? item.useVisible() : true));
+  const childrenItems = useSchemaInitializerMenuItems(validChildren, name);
+
   const items = useMemo(() => {
     return [
       {
         ...others,
-        key: name,
+        key: nameValue,
         label: compile(title),
         icon: typeof icon === 'string' ? <Icon type={icon as string} /> : icon,
         children: childrenItems,
       },
     ];
-  }, [childrenItems, compile, icon, name, others, title]);
-  return <SchemaInitializerMenu items={items}></SchemaInitializerMenu>;
+  }, [childrenItems, compile, icon, nameValue, others, title]);
+  return <SchemaInitializerMenu onOpenChange={onOpenChange} items={items}></SchemaInitializerMenu>;
 };
 
+/**
+ * @internal
+ */
 export const SchemaInitializerSubMenuInternal = () => {
   const itemConfig = useSchemaInitializerItem<SchemaInitializerSubMenuProps>();
   return <SchemaInitializerSubMenu {...itemConfig}></SchemaInitializerSubMenu>;

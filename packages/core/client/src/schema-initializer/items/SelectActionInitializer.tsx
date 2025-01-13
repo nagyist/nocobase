@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React from 'react';
-import { ActionInitializer } from './ActionInitializer';
+import { ActionInitializerItem } from './ActionInitializerItem';
 
 export const SelectActionInitializer = (props) => {
   const schema = {
@@ -23,7 +32,7 @@ export const SelectActionInitializer = (props) => {
           grid: {
             type: 'void',
             'x-component': 'Grid',
-            'x-initializer': 'TableSelectorInitializers',
+            'x-initializer': 'popup:tableSelector:addBlock',
             properties: {},
           },
           footer: {
@@ -39,11 +48,13 @@ export const SelectActionInitializer = (props) => {
                     title: '{{ t("Submit") }}',
                     'x-action': 'submit',
                     'x-component': 'Action',
-                    'x-designer': 'Action.Designer',
+                    'x-use-component-props': 'usePickActionProps',
+                    // 'x-designer': 'Action.Designer',
+                    'x-toolbar': 'ActionSchemaToolbar',
+                    'x-settings': 'actionSettings:submit',
                     'x-component-props': {
                       type: 'primary',
                       htmlType: 'submit',
-                      useProps: '{{ usePickActionProps }}',
                     },
                   },
                 },
@@ -54,5 +65,5 @@ export const SelectActionInitializer = (props) => {
       },
     },
   };
-  return <ActionInitializer {...props} schema={schema} />;
+  return <ActionInitializerItem {...props} schema={schema} />;
 };

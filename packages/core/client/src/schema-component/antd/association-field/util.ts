@@ -1,17 +1,39 @@
-import { ISchema, Schema } from '@formily/react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { Field } from '@formily/core';
+import { ISchema } from '@formily/react';
 import { isArr } from '@formily/shared';
 import { getDefaultFormat, str2moment } from '@nocobase/utils/client';
 import { Tag } from 'antd';
 import dayjs from 'dayjs';
 import React from 'react';
-import { CollectionFieldOptions, useCollectionManager } from '../../../collection-manager';
+import { useCollectionManager } from '../../../data-source/collection/CollectionManagerProvider';
+
+export const useLabelUiSchemaV2 = () => {
+  const cm = useCollectionManager();
+
+  return (collectionName: string, label: string): ISchema => {
+    if (!collectionName) {
+      return;
+    }
+    const labelField = cm?.getCollectionField(`${collectionName}.${label}`);
+    return labelField?.uiSchema;
+  };
+};
 
 export const useLabelUiSchema = (collectionName: string, label: string): ISchema => {
-  const { getCollectionJoinField } = useCollectionManager();
+  const cm = useCollectionManager();
   if (!collectionName) {
     return;
   }
-  const labelField = getCollectionJoinField(`${collectionName}.${label}`) as CollectionFieldOptions;
+  const labelField = cm?.getCollectionField(`${collectionName}.${label}`);
   return labelField?.uiSchema;
 };
 
@@ -90,6 +112,7 @@ export function isShowFilePicker(labelUiSchema) {
 /**
  * 当前字段的模式是否是 `子表格` 或者 `子表单`
  */
-export function isSubMode(fieldSchema: Schema) {
-  return ['Nester', 'SubTable', 'PopoverNester'].includes(fieldSchema['x-component-props']?.mode);
+export function isSubMode(field: any) {
+  const mode = field['x-component-props']?.mode || (field as Field).componentProps?.mode;
+  return ['Nester', 'SubTable', 'PopoverNester'].includes(mode);
 }

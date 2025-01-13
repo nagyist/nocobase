@@ -1,7 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayField } from '@formily/core';
 import { useField } from '@formily/react';
 import React, { useCallback, useState } from 'react';
-import { useCollectionManager } from '../../../collection-manager';
+import { useCollectionManager_deprecated } from '../../../collection-manager';
 import { useCompile } from '../../../schema-component';
 import { TreeNode } from '../TreeLabel';
 
@@ -18,14 +27,21 @@ export const systemKeys = [
   'password',
   'sequence',
 ];
-export const useCollectionState = (currentCollectionName: string) => {
-  const { getCollectionFields, getAllCollectionsInheritChain, getCollection, getInterface } = useCollectionManager();
+/**
+ *
+ * @param currentCollectionName 数据表name
+ * @param displayType boolean 是否显示字段标识
+ * @returns
+ */
+export const useCollectionState = (currentCollectionName: string, displayType = true, filterFields?) => {
+  const { getCollectionFields, getAllCollectionsInheritChain, getCollection, getInterface } =
+    useCollectionManager_deprecated();
   const [collectionList] = useState(getCollectionList);
   const compile = useCompile();
   const templateField: any = useField();
 
   function getCollectionList() {
-    const collections = getAllCollectionsInheritChain(currentCollectionName);
+    const collections = getAllCollectionsInheritChain(currentCollectionName) || [];
     return collections.map((name) => ({ label: getCollection(name)?.title, value: name }));
   }
 
@@ -48,6 +64,9 @@ export const useCollectionState = (currentCollectionName: string) => {
         if (['sort', 'password', 'sequence'].includes(field.type)) {
           return;
         }
+        if (filterFields && filterFields(field)) {
+          return;
+        }
         const node = {
           type: 'duplicate',
           tag: compile(field.uiSchema?.title) || field.name,
@@ -55,7 +74,7 @@ export const useCollectionState = (currentCollectionName: string) => {
         const option = {
           ...node,
           role: 'button',
-          title: React.createElement(TreeNode, node),
+          title: React.createElement(TreeNode, { ...node, displayType }),
           key: prefix ? `${prefix}.${field.name}` : field.name,
           isLeaf: true,
           field,
@@ -64,7 +83,7 @@ export const useCollectionState = (currentCollectionName: string) => {
         if (['belongsTo', 'belongsToMany'].includes(field.type)) {
           node['type'] = 'reference';
           option['type'] = 'reference';
-          option['title'] = React.createElement(TreeNode, { ...node, type: 'reference' });
+          option['title'] = React.createElement(TreeNode, { ...node, type: 'reference', displayType });
           option.isLeaf = false;
           option['children'] = traverseAssociations(field.target, {
             depth: depth + 1,
@@ -105,7 +124,7 @@ export const useCollectionState = (currentCollectionName: string) => {
         const value = prefix ? `${prefix}.${field.name}` : field.name;
         return {
           role: 'button',
-          title: React.createElement(TreeNode, option),
+          title: React.createElement(TreeNode, { ...option, displayType }),
           key: value,
           isLeaf: false,
           field,
@@ -124,7 +143,7 @@ export const useCollectionState = (currentCollectionName: string) => {
       return {
         ...v,
         role: 'button',
-        title: React.createElement(TreeNode, { ...v, type: v.type }),
+        title: React.createElement(TreeNode, { ...v, type: v.type, displayType }),
         children: v.children ? parseTreeData(v.children) : null,
       };
     });
@@ -226,7 +245,7 @@ export const useCollectionState = (currentCollectionName: string) => {
     const targetFields = getCollectionFields(collectionName);
     const options = targetFields
       .filter((field) => {
-        return !field.isForeignKey && getInterface(field.interface)?.titleUsable;
+        return getInterface(field.interface)?.titleUsable;
       })
       .map((field) => ({
         value: field?.name,

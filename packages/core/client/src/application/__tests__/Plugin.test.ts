@@ -1,16 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import { Application } from '../Application';
 import { Plugin } from '../Plugin';
 
 describe('Plugin', () => {
-  beforeAll(() => {
-    const mock = new MockAdapter(axios);
-    mock.onGet('pm:listEnabled').reply(200, {
-      data: [],
-    });
-  });
-
   it('lifecycle', async () => {
     const afterAdd = vitest.fn();
     const beforeLoad = vitest.fn();
@@ -66,7 +68,64 @@ describe('PluginManager', () => {
     expect(fn2).toBeCalledWith(config);
   });
 
-  it('dynamic Plugins', async () => {
+  it('remote plugins', async () => {
+    const mock = new MockAdapter(axios);
+    mock.onGet('pm:listEnabled').reply(200, {
+      data: [
+        {
+          name: '@nocobase/demo',
+          packageName: '@nocobase/demo',
+          url: 'https://demo1.com',
+        },
+        {
+          name: '@nocobase/demo2',
+          packageName: '@nocobase/demo2',
+          url: 'https://demo2.com',
+        },
+      ],
+    });
+
+    // mock requirejs
+    const remoteFn = vi.fn();
+
+    const demo1Mock = vi.fn();
+    const demo2Mock = vi.fn();
+    class Demo1Plugin extends Plugin {
+      async load() {
+        demo1Mock();
+      }
+    }
+
+    class Demo2Plugin extends Plugin {
+      async load() {
+        demo2Mock();
+      }
+    }
+
+    const mockPluginsModules = (pluginData, resolve) => {
+      remoteFn();
+      resolve({ default: Demo1Plugin }, { default: Demo2Plugin });
+    };
+
+    const requirejs: any = {
+      requirejs: mockPluginsModules,
+    };
+
+    requirejs.requirejs.config = vi.fn();
+    requirejs.requirejs.requirejs = vi.fn();
+
+    const app = new Application({
+      loadRemotePlugins: true,
+    });
+    app.requirejs = requirejs;
+
+    await app.load();
+
+    expect(remoteFn).toBeCalledTimes(1);
+    expect(demo1Mock).toBeCalledTimes(1);
+  });
+
+  it('Load other plugins through plugins', async () => {
     const fn2 = vitest.fn();
     const config = { a: 1 };
     class Demo2 extends Plugin {
@@ -93,6 +152,10 @@ describe('PluginManager', () => {
       async afterAdd() {
         expect(this.pm).toBe(this.app.pm);
         expect(this.router).toBe(this.app.router);
+        expect(this.pluginManager).toBe(this.app.pluginManager);
+        expect(this.pluginSettingsManager).toBe(this.app.pluginSettingsManager);
+        expect(this.schemaInitializerManager).toBe(this.app.schemaInitializerManager);
+        expect(this.schemaSettingsManager).toBe(this.app.schemaSettingsManager);
       }
     }
     const app = new Application({ plugins: [[DemoPlugin, { name: 'demo' }]] });
@@ -104,5 +167,22 @@ describe('PluginManager', () => {
     const app = new Application({ plugins: [[DemoPlugin, { name: 'demo' }]] });
     await app.load();
     expect(app.pm.get('demo')).toBeInstanceOf(DemoPlugin);
+  });
+
+  it('i18n', async () => {
+    class DemoPlugin extends Plugin {
+      async load() {
+        expect(this.t('test', { lng: 'zh-CN' })).toBe('测试');
+        expect(this.t('test', { lng: 'en' })).toBe('test');
+      }
+    }
+    const app = new Application({ plugins: [[DemoPlugin, { packageName: 'plugin-demo' }]] });
+    app.i18n.addResourceBundle('zh-CN', 'plugin-demo', {
+      test: '测试',
+    });
+    app.i18n.addResourceBundle('en', 'plugin-demo', {
+      test: 'test',
+    });
+    await app.load();
   });
 });

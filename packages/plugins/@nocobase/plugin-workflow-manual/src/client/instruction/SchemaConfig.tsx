@@ -1,50 +1,59 @@
-import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { FormLayout } from '@formily/antd-v5';
 import { createForm } from '@formily/core';
 import { FormProvider, ISchema, Schema, useFieldSchema, useForm } from '@formily/react';
-import { Alert, Button, Modal, Space } from 'antd';
+import { Alert, Button, Modal, Space, message } from 'antd';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   Action,
   ActionContextProvider,
+  CompatibleSchemaInitializer,
   DefaultValueProvider,
   FormActiveFieldsProvider,
   GeneralSchemaDesigner,
   InitializerWithSwitch,
   SchemaComponent,
   SchemaComponentContext,
-  SchemaInitializer,
   SchemaInitializerItem,
   SchemaInitializerItemType,
-  SchemaSettingsBlockTitleItem,
   SchemaSettingsDivider,
   SchemaSettingsItem,
   SchemaSettingsRemove,
   VariableScopeProvider,
   css,
   gridRowColWrap,
-  useCollectionManager,
-  useCompile,
+  useDataSourceManager,
   useFormActiveFields,
   useFormBlockContext,
   usePlugin,
   useSchemaInitializer,
   useSchemaInitializerItem,
   useSchemaOptionsContext,
+  useVariableScope,
 } from '@nocobase/client';
-import { Registry, lodash } from '@nocobase/utils/client';
 import WorkflowPlugin, {
-  useAvailableUpstreams,
-  useNodeContext,
-  useFlowContext,
+  DetailsBlockProvider,
   JOB_STATUS,
+  SimpleDesigner,
+  useAvailableUpstreams,
+  useFlowContext,
+  useNodeContext,
   useTrigger,
   useWorkflowVariableOptions,
 } from '@nocobase/plugin-workflow/client';
+import { Registry, lodash } from '@nocobase/utils/client';
 
-import { NAMESPACE, useLang } from '../../locale';
-import { DetailsBlockProvider } from './DetailsBlockProvider';
+import { NAMESPACE, usePluginTranslation } from '../../locale';
 import { FormBlockProvider } from './FormBlockProvider';
 import createRecordForm from './forms/create';
 import customRecordForm from './forms/custom';
@@ -68,7 +77,7 @@ export type FormType = {
 export type ManualFormType = {
   title: string;
   config: {
-    useInitializer: ({ collections }?: { collections: any[] }) => SchemaInitializerItemType;
+    useInitializer: ({ allCollections }?: { allCollections: any[] }) => SchemaInitializerItemType;
     initializers?: {
       [key: string]: React.FC;
     };
@@ -85,13 +94,14 @@ export type ManualFormType = {
       [key: string]: React.FC;
     };
   };
+  validate?: (config: any) => string | null;
 };
 
 export const manualFormTypes = new Registry<ManualFormType>();
 
-manualFormTypes.register('customForm', customRecordForm);
-manualFormTypes.register('createForm', createRecordForm);
-manualFormTypes.register('updateForm', updateRecordForm);
+manualFormTypes.register('custom', customRecordForm);
+manualFormTypes.register('create', createRecordForm);
+manualFormTypes.register('update', updateRecordForm);
 
 function useTriggerInitializers(): SchemaInitializerItemType | null {
   const { workflow } = useFlowContext();
@@ -99,31 +109,7 @@ function useTriggerInitializers(): SchemaInitializerItemType | null {
   return trigger.useInitializers ? trigger.useInitializers(workflow.config) : null;
 }
 
-const blockTypeNames = {
-  customForm: customRecordForm.title,
-  record: `{{t("Data record", { ns: "${NAMESPACE}" })}}`,
-};
-
-function SimpleDesigner() {
-  const schema = useFieldSchema();
-  const title = blockTypeNames[schema['x-designer-props']?.type] ?? '{{t("Block")}}';
-  const compile = useCompile();
-  return (
-    <GeneralSchemaDesigner title={compile(title)}>
-      <SchemaSettingsBlockTitleItem />
-      <SchemaSettingsDivider />
-      <SchemaSettingsRemove
-        removeParentsIfNoChildren
-        breakRemoveOn={{
-          'x-component': 'Grid',
-        }}
-      />
-    </GeneralSchemaDesigner>
-  );
-}
-
-export const addBlockButton = new SchemaInitializer({
-  name: 'AddBlockButton',
+const popupConfigureUserInterfaceOptions = {
   wrap: gridRowColWrap,
   title: '{{t("Add block")}}',
   items: [
@@ -131,7 +117,7 @@ export const addBlockButton = new SchemaInitializer({
       type: 'itemGroup',
       name: 'dataBlocks',
       title: '{{t("Data blocks")}}',
-      checkChildrenLength: true,
+      hideIfNoChildren: true,
       useChildren() {
         const workflowPlugin = usePlugin(WorkflowPlugin);
         const current = useNodeContext();
@@ -164,10 +150,11 @@ export const addBlockButton = new SchemaInitializer({
       name: 'form',
       title: '{{t("Form")}}',
       useChildren() {
-        const { collections } = useCollectionManager();
+        const dm = useDataSourceManager();
+        const allCollections = dm.getAllCollections();
         return Array.from(manualFormTypes.getValues()).map((item: ManualFormType) => {
           const { useInitializer: getInitializer } = item.config;
-          return getInitializer({ collections });
+          return getInitializer({ allCollections });
         });
       },
     },
@@ -184,11 +171,29 @@ export const addBlockButton = new SchemaInitializer({
       ],
     },
   ],
+};
+
+/**
+ * @deprecated
+ * use `addBlockButton` instead
+ */
+export const addBlockButton_deprecated = new CompatibleSchemaInitializer({
+  name: 'AddBlockButton',
+  ...popupConfigureUserInterfaceOptions,
 });
+
+export const addBlockButton = new CompatibleSchemaInitializer(
+  {
+    name: 'workflowManual:popup:configureUserInterface:addBlock',
+    ...popupConfigureUserInterfaceOptions,
+  },
+  addBlockButton_deprecated,
+);
 
 function AssignedFieldValues() {
   const ctx = useContext(SchemaComponentContext);
-  const { t } = useTranslation();
+  const { t: coreT } = useTranslation();
+  const { t } = usePluginTranslation();
   const fieldSchema = useFieldSchema();
   const scope = useWorkflowVariableOptions();
   const [open, setOpen] = useState(false);
@@ -196,7 +201,7 @@ function AssignedFieldValues() {
     fieldSchema?.['x-action-settings']?.assignedValues?.schema ?? {
       type: 'void',
       'x-component': 'Grid',
-      'x-initializer': 'CustomFormItemInitializers',
+      'x-initializer': 'assignFieldValuesForm:configureFields',
       properties: {},
     },
   );
@@ -220,7 +225,7 @@ function AssignedFieldValues() {
   }, [fieldSchema]);
   const upLevelActiveFields = useFormActiveFields();
 
-  const title = t('Assign field values');
+  const title = coreT('Assign field values');
 
   function onCancel() {
     setOpen(false);
@@ -266,9 +271,7 @@ function AssignedFieldValues() {
               <FormProvider form={form}>
                 <FormLayout layout={'vertical'}>
                   <Alert
-                    message={useLang(
-                      'Values preset in this form will override user submitted ones when continue or reject.',
-                    )}
+                    message={t('Values preset in this form will override user submitted ones when continue or reject.')}
                   />
                   <br />
                   {open && schema && (
@@ -356,7 +359,7 @@ function ActionInitializer() {
           ...actionProps,
           useAction: '{{ useSubmit }}',
         },
-        'x-designer': 'Action.Designer',
+        'x-designer': 'ManualActionDesigner',
         'x-action': `${action}`,
       }}
       type="x-action"
@@ -364,8 +367,7 @@ function ActionInitializer() {
   );
 }
 
-export const addActionButton = new SchemaInitializer({
-  name: 'AddActionButton',
+const formConfigureActionsOptions = {
   title: '{{t("Configure actions")}}',
   items: [
     {
@@ -393,7 +395,24 @@ export const addActionButton = new SchemaInitializer({
       action: JOB_STATUS.PENDING,
     },
   ],
+};
+
+/**
+ * @deprecated
+ * use `addActionButton` instead
+ */
+export const addActionButton_deprecated = new CompatibleSchemaInitializer({
+  name: 'AddActionButton',
+  ...formConfigureActionsOptions,
 });
+
+export const addActionButton = new CompatibleSchemaInitializer(
+  {
+    name: 'workflowManual:form:configureActions',
+    ...formConfigureActionsOptions,
+  },
+  addActionButton_deprecated,
+);
 
 // NOTE: fake useAction for ui configuration
 function useSubmit() {
@@ -412,11 +431,9 @@ export function SchemaConfig({ value, onChange }) {
   const form = useForm();
   const { workflow } = useFlowContext();
 
-  const nodeInitializers = {};
   const nodeComponents = {};
   nodes.forEach((item) => {
     const instruction = workflowPlugin.instructions.get(item.type);
-    Object.assign(nodeInitializers, instruction.initializers);
     Object.assign(nodeComponents, instruction.components);
   });
 
@@ -441,9 +458,9 @@ export function SchemaConfig({ value, onChange }) {
                 type: 'void',
                 'x-component': 'Tabs',
                 'x-component-props': {},
-                'x-initializer': 'TabPaneInitializers',
+                'x-initializer': 'popup:addTab',
                 'x-initializer-props': {
-                  gridInitializer: 'AddBlockButton',
+                  gridInitializer: 'workflowManual:popup:configureUserInterface:addBlock',
                 },
                 properties: value ?? {
                   tab1: {
@@ -455,7 +472,7 @@ export function SchemaConfig({ value, onChange }) {
                       grid: {
                         type: 'void',
                         'x-component': 'Grid',
-                        'x-initializer': 'AddBlockButton',
+                        'x-initializer': 'workflowManual:popup:configureUserInterface:addBlock',
                         properties: {},
                       },
                     },
@@ -522,15 +539,46 @@ export function SchemaConfig({ value, onChange }) {
   );
 }
 
+function validateForms(forms: Record<string, any> = {}) {
+  for (const form of Object.values(forms)) {
+    const formType = manualFormTypes.get(form.type);
+    if (typeof formType.validate === 'function') {
+      const msg = formType.validate(form);
+      if (msg) {
+        return msg;
+      }
+    }
+  }
+}
+
 export function SchemaConfigButton(props) {
   const { workflow } = useFlowContext();
   const [visible, setVisible] = useState(false);
+  const { values } = useForm();
+  const { t } = usePluginTranslation();
+  const onSetVisible = useCallback(
+    (v) => {
+      if (!v) {
+        const msg = validateForms(values.forms);
+        if (msg) {
+          message.error({
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            title: t('Validation failed'),
+            content: t(msg),
+          });
+          return;
+        }
+      }
+      setVisible(v);
+    },
+    [values.forms],
+  );
   return (
     <>
       <Button type="primary" onClick={() => setVisible(true)} disabled={false}>
-        {useLang(workflow.executed ? 'View user interface' : 'Configure user interface')}
+        {t(workflow.executed ? 'View user interface' : 'Configure user interface')}
       </Button>
-      <ActionContextProvider value={{ visible, setVisible, formValueChanged: false }}>
+      <ActionContextProvider value={{ visible, setVisible: onSetVisible, formValueChanged: false }}>
         {props.children}
       </ActionContextProvider>
     </>

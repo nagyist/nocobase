@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import crypto from 'crypto';
 import path from 'path';
 
@@ -12,6 +21,10 @@ export const cloudFilenameGetter = (storage) => (req, file, cb) => {
     if (err) {
       return cb(err);
     }
-    cb(null, `${storage.path ? `${storage.path}/` : ''}${filename}`);
+    cb(null, `${storage.path ? `${storage.path.replace(/\/+$/, '')}/` : ''}${filename}`);
   });
 };
+
+export function getFileKey(record) {
+  return [record.path.replace(/^\/|\/$/g, ''), record.filename].filter(Boolean).join('/');
+}

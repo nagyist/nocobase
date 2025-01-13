@@ -1,8 +1,15 @@
-import { SchemaInitializer, useCollection } from '@nocobase/client';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-// 表格操作配置
-export const mapActionInitializers = new SchemaInitializer({
-  name: 'MapActionInitializers',
+import { CompatibleSchemaInitializer, useActionAvailable } from '@nocobase/client';
+
+const commonOptions = {
   title: "{{t('Configure actions')}}",
   icon: 'SettingOutlined',
   style: {
@@ -10,106 +17,59 @@ export const mapActionInitializers = new SchemaInitializer({
   },
   items: [
     {
-      type: 'itemGroup',
-      title: "{{t('Enable actions')}}",
-      name: 'enableActions',
-      children: [
-        {
-          name: 'filter',
-          title: "{{t('Filter')}}",
-          Component: 'FilterActionInitializer',
-          schema: {
-            'x-align': 'left',
-          },
-        },
-        {
-          name: 'addNew',
-          title: "{{t('Add new')}}",
-          Component: 'CreateActionInitializer',
-          schema: {
-            'x-align': 'right',
-            'x-decorator': 'ACLActionProvider',
-            'x-acl-action-props': {
-              skipScopeCheck: true,
-            },
-          },
-          useVisible() {
-            const collection = useCollection();
-            return collection.template !== 'sql';
-          },
-        },
-        {
-          name: 'refresh',
-          title: "{{t('Refresh')}}",
-          Component: 'RefreshActionInitializer',
-          schema: {
-            'x-align': 'right',
-          },
-        },
-      ],
-    },
-    {
-      name: 'divider',
-      type: 'divider',
-      useVisible() {
-        const collection = useCollection();
-        return collection.template !== 'sql';
+      name: 'filter',
+      title: "{{t('Filter')}}",
+      Component: 'FilterActionInitializer',
+      schema: {
+        'x-align': 'left',
       },
     },
     {
-      type: 'subMenu',
-      title: '{{t("Customize")}}',
-      name: 'customize',
-      children: [
-        {
-          name: 'bulkUpdate',
-          title: '{{t("Bulk update")}}',
-          Component: 'CustomizeActionInitializer',
-          schema: {
-            type: 'void',
-            title: '{{ t("Bulk update") }}',
-            'x-component': 'Action',
-            'x-align': 'right',
-            'x-acl-action': 'update',
-            'x-decorator': 'ACLActionProvider',
-            'x-acl-action-props': {
-              skipScopeCheck: true,
-            },
-            'x-action': 'customize:bulkUpdate',
-            'x-designer': 'Action.Designer',
-            'x-action-settings': {
-              assignedValues: {},
-              updateMode: 'selected',
-              onSuccess: {
-                manualClose: true,
-                redirecting: false,
-                successMessage: '{{t("Updated successfully")}}',
-              },
-            },
-            'x-component-props': {
-              icon: 'EditOutlined',
-              useProps: '{{ useCustomizeBulkUpdateActionProps }}',
-            },
-          },
+      name: 'addNew',
+      title: "{{t('Add new')}}",
+      Component: 'CreateActionInitializer',
+      schema: {
+        'x-align': 'right',
+        'x-decorator': 'ACLActionProvider',
+        'x-acl-action-props': {
+          skipScopeCheck: true,
         },
-        {
-          name: 'bulkEdit',
-          title: '{{t("Bulk edit")}}',
-          Component: 'CustomizeBulkEditActionInitializer',
-          schema: {
-            'x-align': 'right',
-            'x-decorator': 'ACLActionProvider',
-            'x-acl-action': 'update',
-            'x-acl-action-props': {
-              skipScopeCheck: true,
-            },
-          },
-        },
-      ],
-      useVisible() {
-        const collection = useCollection();
-        return collection.template !== 'sql';
+      },
+      useVisible: () => useActionAvailable('create'),
+    },
+    {
+      name: 'refresh',
+      title: "{{t('Refresh')}}",
+      Component: 'RefreshActionInitializer',
+      schema: {
+        'x-align': 'right',
+      },
+    },
+    {
+      name: 'customRequest',
+      title: '{{t("Custom request")}}',
+      Component: 'CustomRequestInitializer',
+      schema: {
+        'x-action': 'customize:table:request:global',
       },
     },
   ],
+};
+
+/**
+ * @deprecated
+ * use `mapActionInitializers` instead
+ * 表格操作配置
+ */
+export const mapActionInitializers_deprecated = new CompatibleSchemaInitializer({
+  name: 'MapActionInitializers',
+  ...commonOptions,
 });
+
+export const mapActionInitializers = new CompatibleSchemaInitializer(
+  {
+    name: 'map:configureActions',
+    ...commonOptions,
+  },
+  mapActionInitializers_deprecated,
+);

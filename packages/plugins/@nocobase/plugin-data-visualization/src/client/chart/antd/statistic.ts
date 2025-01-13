@@ -1,17 +1,27 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { AntdChart } from './antd';
-import { Statistic as AntdStatistic } from 'antd';
 import { lang } from '../../locale';
 import { ChartType, RenderProps } from '../chart';
+import { Statistic as C } from './components/Statistic';
 
 export class Statistic extends AntdChart {
   constructor() {
     super({
       name: 'statistic',
       title: 'Statistic',
-      component: AntdStatistic,
+      enableAdvancedConfig: true,
+      Component: C,
       config: [
         {
-          property: 'field',
+          configType: 'field',
           name: 'field',
           title: 'Field',
           required: true,
@@ -19,6 +29,14 @@ export class Statistic extends AntdChart {
         {
           title: {
             title: lang('Title'),
+            type: 'string',
+            'x-decorator': 'FormItem',
+            'x-component': 'Input',
+          },
+        },
+        {
+          link: {
+            title: lang('Link'),
             type: 'string',
             'x-decorator': 'FormItem',
             'x-component': 'Input',

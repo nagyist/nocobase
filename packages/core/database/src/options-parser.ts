@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import lodash from 'lodash';
 import { FindAttributeOptions, ModelStatic, Op, Sequelize } from 'sequelize';
 import { Collection } from './collection';
@@ -67,17 +76,42 @@ export class OptionsParser {
     return this.isAssociation(path.split('.')[0]);
   }
 
+  filterByTkToWhereOption() {
+    const filterByTkOption = this.options?.filterByTk;
+
+    if (!filterByTkOption) {
+      return {};
+    }
+
+    // multi filter target key
+    if (lodash.isPlainObject(this.options.filterByTk)) {
+      const where = {};
+      for (const [key, value] of Object.entries(filterByTkOption)) {
+        where[key] = value;
+      }
+
+      return where;
+    }
+
+    // single filter target key
+    const filterTargetKey = this.context.targetKey || this.collection.filterTargetKey;
+
+    if (Array.isArray(filterTargetKey)) {
+      throw new Error('multi filter target key value must be object');
+    }
+
+    return {
+      [filterTargetKey]: filterByTkOption,
+    };
+  }
+
   toSequelizeParams() {
     const queryParams = this.filterParser.toSequelizeParams();
 
     if (this.options?.filterByTk) {
+      const filterByTkWhere = this.filterByTkToWhereOption();
       queryParams.where = {
-        [Op.and]: [
-          queryParams.where,
-          {
-            [this.context.targetKey || this.collection.filterTargetKey]: this.options.filterByTk,
-          },
-        ],
+        [Op.and]: [queryParams.where, filterByTkWhere],
       };
     }
 
@@ -99,18 +133,40 @@ export class OptionsParser {
    */
   protected parseSort(filterParams) {
     let sort = this.options?.sort || [];
+
     if (typeof sort === 'string') {
       sort = sort.split(',');
     }
 
+    let defaultSortField: Array<string> | string = this.model.primaryKeyAttribute;
+
+    if (Array.isArray(this.collection.filterTargetKey)) {
+      defaultSortField = this.collection.filterTargetKey;
+    }
+
+    if (!defaultSortField && this.collection.filterTargetKey && !Array.isArray(this.collection.filterTargetKey)) {
+      defaultSortField = this.collection.filterTargetKey;
+    }
+
+    if (defaultSortField && !this.options?.group) {
+      defaultSortField = lodash.castArray(defaultSortField);
+      for (const key of defaultSortField) {
+        if (!sort.includes(key)) {
+          sort.push(key);
+        }
+      }
+    }
+
     const orderParams = [];
+
     for (const sortKey of sort) {
       let direction = sortKey.startsWith('-') ? 'DESC' : 'ASC';
-      const sortField: Array<any> = sortKey.replace('-', '').split('.');
+      const sortField: Array<any> = sortKey.startsWith('-') ? sortKey.replace('-', '').split('.') : sortKey.split('.');
 
       if (this.database.inDialect('postgres', 'sqlite')) {
         direction = `${direction} NULLS LAST`;
       }
+
       // handle sort by association
       if (sortField.length > 1) {
         let associationModel = this.model;
@@ -126,7 +182,12 @@ export class OptionsParser {
 
       sortField.push(direction);
       if (this.database.isMySQLCompatibleDialect()) {
-        orderParams.push([Sequelize.fn('ISNULL', Sequelize.col(`${this.model.name}.${sortField[0]}`))]);
+        const fieldName = sortField[0];
+
+        // @ts-ignore
+        if (this.model.fieldRawAttributesMap[fieldName]) {
+          orderParams.push([Sequelize.fn('ISNULL', Sequelize.col(`${this.model.name}.${sortField[0]}`))]);
+        }
       }
       orderParams.push(sortField);
     }

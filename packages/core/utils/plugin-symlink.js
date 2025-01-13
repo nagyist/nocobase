@@ -1,5 +1,5 @@
 const { dirname, resolve } = require('path');
-const { readFile, writeFile, readdir, symlink, unlink, mkdir, stat } = require('fs').promises;
+const { realpath, readFile, writeFile, readdir, symlink, unlink, mkdir, stat } = require('fs').promises;
 
 async function getStoragePluginNames(target) {
   const plugins = [];
@@ -76,12 +76,27 @@ async function createDevPluginSymLink(pluginName) {
     }
     const link = resolve(nodeModulesPath, pluginName);
     if (await fsExists(link)) {
+      const real = await realpath(link);
+      if (real === resolve(packagePluginsPath, pluginName)) {
+        return;
+      }
       await unlink(link);
     }
-    await symlink(resolve(packagePluginsPath, pluginName), link);
+    await symlink(resolve(packagePluginsPath, pluginName), link, 'dir');
   } catch (error) {
     console.error(error);
   }
 }
 
 exports.createDevPluginSymLink = createDevPluginSymLink;
+
+async function createDevPluginsSymlink() {
+  const storagePluginsPath = resolve(process.cwd(), 'packages/plugins');
+  if (!(await fsExists(storagePluginsPath))) {
+    return;
+  }
+  const pluginNames = await getStoragePluginNames(storagePluginsPath);
+  await Promise.all(pluginNames.map((pluginName) => createDevPluginSymLink(pluginName)));
+}
+
+exports.createDevPluginsSymlink = createDevPluginsSymlink;

@@ -1,5 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ComponentType } from 'react';
 import {
+  SchemaSettingsActionModalItemProps,
   SchemaSettingsCascaderItemProps,
   SchemaSettingsItemProps,
   SchemaSettingsModalItemProps,
@@ -24,7 +34,10 @@ interface SchemaSettingsItemCommon<T = {}> {
   useVisible?: () => boolean;
   children?: SchemaSettingsItemType[];
   useChildren?: () => SchemaSettingsItemType[];
-  checkChildrenLength?: boolean;
+  /**
+   * @default true
+   */
+  hideIfNoChildren?: boolean;
   componentProps?: Omit<T, 'children'>;
   useComponentProps?: () => Omit<T, 'children'>;
 }
@@ -35,10 +48,6 @@ export interface SchemaSettingItemItemType extends SchemaSettingsItemCommon<Sche
 
 export interface SchemaSettingItemGroupType extends SchemaSettingsItemCommon<SchemaSettingsSubMenuProps> {
   type: 'itemGroup';
-}
-
-export interface SchemaSettingItemSubMenuType extends SchemaSettingsItemCommon<SchemaSettingsSubMenuProps> {
-  type: 'subMenu';
 }
 
 export interface SchemaSettingItemDividerProps extends SchemaSettingsItemCommon {
@@ -69,9 +78,13 @@ export type SchemaSettingItemModalType = SchemaSettingsItemCommon<SchemaSettings
   type: 'modal';
 };
 
-export type SchemaSettingItemActionModalType = SchemaSettingsItemCommon<SchemaSettingsSelectItemProps> & {
+export type SchemaSettingItemActionModalType = SchemaSettingsItemCommon<SchemaSettingsActionModalItemProps> & {
   type: 'actionModal';
 };
+
+export interface SchemaSettingItemSubMenuType extends SchemaSettingsItemCommon<SchemaSettingsSubMenuProps> {
+  type: 'subMenu';
+}
 
 export interface SchemaSettingItemComponentType<T = {}> extends SchemaSettingsItemCommon<T> {
   Component: string | ComponentType<T>;
@@ -87,6 +100,7 @@ export type SchemaSettingItemAllBuiltType =
   | SchemaSettingItemModalType
   | SchemaSettingItemItemType
   | SchemaSettingItemSelectType
+  | SchemaSettingItemSubMenuType
   | SchemaSettingItemGroupType;
 
 export type SchemaSettingsItemType = SchemaSettingItemComponentType | SchemaSettingItemAllBuiltType;

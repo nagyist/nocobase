@@ -1,15 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import _ from 'lodash';
-import {
-  DataType,
-  ModelAttributeColumnOptions,
-  ModelIndexesOptions,
-  QueryInterfaceOptions,
-  SyncOptions,
-  Transactionable,
-} from 'sequelize';
+import { DataType, ModelAttributeColumnOptions, ModelIndexesOptions, SyncOptions, Transactionable } from 'sequelize';
 import { Collection } from '../collection';
 import { Database } from '../database';
-import { InheritedCollection } from '../inherited-collection';
 import { ModelEventTypes } from '../types';
 import { snakeCase } from '../utils';
 
@@ -55,7 +56,11 @@ export abstract class Field {
     return this.options.type;
   }
 
-  abstract get dataType();
+  abstract get dataType(): any;
+
+  isRelationField() {
+    return false;
+  }
 
   async sync(syncOptions: SyncOptions) {
     await this.collection.sync({
@@ -100,84 +105,6 @@ export abstract class Field {
     }
 
     return this.name;
-  }
-
-  async removeFromDb(options?: QueryInterfaceOptions) {
-    const attribute = this.collection.model.rawAttributes[this.name];
-
-    if (!attribute) {
-      this.remove();
-      // console.log('field is not attribute');
-      return;
-    }
-
-    if (this.collection.isInherited() && (<InheritedCollection>this.collection).parentFields().has(this.name)) {
-      return;
-    }
-
-    if ((this.collection.model as any)._virtualAttributes.has(this.name)) {
-      this.remove();
-      // console.log('field is virtual attribute');
-      return;
-    }
-    if (this.collection.model.primaryKeyAttributes.includes(this.name)) {
-      // 主键不能删除
-      return;
-    }
-    if (this.collection.model.options.timestamps !== false) {
-      // timestamps 相关字段不删除
-      let timestampsFields = ['createdAt', 'updatedAt', 'deletedAt'];
-      if (this.database.options.underscored) {
-        timestampsFields = timestampsFields.map((field) => snakeCase(field));
-      }
-      if (timestampsFields.includes(this.columnName())) {
-        this.collection.fields.delete(this.name);
-        return;
-      }
-    }
-    // 排序字段通过 sortable 控制
-    const sortable = this.collection.options.sortable;
-    if (sortable) {
-      let sortField: any;
-      if (sortable === true) {
-        sortField = 'sort';
-      } else if (typeof sortable === 'string') {
-        sortField = sortable;
-      } else if (sortable.name) {
-        sortField = sortable.name || 'sort';
-      }
-      if (this.name === sortField) {
-        return;
-      }
-    }
-
-    // if (this.options.field && this.name !== this.options.field) {
-    //   // field 指向的是真实的字段名，如果与 name 不一样，说明字段只是引用
-    //   this.remove();
-    //   return;
-    // }
-
-    if (this.collection.isView()) {
-      this.remove();
-      return;
-    }
-
-    const columnReferencesCount = _.filter(
-      this.collection.model.rawAttributes,
-      (attr) => attr.field == this.columnName(),
-    ).length;
-
-    if (
-      (await this.existsInDb({
-        transaction: options?.transaction,
-      })) &&
-      columnReferencesCount == 1
-    ) {
-      const queryInterface = this.database.sequelize.getQueryInterface();
-      await queryInterface.removeColumn(this.collection.getTableNameWithSchema(), this.columnName(), options);
-    }
-
-    this.remove();
   }
 
   async existsInDb(options?: Transactionable) {
@@ -238,15 +165,19 @@ export abstract class Field {
 
   toSequelize(): any {
     const opts = _.omit(this.options, ['name']);
+
     if (this.dataType) {
-      Object.assign(opts, { type: this.dataType });
+      // @ts-ignore
+      Object.assign(opts, { type: this.database.sequelize.normalizeDataType(this.dataType) });
     }
+
+    Object.assign(opts, this.additionalSequelizeOptions());
 
     return opts;
   }
 
-  isSqlite() {
-    return this.database.sequelize.getDialect() === 'sqlite';
+  additionalSequelizeOptions() {
+    return {};
   }
 
   typeToString() {

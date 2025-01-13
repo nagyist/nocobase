@@ -1,10 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useField, useFieldSchema } from '@formily/react';
 import React, { useLayoutEffect } from 'react';
-import { SortableItem, useCollection, useCompile, useDesignable, useDesigner } from '../../../';
+import { SortableItem, useCollection_deprecated, useCompile, useDesignable, useDesigner } from '../../../';
 import { designerCss } from './Table.Column.ActionBar';
 
 export const useColumnSchema = () => {
-  const { getField } = useCollection();
+  const { getField } = useCollection_deprecated();
   const compile = useCompile();
   const columnSchema = useFieldSchema();
   const fieldSchema = columnSchema.reduceProperties((buf, s) => {

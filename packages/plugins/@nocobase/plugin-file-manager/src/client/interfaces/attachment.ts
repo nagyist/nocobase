@@ -1,15 +1,24 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema } from '@formily/react';
 import { uid } from '@formily/shared';
-import { IField, interfacesProperties } from '@nocobase/client';
+import { CollectionFieldInterface, interfacesProperties } from '@nocobase/client';
 import { NAMESPACE } from '../locale';
 
-export const attachment: IField = {
-  name: 'attachment',
-  type: 'object',
-  group: 'media',
-  title: `{{t("Attachment", { ns: "${NAMESPACE}" })}}`,
-  isAssociation: true,
-  default: {
+export class AttachmentFieldInterface extends CollectionFieldInterface {
+  name = 'attachment';
+  type = 'object';
+  group = 'media';
+  title = `{{t("Attachment", { ns: "${NAMESPACE}" })}}`;
+  isAssociation = true;
+  default = {
     type: 'belongsToMany',
     target: 'attachments',
     // name,
@@ -17,24 +26,22 @@ export const attachment: IField = {
       type: 'array',
       // title,
       'x-component': 'Upload.Attachment',
-      'x-component-props': {},
+      'x-use-component-props': 'useAttachmentFieldProps',
     },
-  },
-  availableTypes: ['belongsToMany'],
+  };
+  availableTypes = ['belongsToMany'];
   schemaInitialize(schema: ISchema, { block, field }) {
-    if (['Table', 'Kanban'].includes(block)) {
-      schema['x-component-props'] = schema['x-component-props'] || {};
-      schema['x-component-props']['size'] = 'small';
-    }
-
     if (!schema['x-component-props']) {
       schema['x-component-props'] = {};
     }
-    schema['x-component-props']['action'] = `${field.target}:create${
-      field.storage ? `?attachmentField=${field.collectionName}.${field.name}` : ''
-    }`;
-  },
-  initialize: (values: any) => {
+
+    if (['Table', 'Kanban'].includes(block)) {
+      schema['x-component-props']['size'] = 'small';
+    }
+
+    schema['x-use-component-props'] = 'useAttachmentFieldProps';
+  }
+  initialize(values: any) {
     if (!values.through) {
       values.through = `t_${uid()}`;
     }
@@ -50,16 +57,18 @@ export const attachment: IField = {
     if (!values.targetKey) {
       values.targetKey = 'id';
     }
-  },
-  properties: {
+  }
+  properties = {
     ...interfacesProperties.defaultProps,
     'uiSchema.x-component-props.accept': {
       type: 'string',
       title: `{{t("MIME type", { ns: "${NAMESPACE}" })}}`,
       'x-component': 'Input',
+      'x-component-props': {
+        placeholder: 'image/*',
+      },
       'x-decorator': 'FormItem',
       description: 'Example: image/png',
-      default: 'image/*',
     },
     'uiSchema.x-component-props.multiple': {
       type: 'boolean',
@@ -88,8 +97,8 @@ export const attachment: IField = {
         },
       },
     },
-  },
-  filterable: {
+  };
+  filterable = {
     children: [
       {
         name: 'id',
@@ -115,5 +124,5 @@ export const attachment: IField = {
         },
       },
     ],
-  },
-};
+  };
+}

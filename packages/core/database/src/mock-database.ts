@@ -1,9 +1,19 @@
-import { merge, uid } from '@nocobase/utils';
-import { resolve } from 'path';
-import { Database, IDatabaseOptions } from './database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+/* istanbul ignore file -- @preserve */
+import { merge } from '@nocobase/utils';
+import { customAlphabet } from 'nanoid';
 import fetch from 'node-fetch';
 import path from 'path';
-import { customAlphabet } from 'nanoid';
+import { Database, IDatabaseOptions } from './database';
+
 export class MockDatabase extends Database {
   constructor(options: IDatabaseOptions) {
     super({
@@ -23,10 +33,7 @@ export function getConfigByEnv() {
     port: process.env.DB_PORT,
     dialect: process.env.DB_DIALECT || 'sqlite',
     logging: process.env.DB_LOGGING === 'on' ? customLogger : false,
-    storage:
-      process.env.DB_STORAGE && process.env.DB_STORAGE !== ':memory:'
-        ? resolve(process.cwd(), process.env.DB_STORAGE)
-        : ':memory:',
+    storage: process.env.DB_STORAGE,
     define: {
       charset: 'utf8mb4',
       collate: 'utf8mb4_unicode_ci',
@@ -46,7 +53,7 @@ export function getConfigByEnv() {
 
 function customLogger(queryString, queryObject) {
   console.log(queryString); // outputs a string
-  if (queryObject.bind) {
+  if (queryObject?.bind) {
     console.log(queryObject.bind); // outputs an array
   }
 }

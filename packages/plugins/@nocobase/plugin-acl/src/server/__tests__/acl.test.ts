@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ACL } from '@nocobase/acl';
 import { Database } from '@nocobase/database';
 import { UiSchemaRepository } from '@nocobase/plugin-ui-schema-storage';
@@ -26,6 +35,7 @@ describe('acl', () => {
     acl = app.acl;
 
     const UserRepo = db.getCollection('users').repository;
+
     admin = await UserRepo.create({
       values: {
         roles: ['admin'],
@@ -84,7 +94,7 @@ describe('acl', () => {
       },
     });
 
-    await adminAgent.resource('roles.resources', 'test-role').create({
+    const createResp = await adminAgent.resource('roles.resources', 'test-role').create({
       values: {
         name: 'repairs',
         usingActionsConfig: true,
@@ -96,6 +106,8 @@ describe('acl', () => {
         ],
       },
     });
+
+    expect(createResp.statusCode).toEqual(200);
 
     const u1 = await db.getRepository('users').create({
       values: {
@@ -216,7 +228,7 @@ describe('acl', () => {
         resource: 'posts.comments',
         action: 'list',
       }),
-    ).not.toBeNull();
+    ).toBeNull();
 
     expect(
       acl.can({
@@ -325,6 +337,7 @@ describe('acl', () => {
       forceUpdate: true,
     });
 
+    app.acl.appendStrategyResource('posts');
     expect(
       acl.can({
         role: 'new',
@@ -463,7 +476,7 @@ describe('acl', () => {
     // create c1 published scope
     const {
       body: { data: publishedScope },
-    } = await adminAgent.resource('rolesResourcesScopes').create({
+    } = await adminAgent.resource('dataSourcesRolesResourcesScopes').create({
       values: {
         resourceName: 'c1',
         name: 'published',
@@ -472,8 +485,6 @@ describe('acl', () => {
         },
       },
     });
-
-    // await db.getRepository('rolesResourcesScopes').findOne();
 
     // set admin resources
     await adminAgent.resource('roles.resources', 'new').create({
@@ -534,7 +545,10 @@ describe('acl', () => {
     const collectionName = response.body.data[0].name;
 
     await adminAgent.resource('roles.resources', role.get('name')).update({
-      filterByTk: collectionName,
+      filter: {
+        name: collectionName,
+        dataSourceKey: 'main',
+      },
       values: {
         name: 'c1',
         usingActionsConfig: true,
@@ -653,15 +667,16 @@ describe('acl', () => {
       action: 'create',
     });
 
+    const existsResource = await db.getRepository('dataSourcesRolesResources').findOne({
+      filter: {
+        name: 'posts',
+        roleName: 'new',
+        dataSourceKey: 'main',
+      },
+    });
+
     await adminAgent.resource('roles.resources', 'new').update({
-      filterByTk: (
-        await db.getRepository('rolesResources').findOne({
-          filter: {
-            name: 'posts',
-            roleName: 'new',
-          },
-        })
-      ).get('name') as string,
+      filterByTk: existsResource.get('id'),
       values: {
         usingActionsConfig: false,
       },
@@ -676,14 +691,7 @@ describe('acl', () => {
     ).toBeNull();
 
     await adminAgent.resource('roles.resources', 'new').update({
-      filterByTk: (
-        await db.getRepository('rolesResources').findOne({
-          filter: {
-            name: 'posts',
-            roleName: 'new',
-          },
-        })
-      ).get('name') as string,
+      filterByTk: existsResource.get('id'),
       values: {
         usingActionsConfig: true,
       },
@@ -812,7 +820,7 @@ describe('acl', () => {
     expect(response.statusCode).toEqual(200);
   });
 
-  it('should sync data to acl after app reload', async () => {
+  it.skip('should sync data to acl after app reload', async () => {
     const role = await db.getRepository('roles').create({
       values: {
         name: 'new',
@@ -879,5 +887,28 @@ describe('acl', () => {
 
     expect(destroyResponse.statusCode).toEqual(200);
     expect(await db.getRepository('roles').findOne({ filterByTk: 'testRole' })).toBeNull();
+  });
+
+  it('should set acl strategy resources', async () => {
+    await db.getRepository('collections').create({
+      values: {
+        name: 'posts',
+        fields: [
+          {
+            name: 'title',
+            type: 'string',
+          },
+        ],
+      },
+      context: {},
+    });
+
+    expect(app.acl.getStrategyResources()).toContain('posts');
+
+    await db.getRepository('collections').destroy({
+      filterByTk: 'posts',
+    });
+
+    expect(app.acl.getStrategyResources()).not.toContain('posts');
   });
 });

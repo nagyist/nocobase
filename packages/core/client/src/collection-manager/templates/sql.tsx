@@ -1,19 +1,27 @@
-import { Field } from '@formily/core';
-import { useAsyncData } from '../../async-data-provider';
-import { SQLInput, PreviewTable, FieldsConfigure, SQLRequestProvider } from './components/sql-collection';
-import { getConfigurableProperties } from './properties';
-import { ICollectionTemplate } from './types';
-import { i18n } from '../../i18n';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export const sql: ICollectionTemplate = {
-  name: 'sql',
-  title: '{{t("SQL collection")}}',
-  order: 4,
-  color: 'yellow',
-  default: {
+import { Field } from '@formily/core';
+import { CollectionTemplate } from '../../data-source/collection-template/CollectionTemplate';
+import { i18n } from '../../i18n';
+import { FieldsConfigure, PreviewTable, SQLInput, SQLRequestProvider } from './components/sql-collection';
+import { getConfigurableProperties } from './properties';
+
+export class SqlCollectionTemplate extends CollectionTemplate {
+  name = 'sql';
+  title = '{{t("SQL collection")}}';
+  order = 4;
+  color = 'yellow';
+  default = {
     fields: [],
-  },
-  configurableProperties: {
+  };
+  configurableProperties = {
     title: {
       type: 'string',
       title: '{{ t("Collection display name") }}',
@@ -76,5 +84,16 @@ export const sql: ICollectionTemplate = {
       },
     },
     ...getConfigurableProperties('category'),
-  },
-};
+    filterTargetKey: {
+      title: `{{ t("Record unique key")}}`,
+      type: 'single',
+      description: `{{t( "If a collection lacks a primary key, you must configure a unique record key to locate row records within a block, failure to configure this will prevent the creation of data blocks for the collection.")}}`,
+      'x-decorator': 'FormItem',
+      'x-component': 'Select',
+      'x-component-props': {
+        multiple: true,
+      },
+      'x-reactions': ['{{useAsyncDataSource(loadFilterTargetKeys)}}'],
+    },
+  };
+}

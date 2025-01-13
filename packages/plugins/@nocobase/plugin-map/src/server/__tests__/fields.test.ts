@@ -1,6 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import Database from '@nocobase/database';
 import { mockDatabase } from '@nocobase/test';
-import { PointField, CircleField, PolygonField, LineStringField } from '../fields';
+import { CircleField, LineStringField, PointField, PolygonField } from '../fields';
 
 const data = {
   polygon: [
@@ -24,6 +33,7 @@ describe('fields', () => {
 
   beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
     db.registerFieldTypes({
       point: PointField,
       circle: CircleField,

@@ -1,4 +1,14 @@
-import { DataTypes, mockDatabase } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { mockDatabase } from '@nocobase/database';
+import { vi } from 'vitest';
 import Application, { ApplicationOptions } from '../application';
 
 const mockServer = (options?: ApplicationOptions) => {
@@ -20,8 +30,7 @@ describe('app command', () => {
 
   beforeEach(async () => {
     app = mockServer();
-    await app.load();
-    await app.install();
+    await app.runCommand('install');
   });
 
   it('should test command should handle by IPC Server or not', () => {
@@ -42,7 +51,7 @@ describe('app command', () => {
   });
 
   it('should correctly parse the command multiple times with varying parameters', async () => {
-    const fn = jest.fn();
+    const fn = vi.fn();
 
     app
       .command('test1')

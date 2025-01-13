@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { CopyOutlined } from '@ant-design/icons';
 import { ArrayBase } from '@formily/antd-v5';
 import { ArrayField } from '@formily/core';
@@ -266,3 +275,4 @@ ArrayCollapse.Copy = React.forwardRef((props: any, ref) => {
     />
   );
 });
+(ArrayCollapse as any).Copy.displayName = 'ArrayCollapse.Copy';

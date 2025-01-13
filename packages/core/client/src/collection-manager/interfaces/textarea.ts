@@ -1,35 +1,43 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema } from '@formily/react';
 import { i18n } from '../../i18n';
 import { defaultProps, operators } from './properties';
-import { IField } from './types';
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
 
-export const textarea: IField = {
-  name: 'textarea',
-  type: 'object',
-  group: 'basic',
-  order: 2,
-  title: '{{t("Long text")}}',
-  default: {
+export class TextareaFieldInterface extends CollectionFieldInterface {
+  name = 'textarea';
+  type = 'object';
+  group = 'basic';
+  order = 2;
+  title = '{{t("Long text")}}';
+  default = {
     interface: 'textarea',
     type: 'text',
-    // name,
     uiSchema: {
       type: 'string',
       'x-component': 'Input.TextArea',
     },
-  },
-  availableTypes: ['text'],
-  hasDefaultValue: true,
-  properties: {
+  };
+  availableTypes = ['text', 'json', 'string'];
+  hasDefaultValue = true;
+  properties = {
     ...defaultProps,
-  },
+  };
   schemaInitialize(schema: ISchema, { block }) {
     if (['Table', 'Kanban'].includes(block)) {
       schema['x-component-props'] = schema['x-component-props'] || {};
       schema['x-component-props']['ellipsis'] = true;
     }
-  },
-  validateSchema(fieldSchema) {
+  }
+  validateSchema = (fieldSchema) => {
     return {
       max: {
         type: 'number',
@@ -69,8 +77,8 @@ export const textarea: IField = {
         },
       },
     };
-  },
-  filterable: {
+  };
+  filterable = {
     operators: operators.string,
-  },
-};
+  };
+}

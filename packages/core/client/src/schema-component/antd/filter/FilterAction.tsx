@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
 import { createForm, Field, Form } from '@formily/core';
 import { observer, useField, useFieldSchema, useForm } from '@formily/react';
@@ -5,30 +14,56 @@ import { flatten, unflatten } from '@nocobase/utils/client';
 import { Button, Space } from 'antd';
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { withDynamicSchemaProps } from '../../../hoc/withDynamicSchemaProps';
 import { FormProvider, SchemaComponent } from '../../core';
 import { useDesignable } from '../../hooks';
 import { useProps } from '../../hooks/useProps';
-import { Action } from '../action';
-import { PopoverWithStopPropagation } from '../popover';
+import { Action, ActionProps } from '../action';
+import { DatePickerProvider } from '../date-picker/DatePicker';
+import { StablePopover } from '../popover';
+import { useCompile } from '../../';
 
 export const FilterActionContext = createContext<any>(null);
+FilterActionContext.displayName = 'FilterActionContext';
 
-export const FilterAction = observer(
-  (props: any) => {
+export type FilterActionProps<T = {}> = ActionProps & {
+  options?: any[];
+  form?: Form;
+  onSubmit?: (values: T) => void;
+  onReset?: (values: T) => void;
+  /**
+   * @default Popover
+   * 在移动端中，会使用移动端的 Popup 组件
+   */
+  Container?: (props: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    trigger: 'click' | 'hover';
+    content: React.ReactElement;
+    children: React.ReactElement;
+  }) => React.ReactElement;
+};
+
+export const FilterAction = withDynamicSchemaProps(
+  observer((props: FilterActionProps) => {
     const { t } = useTranslation();
     const field = useField<Field>();
     const [visible, setVisible] = useState(false);
     const { designable, dn } = useDesignable();
     const fieldSchema = useFieldSchema();
+    const compile = useCompile();
+
     const form = useMemo<Form>(() => props.form || createForm(), []);
-    const { options, onSubmit, onReset, ...others } = useProps(props);
+
+    // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
+    const { options, onSubmit, onReset, Container = StablePopover, ...others } = useProps(props);
+
     const onOpenChange = useCallback((visible: boolean): void => {
       setVisible(visible);
     }, []);
-
     return (
       <FilterActionContext.Provider value={{ field, fieldSchema, designable, dn }}>
-        <PopoverWithStopPropagation
+        <Container
           destroyTooltipOnHide
           placement={'bottomLeft'}
           open={visible}
@@ -37,20 +72,22 @@ export const FilterAction = observer(
           content={
             <form>
               <FormProvider form={form}>
-                <SchemaComponent
-                  schema={{
-                    type: 'object',
-                    properties: {
-                      filter: {
-                        type: 'string',
-                        enum: options || field.dataSource,
-                        default: fieldSchema.default,
-                        'x-component': 'Filter',
-                        'x-component-props': {},
+                <DatePickerProvider value={{ utc: false }}>
+                  <SchemaComponent
+                    schema={{
+                      type: 'object',
+                      properties: {
+                        filter: {
+                          type: 'string',
+                          enum: options || field.dataSource,
+                          default: fieldSchema.default,
+                          'x-component': 'Filter',
+                          'x-component-props': {},
+                        },
                       },
-                    },
-                  }}
-                />
+                    }}
+                  />
+                </DatePickerProvider>
                 <div
                   className={css`
                     display: flex;
@@ -64,7 +101,7 @@ export const FilterAction = observer(
                       onClick={async () => {
                         await form.reset();
                         onReset?.(form.values);
-                        field.title = t('Filter');
+                        field.title = compile(fieldSchema.title) || t('Filter');
                         setVisible(false);
                       }}
                     >
@@ -88,11 +125,11 @@ export const FilterAction = observer(
             </form>
           }
         >
-          <Action {...others} title={field.title} />
-        </PopoverWithStopPropagation>
+          <Action onClick={() => setVisible(!visible)} {...others} title={field.title} />
+        </Container>
       </FilterActionContext.Provider>
     );
-  },
+  }),
   { displayName: 'FilterAction' },
 );
 

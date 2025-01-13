@@ -1,10 +1,21 @@
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-export default {
-  namespace: 'file-manager.attachmentRecords',
-  duplicator: 'optional',
+import { defineCollection } from '@nocobase/database';
+
+export default defineCollection({
+  dumpRules: {
+    group: 'user',
+  },
+  asStrategyResource: true,
+  shared: true,
   name: 'attachments',
-  title: '文件管理器',
   createdBy: true,
   updatedBy: true,
   template: 'file',
@@ -62,4 +73,4 @@ export default {
       // formula: '{{ storage.baseUrl }}{{ path }}/{{ filename }}'
     },
   ],
-} as CollectionOptions;
+});

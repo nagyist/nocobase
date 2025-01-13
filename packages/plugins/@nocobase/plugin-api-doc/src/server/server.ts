@@ -1,16 +1,25 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Context } from '@nocobase/actions';
 import { Plugin } from '@nocobase/server';
 import { SwaggerManager } from './swagger';
 
-export default class APIDoc extends Plugin {
+export class PluginAPIDocServer extends Plugin {
   swagger: SwaggerManager;
   constructor(app, options) {
     super(app, options);
     this.swagger = new SwaggerManager(this);
   }
-  beforeLoad() {}
+  async beforeLoad() {}
   async load() {
-    this.app.resource({
+    this.app.resourcer.define({
       name: 'swagger',
       type: 'single',
       actions: {
@@ -46,3 +55,5 @@ export default class APIDoc extends Plugin {
     });
   }
 }
+
+export default PluginAPIDocServer;

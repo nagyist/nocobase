@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import {
-  SchemaInitializer,
+  CompatibleSchemaInitializer,
   SchemaInitializerChildren,
   useAssociatedTableColumnInitializerFields,
   useCompile,
@@ -22,7 +31,7 @@ const ParentCollectionFields = () => {
         type: 'itemGroup',
         divider: true,
         title: t(`Parent collection fields`) + '(' + compile(`${Object.keys(inherit)[0]}`) + ')',
-        children: Object.values(inherit)[0].filter((v: any) => !v?.field?.isForeignKey),
+        children: Object.values(inherit)[0],
       });
   });
   return <SchemaInitializerChildren>{res}</SchemaInitializerChildren>;
@@ -44,8 +53,7 @@ const AssociatedFields = () => {
   return <SchemaInitializerChildren>{schema}</SchemaInitializerChildren>;
 };
 
-export const auditLogsTableColumnInitializers = new SchemaInitializer({
-  name: 'AuditLogsTableColumnInitializers',
+const commonOptions = {
   insertPosition: 'beforeEnd',
   icon: 'SettingOutlined',
   title: '{{t("Configure columns")}}',
@@ -86,4 +94,21 @@ export const auditLogsTableColumnInitializers = new SchemaInitializer({
       Component: 'AuditLogsTableActionColumnInitializer',
     },
   ],
+};
+
+/**
+ * @deprecated
+ * use `auditLogsTableColumnInitializers` instead
+ */
+export const auditLogsTableColumnInitializers_deprecated = new CompatibleSchemaInitializer({
+  name: 'AuditLogsTableColumnInitializers',
+  ...commonOptions,
 });
+
+export const auditLogsTableColumnInitializers = new CompatibleSchemaInitializer(
+  {
+    name: 'auditLogsTable:configureColumns',
+    ...commonOptions,
+  },
+  auditLogsTableColumnInitializers_deprecated,
+);

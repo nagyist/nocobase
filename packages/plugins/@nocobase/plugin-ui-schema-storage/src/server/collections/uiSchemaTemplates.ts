@@ -1,8 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { defineCollection } from '@nocobase/database';
 
 export default defineCollection({
-  namespace: 'ui-schema-storage.uiSchemas',
-  duplicator: 'required',
+  dumpRules: 'required',
   name: 'uiSchemaTemplates',
   autoGenId: false,
   fields: [
@@ -29,18 +37,18 @@ export default defineCollection({
       name: 'resourceName',
     },
     {
+      type: 'string',
+      name: 'collectionName',
+    },
+    {
+      type: 'string',
+      name: 'dataSourceKey',
+    },
+    {
       type: 'belongsTo',
       name: 'uiSchema',
       target: 'uiSchemas',
       foreignKey: 'uid',
-    },
-    {
-      type: 'belongsTo',
-      name: 'collection',
-      target: 'collections',
-      foreignKey: 'collectionName',
-      targetKey: 'name',
-      onDelete: 'CASCADE',
     },
   ],
 });

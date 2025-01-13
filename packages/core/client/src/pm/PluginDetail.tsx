@@ -1,10 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Alert, Col, Modal, Row, Space, Spin, Table, Tabs, TabsProps, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import React, { FC, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRequest } from '../api-client';
-import { PluginDocument } from './PluginDocument';
 import { useStyles } from './style';
 import { IPluginData } from './types';
 
@@ -111,90 +119,75 @@ export const PluginDetail: FC<IPluginDetail> = ({ plugin, onCancel }) => {
       label: t('Readme'),
       children: (
         <Row gutter={20}>
-          <Col span={16}>
-            {plugin?.readmeUrl ? (
-              <PluginDocument url={plugin?.readmeUrl} packageName={plugin.packageName} />
-            ) : (
-              t('No README.md file')
-            )}
+          {plugin.name && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('Name')}</Typography.Text>
+                <Typography.Text strong>{plugin.name}</Typography.Text>
+              </div>
+            </Col>
+          )}
+          {plugin.displayName && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('DisplayName')}</Typography.Text>
+                <Typography.Text strong>{plugin.displayName}</Typography.Text>
+              </div>
+            </Col>
+          )}
+          <Col span={24}>
+            <div className={styles.PluginDetailBaseInfo}>
+              <Typography.Text type="secondary">{t('PackageName')}</Typography.Text>
+              <Typography.Text strong>{plugin.packageName}</Typography.Text>
+            </div>
           </Col>
-          <Col span={8}>
-            <Row>
-              {plugin.name && (
-                <Col span={12}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('Name')}</Typography.Text>
-                    <Typography.Text strong>{plugin.name}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              {plugin.displayName && (
-                <Col span={12}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('DisplayName')}</Typography.Text>
-                    <Typography.Text strong>{plugin.displayName}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              <Col span={24}>
-                <div className={styles.PluginDetailBaseInfo}>
-                  <Typography.Text type="secondary">{t('PackageName')}</Typography.Text>
-                  <Typography.Text strong>{plugin.packageName}</Typography.Text>
-                </div>
-              </Col>
-              {repository && (
-                <Col span={24}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('Repository')}</Typography.Text>
-                    <Typography.Text strong>{repository}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              {data?.data?.packageJson.homepage && (
-                <Col span={24}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('Homepage')}</Typography.Text>
-                    <Typography.Text strong>{data?.data?.packageJson.homepage}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              {plugin.description && (
-                <Col span={24}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('Description')}</Typography.Text>
-                    <Typography.Text strong>{plugin.description}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              {data?.data?.packageJson.license && (
-                <Col span={12}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('License')}</Typography.Text>
-                    <Typography.Text strong>{data?.data?.packageJson.license}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              {author && (
-                <Col span={12}>
-                  <div className={styles.PluginDetailBaseInfo}>
-                    <Typography.Text type="secondary">{t('Author')}</Typography.Text>
-                    <Typography.Text strong>{author}</Typography.Text>
-                  </div>
-                </Col>
-              )}
-              <Col span={12}>
-                <div className={styles.PluginDetailBaseInfo}>
-                  <Typography.Text type="secondary">{t('Last updated')}</Typography.Text>
-                  <Typography.Text strong>{dayjs(data?.data?.lastUpdated).fromNow()}</Typography.Text>
-                </div>
-              </Col>
-              <Col span={12}>
-                <div className={styles.PluginDetailBaseInfo}>
-                  <Typography.Text type="secondary">{t('Version')}</Typography.Text>
-                  <Typography.Text strong>{plugin?.version}</Typography.Text>
-                </div>
-              </Col>
-            </Row>
+          {repository && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('Repository')}</Typography.Text>
+                <Typography.Text strong>{repository}</Typography.Text>
+              </div>
+            </Col>
+          )}
+          {data?.data?.packageJson.homepage && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('Homepage')}</Typography.Text>
+                <a href={data?.data?.packageJson.homepage} target="_blank" rel="noreferrer">
+                  {data?.data?.packageJson.homepage}
+                </a>
+              </div>
+            </Col>
+          )}
+          {plugin.description && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('Description')}</Typography.Text>
+                <Typography.Text strong>{plugin.description}</Typography.Text>
+              </div>
+            </Col>
+          )}
+          {data?.data?.packageJson.license && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('License')}</Typography.Text>
+                <Typography.Text strong>{data?.data?.packageJson.license}</Typography.Text>
+              </div>
+            </Col>
+          )}
+          {author && (
+            <Col span={24}>
+              <div className={styles.PluginDetailBaseInfo}>
+                <Typography.Text type="secondary">{t('Author')}</Typography.Text>
+                <Typography.Text strong>{author}</Typography.Text>
+              </div>
+            </Col>
+          )}
+          <Col span={24}>
+            <div className={styles.PluginDetailBaseInfo}>
+              <Typography.Text type="secondary">{t('Version')}</Typography.Text>
+              <Typography.Text strong>{plugin?.version}</Typography.Text>
+            </div>
           </Col>
         </Row>
       ),
@@ -231,15 +224,15 @@ export const PluginDetail: FC<IPluginDetail> = ({ plugin, onCancel }) => {
         </>
       ),
     },
-    {
-      key: 'changelog',
-      label: t('Changelog'),
-      children: plugin?.changelogUrl ? <PluginDocument url={plugin?.changelogUrl} /> : t('No CHANGELOG.md file'),
-    },
+    // {
+    //   key: 'changelog',
+    //   label: t('Changelog'),
+    //   children: plugin?.changelogUrl ? <PluginDocument url={plugin?.changelogUrl} /> : t('No CHANGELOG.md file'),
+    // },
   ];
 
   return (
-    <Modal open={!!plugin} footer={false} destroyOnClose width={1200} onCancel={onCancel}>
+    <Modal open={!!plugin} footer={false} destroyOnClose width={600} onCancel={onCancel}>
       {loading ? (
         <Spin />
       ) : (
@@ -248,9 +241,6 @@ export const PluginDetail: FC<IPluginDetail> = ({ plugin, onCancel }) => {
             <Typography.Title level={3}>{plugin.packageName}</Typography.Title>
             <Space split={<span>&nbsp;•&nbsp;</span>}>
               <span>{plugin.version}</span>
-              <span>
-                {t('Last updated')} {dayjs(data?.data?.lastUpdated).fromNow()}
-              </span>
             </Space>
             <Tabs
               style={{ minHeight: '50vh' }}

@@ -1,10 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { BelongsToManyRepository } from '@nocobase/database';
 import Database from '../../database';
 import { InheritedCollection } from '../../inherited-collection';
 import { mockDatabase } from '../index';
-import pgOnly from './helper';
+import { isPg } from '@nocobase/test';
 
-pgOnly()('collection inherits', () => {
+describe.runIf(isPg())('collection inherits', () => {
   let db: Database;
 
   beforeEach(async () => {
@@ -14,6 +23,94 @@ pgOnly()('collection inherits', () => {
 
   afterEach(async () => {
     await db.close();
+  });
+
+  it('should load parent collection with association field', async () => {
+    const User = db.collection({
+      name: 'users',
+      autoGenId: false,
+      timestamps: false,
+      fields: [
+        {
+          name: 'roles',
+          type: 'belongsToMany',
+          target: 'roles',
+          through: 'rolesUsers',
+        },
+      ],
+    });
+
+    User.setField('roles', {
+      type: 'belongsToMany',
+      target: 'roles',
+      through: 'rolesUsers',
+    });
+
+    User.setField('id', {
+      type: 'bigInt',
+      primaryKey: true,
+    });
+
+    const Role = db.collection({
+      name: 'roles',
+      autoGenId: false,
+      fields: [
+        {
+          name: 'name',
+          primaryKey: true,
+          type: 'string',
+        },
+        {
+          name: 'users',
+          type: 'belongsToMany',
+          target: 'users',
+          through: 'rolesUsers',
+        },
+      ],
+    });
+
+    await db.sync();
+
+    let err;
+    try {
+      const child = db.collection({
+        name: 'child',
+        inherits: ['users'],
+      });
+    } catch (e) {
+      err = e;
+    }
+
+    expect(err).toBeUndefined();
+  });
+
+  it('should emit afterSync event', async () => {
+    const Root = db.collection({
+      name: 'root',
+      fields: [
+        { name: 'name', type: 'string' },
+        {
+          name: 'bs',
+          type: 'hasMany',
+          target: 'b',
+          foreignKey: 'root_id',
+        },
+      ],
+    });
+
+    const Child = db.collection({
+      name: 'child',
+      inherits: ['root'],
+    });
+
+    const fn = vi.fn();
+    db.on('child.afterSync', (options) => {
+      fn();
+    });
+
+    await db.sync();
+
+    expect(fn).toBeCalled();
   });
 
   it('should append __collection with eager load', async () => {
@@ -364,7 +461,7 @@ pgOnly()('collection inherits', () => {
     });
   });
 
-  it('should create inherits from empty table', async () => {
+  it('should throw error when create inherits from empty table', async () => {
     const empty = db.collection({
       name: 'empty',
       timestamps: false,
@@ -389,22 +486,20 @@ pgOnly()('collection inherits', () => {
       fields: [{ type: 'string', name: 'name' }],
     });
 
-    await db.sync({
-      force: false,
-      alter: {
-        drop: false,
-      },
-    });
+    let error;
+    try {
+      await db.sync({
+        force: false,
+        alter: {
+          drop: false,
+        },
+      });
+    } catch (e) {
+      error = e;
+    }
 
-    expect(inherits instanceof InheritedCollection).toBeTruthy();
-
-    const record = await inherits.repository.create({
-      values: {
-        name: 'test',
-      },
-    });
-
-    expect(record.get('name')).toEqual('test');
+    expect(error).toBeTruthy();
+    expect(error.message.includes("can't inherit from")).toBeTruthy();
   });
 
   it('should not throw error when fields have same type with parent', async () => {

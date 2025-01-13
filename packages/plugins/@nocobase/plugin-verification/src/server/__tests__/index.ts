@@ -1,8 +1,16 @@
-import { MockServer, mockServer } from '@nocobase/test';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { MockServer, createMockServer } from '@nocobase/test';
 import path from 'path';
 
 import { ApplicationOptions } from '@nocobase/server';
-import Plugin from '..';
 
 export function sleep(ms: number) {
   return new Promise((resolve) => {
@@ -14,12 +22,11 @@ interface MockAppOptions extends ApplicationOptions {
   manual?: boolean;
 }
 
-export async function getApp({ manual, ...options }: MockAppOptions = {}): Promise<MockServer> {
-  const app = mockServer(options);
-
-  app.plugin(Plugin, { name: 'verification' });
-
-  await app.load();
+export async function getApp(options: MockAppOptions = {}): Promise<MockServer> {
+  const app = await createMockServer({
+    ...options,
+    plugins: ['verification'],
+  });
 
   await app.db.import({
     directory: path.resolve(__dirname, './collections'),
@@ -29,10 +36,6 @@ export async function getApp({ manual, ...options }: MockAppOptions = {}): Promi
     await app.db.sync();
   } catch (error) {
     console.error(error);
-  }
-
-  if (!manual) {
-    await app.start();
   }
 
   return app;

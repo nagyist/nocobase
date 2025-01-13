@@ -1,8 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { registerValidateRules } from '@formily/core';
 import { ISchema } from '@formily/react';
 import { i18n } from '../../i18n';
 import { defaultProps, operators, unique } from './properties';
-import { IField } from './types';
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
 
 registerValidateRules({
   percentMode(value, rule) {
@@ -47,14 +56,14 @@ registerValidateRules({
 //   percentInteger: /^(\d+)(.\d{0,2})?$/,
 // });
 
-export const percent: IField = {
-  name: 'percent',
-  type: 'object',
-  group: 'basic',
-  order: 8,
-  title: '{{t("Percent")}}',
-  sortable: true,
-  default: {
+export class PercentFieldInterface extends CollectionFieldInterface {
+  name = 'percent';
+  type = 'object';
+  group = 'basic';
+  order = 8;
+  title = '{{t("Percent")}}';
+  sortable = true;
+  default = {
     type: 'float',
     // name,
     uiSchema: {
@@ -67,17 +76,17 @@ export const percent: IField = {
         addonAfter: '%',
       },
     },
-  },
+  };
   schemaInitialize(schema: ISchema, { field, block, readPretty, action }) {
     const props = (schema['x-component-props'] = schema['x-component-props'] || {});
     schema['x-component-props'].style = {
       ...(props.style || {}),
       width: '100%',
     };
-  },
-  availableTypes: ['float'],
-  hasDefaultValue: true,
-  properties: {
+  }
+  availableTypes = ['float', 'double', 'decimal'];
+  hasDefaultValue = true;
+  properties = {
     ...defaultProps,
     unique,
     'uiSchema.x-component-props.step': {
@@ -95,12 +104,12 @@ export const percent: IField = {
         { value: '0.00001', label: '1.00000%' },
       ],
     },
-  },
-  filterable: {
+  };
+  filterable = {
     operators: operators.number,
-  },
-  titleUsable: true,
-  validateSchema(fieldSchema) {
+  };
+  titleUsable = true;
+  validateSchema = (fieldSchema) => {
     return {
       maxValue: {
         type: 'number',
@@ -163,5 +172,5 @@ export const percent: IField = {
         },
       },
     };
-  },
-};
+  };
+}

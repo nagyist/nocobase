@@ -1,13 +1,22 @@
-import { PlusOutlined } from '@ant-design/icons';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { uid } from '@formily/shared';
-import { ActionContext, SchemaComponent, useCompile, usePlugin, useRecord } from '@nocobase/client';
+import { ActionContext, i18n, SchemaComponent, useCompile, usePlugin, useRecord } from '@nocobase/client';
 import { Button, Card, Dropdown } from 'antd';
 import _ from 'lodash';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FileManagerPlugin from '.';
-import { StorageOptions } from './StorageOptions';
 import { storageSchema } from './schemas/storage';
+import { storageTypes } from './schemas/storageTypes';
 
 export const CreateStorage = () => {
   const [schema, setSchema] = useState({});
@@ -37,7 +46,7 @@ export const CreateStorage = () => {
                     },
                     title: compile("{{t('Add new')}}") + ' - ' + compile(storageType.title),
                     properties: {
-                      ..._.cloneDeep(storageType.properties),
+                      ..._.cloneDeep(storageType.fieldset),
                       footer: {
                         type: 'void',
                         'x-component': 'Action.Drawer.Footer',
@@ -73,7 +82,7 @@ export const CreateStorage = () => {
           }}
         >
           <Button type={'primary'} icon={<PlusOutlined />}>
-            {t('Add new')}
+            {t('Add new')} <DownOutlined />
           </Button>
         </Dropdown>
         <SchemaComponent scope={{ createOnly: true }} schema={schema} />
@@ -96,6 +105,15 @@ export const EditStorage = () => {
           onClick={() => {
             setVisible(true);
             const storageType = plugin.storageTypes.get(record.type);
+            if (storageType.fieldset['default']) {
+              storageType.fieldset['default']['x-reactions'] = (field) => {
+                if (field.initialValue) {
+                  field.disabled = true;
+                } else {
+                  field.disabled = false;
+                }
+              };
+            }
             setSchema({
               type: 'object',
               properties: {
@@ -110,7 +128,7 @@ export const EditStorage = () => {
                   },
                   title: compile("{{t('Edit')}}") + ' - ' + compile(storageType.title),
                   properties: {
-                    ..._.cloneDeep(storageType.properties),
+                    ..._.cloneDeep(storageType.fieldset),
                     footer: {
                       type: 'void',
                       'x-component': 'Action.Drawer.Footer',
@@ -146,29 +164,32 @@ export const EditStorage = () => {
   );
 };
 
+function renderThumbnailRuleDesc(key) {
+  const option = storageTypes[key];
+  return option?.thumbnailRule ? (
+    <div>
+      <a target="_blank" href={option.thumbnailRuleLink} rel="noreferrer">
+        {i18n.t('See more')}
+      </a>
+    </div>
+  ) : null;
+}
+
 export const FileStoragePane = () => {
-  const { t } = useTranslation();
   const compile = useCompile();
   const plugin = usePlugin(FileManagerPlugin);
-  const storageTypes = [...plugin.storageTypes.values()].map((storageType) => {
+  const storageTypes = [...plugin.storageTypes.values()];
+  const storageTypeOptions = storageTypes.map((storageType) => {
     return {
       value: storageType.name,
       label: compile(storageType.title),
     };
   });
-  const xStyleProcessDesc = (
-    <div>
-      {t('See more')}{' '}
-      <a target="_blank" href="https://help.aliyun.com/zh/oss/user-guide/resize-images-4" rel="noreferrer">
-        x-oss-process
-      </a>
-    </div>
-  );
   return (
     <Card bordered={false}>
       <SchemaComponent
-        components={{ StorageOptions, CreateStorage, EditStorage }}
-        scope={{ useNewId: (prefix) => `${prefix}${uid()}`, storageTypes, xStyleProcessDesc }}
+        components={{ CreateStorage, EditStorage }}
+        scope={{ useNewId: (prefix) => `${prefix}${uid()}`, storageTypeOptions, renderThumbnailRuleDesc }}
         schema={storageSchema}
       />
     </Card>

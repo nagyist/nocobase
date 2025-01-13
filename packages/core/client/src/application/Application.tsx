@@ -1,23 +1,31 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { define, observable } from '@formily/reactive';
 import { APIClientOptions, getSubAppName } from '@nocobase/sdk';
 import { i18n as i18next } from 'i18next';
 import get from 'lodash/get';
 import merge from 'lodash/merge';
 import set from 'lodash/set';
-import React, { ComponentType, FC, ReactElement } from 'react';
+import React, { ComponentType, FC, ReactElement, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import { Link, NavLink, Navigate } from 'react-router-dom';
 
+import { APIClient, APIClientProvider } from '../api-client';
 import { CSSVariableProvider } from '../css-variable';
 import { AntdAppProvider, GlobalThemeProvider } from '../global-theme';
+import { i18n } from '../i18n';
 import { PluginManager, PluginType } from './PluginManager';
 import { PluginSettingOptions, PluginSettingsManager } from './PluginSettingsManager';
 import { ComponentTypeAndString, RouterManager, RouterOptions } from './RouterManager';
 import { WebSocketClient, WebSocketClientOptions } from './WebSocketClient';
-
-import { APIClient, APIClientProvider } from '../api-client';
-import { i18n } from '../i18n';
 import { AppComponent, BlankComponent, defaultAppComponents } from './components';
 import { SchemaInitializer, SchemaInitializerManager } from './schema-initializer';
 import * as schemaInitializerComponents from './schema-initializer/components';
@@ -26,6 +34,14 @@ import { compose, normalizeContainer } from './utils';
 import { defineGlobalDeps } from './utils/globalDeps';
 import { getRequireJs } from './utils/requirejs';
 
+import { CollectionFieldInterfaceComponentOption } from '../data-source/collection-field-interface/CollectionFieldInterface';
+import { CollectionField } from '../data-source/collection-field/CollectionField';
+import { DataSourceApplicationProvider } from '../data-source/components/DataSourceApplicationProvider';
+import { DataBlockProvider } from '../data-source/data-block/DataBlockProvider';
+import { DataSourceManager, type DataSourceManagerOptions } from '../data-source/data-source/DataSourceManager';
+
+import type { CollectionFieldInterfaceFactory } from '../data-source';
+import { OpenModeProvider } from '../modules/popup/OpenModeProvider';
 import { AppSchemaComponentProvider } from './AppSchemaComponentProvider';
 import type { Plugin } from './Plugin';
 import type { RequireJS } from './utils/requirejs';
@@ -40,7 +56,8 @@ export type DevDynamicImport = (packageName: string) => Promise<{ default: typeo
 export type ComponentAndProps<T = any> = [ComponentType, T];
 export interface ApplicationOptions {
   name?: string;
-  apiClient?: APIClientOptions;
+  publicPath?: string;
+  apiClient?: APIClientOptions | APIClient;
   ws?: WebSocketClientOptions | boolean;
   i18n?: i18next;
   providers?: (ComponentType | ComponentAndProps)[];
@@ -54,6 +71,8 @@ export interface ApplicationOptions {
   designable?: boolean;
   loadRemotePlugins?: boolean;
   devDynamicImport?: DevDynamicImport;
+  dataSourceManager?: DataSourceManagerOptions;
+  disableAcl?: boolean;
 }
 
 export class Application {
@@ -64,8 +83,10 @@ export class Application {
   public ws: WebSocketClient;
   public apiClient: APIClient;
   public components: Record<string, ComponentType<any> | any> = {
+    DataBlockProvider,
     ...defaultAppComponents,
     ...schemaInitializerComponents,
+    CollectionField,
   };
   public pluginManager: PluginManager;
   public pluginSettingsManager: PluginSettingsManager;
@@ -74,6 +95,7 @@ export class Application {
   public notification;
   public schemaInitializerManager: SchemaInitializerManager;
   public schemaSettingsManager: SchemaSettingsManager;
+  public dataSourceManager: DataSourceManager;
 
   public name: string;
 
@@ -83,6 +105,9 @@ export class Application {
   error = null;
   get pm() {
     return this.pluginManager;
+  }
+  get disableAcl() {
+    return this.options.disableAcl;
   }
 
   constructor(protected options: ApplicationOptions = {}) {
@@ -96,23 +121,25 @@ export class Application {
     this.devDynamicImport = options.devDynamicImport;
     this.scopes = merge(this.scopes, options.scopes);
     this.components = merge(this.components, options.components);
-    this.apiClient = new APIClient(options.apiClient);
+    this.apiClient = options.apiClient instanceof APIClient ? options.apiClient : new APIClient(options.apiClient);
     this.apiClient.app = this;
     this.i18n = options.i18n || i18n;
-    this.router = new RouterManager({
-      ...options.router,
-      renderComponent: this.renderComponent.bind(this),
-    });
+    this.router = new RouterManager(options.router, this);
     this.schemaSettingsManager = new SchemaSettingsManager(options.schemaSettings, this);
     this.pluginManager = new PluginManager(options.plugins, options.loadRemotePlugins, this);
     this.schemaInitializerManager = new SchemaInitializerManager(options.schemaInitializers, this);
+    this.dataSourceManager = new DataSourceManager(options.dataSourceManager, this);
     this.addDefaultProviders();
     this.addReactRouterComponents();
     this.addProviders(options.providers || []);
     this.ws = new WebSocketClient(options.ws);
+    this.ws.app = this;
     this.pluginSettingsManager = new PluginSettingsManager(options.pluginSettings, this);
     this.addRoutes();
-    this.name = this.options.name || getSubAppName() || 'main';
+    this.name = this.options.name || getSubAppName(options.publicPath) || 'main';
+    this.i18n.on('languageChanged', (lng) => {
+      this.apiClient.auth.locale = lng;
+    });
   }
 
   private initRequireJs() {
@@ -133,6 +160,8 @@ export class Application {
       scope: this.scopes,
     });
     this.use(AntdAppProvider);
+    this.use(DataSourceApplicationProvider, { dataSourceManager: this.dataSourceManager });
+    this.use(OpenModeProvider);
   }
 
   private addReactRouterComponents() {
@@ -146,10 +175,54 @@ export class Application {
   private addRoutes() {
     this.router.add('not-found', {
       path: '*',
-      Component: this.components['AppNotFound'] || BlankComponent,
+      Component: this.components['AppNotFound'],
     });
   }
 
+  getOptions() {
+    return this.options;
+  }
+
+  getName() {
+    return getSubAppName(this.getPublicPath()) || null;
+  }
+
+  getPublicPath() {
+    let publicPath = this.options.publicPath || '/';
+    if (!publicPath.endsWith('/')) {
+      publicPath += '/';
+    }
+    return publicPath;
+  }
+
+  getApiUrl(pathname = '') {
+    let baseURL = this.apiClient.axios['defaults']['baseURL'];
+    if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
+      const { protocol, host } = window.location;
+      baseURL = `${protocol}//${host}${baseURL}`;
+    }
+    return baseURL.replace(/\/$/g, '') + '/' + pathname.replace(/^\//g, '');
+  }
+
+  getRouteUrl(pathname: string) {
+    return this.getPublicPath() + pathname.replace(/^\//g, '');
+  }
+
+  getHref(pathname: string) {
+    const name = this.name;
+    if (name && name !== 'main') {
+      return this.getPublicPath() + 'apps/' + name + '/' + pathname.replace(/^\//g, '');
+    }
+    return this.getPublicPath() + pathname.replace(/^\//g, '');
+  }
+
+  getCollectionManager(dataSource?: string) {
+    return this.dataSourceManager.getDataSource(dataSource)?.collectionManager;
+  }
+
+  /**
+   * @internal
+   */
   getComposeProviders() {
     const Providers = compose(...this.providers)(BlankComponent);
     Providers.displayName = 'Providers';
@@ -192,9 +265,10 @@ export class Application {
         this.maintaining = true;
         this.error = data.payload;
       } else {
-        console.log('loadFailed', loadFailed);
+        // console.log('loadFailed', loadFailed);
         if (loadFailed) {
           window.location.reload();
+          return;
         }
         this.maintaining = false;
         this.maintained = true;
@@ -203,18 +277,38 @@ export class Application {
     });
     this.ws.on('serverDown', () => {
       this.maintaining = true;
+      this.maintained = false;
     });
     this.ws.connect();
     try {
       this.loading = true;
       await this.pm.load();
     } catch (error) {
+      if (this.ws.enabled) {
+        await new Promise((resolve) => {
+          setTimeout(() => resolve(null), 1000);
+        });
+      }
       loadFailed = true;
+      const toError = (error) => {
+        if (typeof error?.response?.data === 'string') {
+          const tempElement = document.createElement('div');
+          tempElement.innerHTML = error?.response?.data;
+          return { message: tempElement.textContent || tempElement.innerText };
+        }
+        if (error?.response?.data?.error) {
+          return error?.response?.data?.error;
+        }
+        if (error?.response?.data?.errors?.[0]) {
+          return error?.response?.data?.errors?.[0];
+        }
+        return { message: error?.message };
+      };
       this.error = {
         code: 'LOAD_ERROR',
-        message: error.message,
+        ...toError(error),
       };
-      console.error(error);
+      console.error(error, this.error);
     }
     this.loading = false;
   }
@@ -243,10 +337,13 @@ export class Application {
     return;
   }
 
-  renderComponent<T extends {}>(Component: ComponentTypeAndString, props?: T): ReactElement {
-    return React.createElement(this.getComponent(Component), props);
+  renderComponent<T extends {}>(Component: ComponentTypeAndString, props?: T, children?: ReactNode): ReactElement {
+    return React.createElement(this.getComponent(Component), props, children);
   }
 
+  /**
+   * @internal use addComponents({ SomeComponent }) instead
+   */
   protected addComponent(component: ComponentType, name?: string) {
     const componentName = name || component.displayName || component.name;
     if (!componentName) {
@@ -267,7 +364,9 @@ export class Application {
   }
 
   getRootComponent() {
-    const Root: FC = () => <AppComponent app={this} />;
+    const Root: FC<{ children?: React.ReactNode }> = ({ children }) => (
+      <AppComponent app={this}>{children}</AppComponent>
+    );
     return Root;
   }
 
@@ -278,5 +377,16 @@ export class Application {
     const root = createRoot(container);
     root.render(<App />);
     return root;
+  }
+
+  addFieldInterfaces(fieldInterfaceClasses: CollectionFieldInterfaceFactory[] = []) {
+    return this.dataSourceManager.collectionFieldInterfaceManager.addFieldInterfaces(fieldInterfaceClasses);
+  }
+
+  addFieldInterfaceComponentOption(fieldName: string, componentOption: CollectionFieldInterfaceComponentOption) {
+    return this.dataSourceManager.collectionFieldInterfaceManager.addFieldInterfaceComponentOption(
+      fieldName,
+      componentOption,
+    );
   }
 }

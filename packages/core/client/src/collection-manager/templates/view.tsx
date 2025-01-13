@@ -1,18 +1,27 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { CollectionTemplate } from '../../data-source/collection-template/CollectionTemplate';
 import { PreviewFields } from './components/PreviewFields';
 import { PreviewTable } from './components/PreviewTable';
 import { getConfigurableProperties } from './properties';
-import { ICollectionTemplate } from './types';
 
-export const view: ICollectionTemplate = {
-  name: 'view',
-  title: '{{t("Connect to database view")}}',
-  order: 4,
-  color: 'yellow',
-  default: {
+export class ViewCollectionTemplate extends CollectionTemplate {
+  name = 'view';
+  title = '{{t("Connect to database view")}}';
+  order = 4;
+  color = 'yellow';
+  default = {
     fields: [],
-  },
-  divider: true,
-  configurableProperties: {
+  };
+  divider = true;
+  configurableProperties = {
     title: {
       type: 'string',
       title: '{{ t("Collection display name") }}',
@@ -29,6 +38,7 @@ export const view: ICollectionTemplate = {
       'x-component': 'Select',
       'x-reactions': ['{{useAsyncDataSource(loadDBViews)}}'],
       'x-disabled': '{{ !createOnly }}',
+      'x-visible': '{{!createMainOnly}}',
     },
     name: {
       type: 'string',
@@ -63,7 +73,7 @@ export const view: ICollectionTemplate = {
         when: '{{isPG}}',
         fulfill: {
           state: {
-            value: "{{$deps[0].split('_')?.[0]}}",
+            value: "{{$deps[0].split('@')?.[0]}}",
           },
         },
         otherwise: {
@@ -81,7 +91,7 @@ export const view: ICollectionTemplate = {
         when: '{{isPG}}',
         fulfill: {
           state: {
-            value: '{{$deps[0].match(/^([^_]+)_(.*)$/)?.[2]}}',
+            value: "{{$deps[0].split('@')?.[1]}}",
           },
         },
         otherwise: {
@@ -97,6 +107,7 @@ export const view: ICollectionTemplate = {
       'x-decorator': 'FormItem',
       'x-component': 'Checkbox',
       default: false,
+      'x-visible': '{{!createMainOnly}}',
     },
     sources: {
       type: 'array',
@@ -108,11 +119,13 @@ export const view: ICollectionTemplate = {
       },
       'x-reactions': ['{{useAsyncDataSource(loadCollections)}}'],
       'x-disabled': true,
+      'x-visible': '{{!createMainOnly}}',
     },
     fields: {
       type: 'array',
       'x-component': PreviewFields,
-      'x-visible': '{{ createOnly }}',
+      'x-hidden': '{{ !createOnly }}',
+      'x-decorator': 'FormItem',
       'x-reactions': {
         dependencies: ['name'],
         fulfill: {
@@ -121,9 +134,10 @@ export const view: ICollectionTemplate = {
           },
         },
       },
+      description: `{{t("Fields can only be used correctly if they are defined with an interface.")}}`,
     },
     preview: {
-      type: 'object',
+      type: 'void',
       'x-visible': '{{ createOnly }}',
       'x-component': PreviewTable,
       'x-reactions': {
@@ -135,7 +149,17 @@ export const view: ICollectionTemplate = {
         },
       },
     },
-
+    filterTargetKey: {
+      title: `{{ t("Record unique key")}}`,
+      type: 'single',
+      description: `{{t( "If a collection lacks a primary key, you must configure a unique record key to locate row records within a block, failure to configure this will prevent the creation of data blocks for the collection.")}}`,
+      'x-decorator': 'FormItem',
+      'x-component': 'Select',
+      'x-component-props': {
+        multiple: true,
+      },
+      'x-reactions': ['{{useAsyncDataSource(loadFilterTargetKeys)}}'],
+    },
     ...getConfigurableProperties('category', 'description'),
-  },
-};
+  };
+}

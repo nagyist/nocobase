@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema } from '@formily/json-schema';
 import { ButtonProps, PopoverProps } from 'antd';
 import { ComponentType, ReactNode } from 'react';
@@ -12,7 +21,7 @@ import type {
 
 export type InsertType = (s: ISchema) => void;
 
-type SchemaInitializerItemBuiltInType<T = {}> = T & {
+type SchemaInitializerItemBuiltInType<T = {}> = Partial<T> & {
   name: string;
   sort?: number;
   componentProps?: Omit<T, 'children'>;
@@ -23,13 +32,13 @@ type SchemaInitializerItemBuiltInType<T = {}> = T & {
 
 export interface SchemaInitializerItemComponentType<T = {}> {
   name: string;
-  Component: ComponentType<T> | string;
+  Component?: ComponentType<T> | string;
   sort?: number;
   componentProps?: Omit<T, 'children'>;
   useComponentProps?: () => Omit<T, 'children'>;
   useVisible?: () => boolean;
   children?: SchemaInitializerItemType[];
-  checkChildrenLength?: boolean;
+  hideIfNoChildren?: boolean;
   useChildren?: () => SchemaInitializerItemType[];
   [index: string]: any;
 }
@@ -57,14 +66,14 @@ export type SchemaInitializerItemActionModalType = {
 export type SchemaInitializerItemGroupType = {
   type: 'itemGroup';
   children?: SchemaInitializerItemType[];
-  checkChildrenLength?: boolean;
+  hideIfNoChildren?: boolean;
   useChildren?: () => SchemaInitializerItemType[];
 } & SchemaInitializerItemBuiltInType<SchemaInitializerItemGroupProps>;
 
 export type SchemaInitializerSubMenuType = {
   type: 'subMenu';
   children?: SchemaInitializerItemType[];
-  checkChildrenLength?: boolean;
+  hideIfNoChildren?: boolean;
   useChildren?: () => SchemaInitializerItemType[];
 } & SchemaInitializerItemBuiltInType<SchemaInitializerSubMenuProps>;
 
@@ -100,7 +109,8 @@ export interface SchemaInitializerOptions<P1 = ButtonProps, P2 = {}> {
 
   insertPosition?: 'beforeBegin' | 'afterBegin' | 'beforeEnd' | 'afterEnd';
   designable?: boolean;
-  wrap?: (s: ISchema) => ISchema;
+  wrap?: (s: ISchema, options?: any) => ISchema;
+  useWrap?: () => ((s: ISchema, options?: any) => ISchema);
   onSuccess?: (data: any) => void;
   insert?: InsertType;
   useInsert?: () => InsertType;

@@ -1,4 +1,13 @@
-import set from 'lodash/set';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { get, set } from 'lodash';
 import React, { ComponentType } from 'react';
 import {
   BrowserRouter,
@@ -10,6 +19,9 @@ import {
   RouteObject,
   useRoutes,
 } from 'react-router-dom';
+import VariablesProvider from '../variables/VariablesProvider';
+import { Application } from './Application';
+import { CustomRouterContextProvider } from './CustomRouterContextProvider';
 import { BlankComponent, RouterContextCleaner } from './components';
 
 export interface BrowserRouterOptions extends Omit<BrowserRouterProps, 'children'> {
@@ -23,6 +35,7 @@ export interface MemoryRouterOptions extends Omit<MemoryRouterProps, 'children'>
 }
 export type RouterOptions = (HashRouterOptions | BrowserRouterOptions | MemoryRouterOptions) & {
   renderComponent?: RenderComponentType;
+  routes?: Record<string, RouteType>;
 };
 export type ComponentTypeAndString<T = any> = ComponentType<T> | string;
 export interface RouteType extends Omit<RouteObject, 'children' | 'Component'> {
@@ -32,11 +45,18 @@ export type RenderComponentType = (Component: ComponentTypeAndString, props?: an
 
 export class RouterManager {
   protected routes: Record<string, RouteType> = {};
+  protected options: RouterOptions;
+  public app: Application;
 
-  constructor(protected options: RouterOptions) {
-    this.options = options || {};
+  constructor(options: RouterOptions = {}, app: Application) {
+    this.options = options;
+    this.app = app;
+    this.routes = options.routes || {};
   }
 
+  /**
+   * @internal
+   */
   getRoutesTree(): RouteObject[] {
     type RouteTypeWithChildren = RouteType & { children?: RouteTypeWithChildren };
     const routes: Record<string, RouteTypeWithChildren> = {};
@@ -47,7 +67,7 @@ export class RouterManager {
      * { a: { name: '1', children: { b: { name: '2' }, c: {name: '3'} } } }
      */
     for (const [name, route] of Object.entries(this.routes)) {
-      set(routes, name.split('.').join('.children.'), route);
+      set(routes, name.split('.').join('.children.'), { ...get(routes, name.split('.').join('.children.')), ...route });
     }
 
     /**
@@ -67,7 +87,7 @@ export class RouterManager {
           let ele = element;
           if (Component) {
             if (typeof Component === 'string') {
-              ele = this.options.renderComponent ? this.options.renderComponent(Component) : Component;
+              ele = this.app.renderComponent(Component);
             } else {
               ele = React.createElement(Component);
             }
@@ -94,12 +114,19 @@ export class RouterManager {
     this.options.type = type;
   }
 
+  getBasename() {
+    return this.options.basename;
+  }
+
   setBasename(basename: string) {
     this.options.basename = basename;
   }
 
-  getRouterComponent() {
-    const { type = 'browser', ...opts } = this.options || {};
+  /**
+   * @internal
+   */
+  getRouterComponent(children?: React.ReactNode) {
+    const { type = 'browser', ...opts } = this.options;
     const Routers = {
       hash: HashRouter,
       browser: BrowserRouter,
@@ -107,9 +134,9 @@ export class RouterManager {
     };
 
     const ReactRouter = Routers[type];
+    const routes = this.getRoutesTree();
 
     const RenderRoutes = () => {
-      const routes = this.getRoutesTree();
       const element = useRoutes(routes);
       return element;
     };
@@ -118,9 +145,14 @@ export class RouterManager {
       return (
         <RouterContextCleaner>
           <ReactRouter {...opts}>
-            <BaseLayout>
-              <RenderRoutes />
-            </BaseLayout>
+            <CustomRouterContextProvider>
+              <BaseLayout>
+                <VariablesProvider>
+                  <RenderRoutes />
+                  {children}
+                </VariablesProvider>
+              </BaseLayout>
+            </CustomRouterContextProvider>
           </ReactRouter>
         </RouterContextCleaner>
       );
@@ -146,6 +178,6 @@ export class RouterManager {
   }
 }
 
-export function createRouterManager(options?: RouterOptions) {
-  return new RouterManager(options);
+export function createRouterManager(options?: RouterOptions, app?: Application) {
+  return new RouterManager(options, app);
 }

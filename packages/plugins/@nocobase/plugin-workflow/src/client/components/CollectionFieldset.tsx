@@ -1,49 +1,72 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { CloseCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { observer, useField, useForm } from '@formily/react';
 import {
   CollectionField,
-  CollectionProvider,
+  CollectionProvider_deprecated,
   SchemaComponent,
   Variable,
   css,
-  useCollectionManager,
+  parseCollectionName,
+  useCollectionManager_deprecated,
   useCompile,
   useToken,
 } from '@nocobase/client';
 import { Button, Dropdown, Form, Input, MenuProps } from 'antd';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { lang } from '../locale';
 import { useWorkflowVariableOptions } from '../variable';
 
 function AssociationInput(props) {
-  const { getCollectionFields } = useCollectionManager();
+  const { getCollectionFields } = useCollectionManager_deprecated();
   const { path } = useField();
   const fieldName = path.segments[path.segments.length - 1] as string;
   const { values: config } = useForm();
-  const fields = getCollectionFields(config?.collection);
+  const [dataSourceName, collectionName] = parseCollectionName(config?.collection);
+  const fields = getCollectionFields(collectionName, dataSourceName);
   const { type } = fields.find((item) => item.name === fieldName);
 
   const value = Array.isArray(props.value) ? props.value.join(',') : props.value;
-  function onChange(ev) {
-    const trimed = ev.target.value.trim();
-    props.onChange(['belongsTo', 'hasOne'].includes(type) ? trimed : trimed.split(/[,\s]+/));
-  }
+  const onChange = useCallback(
+    (ev) => {
+      const trimed = ev.target.value.trim();
+      const next = ['belongsTo', 'hasOne'].includes(type)
+        ? trimed || null
+        : trimed
+            .split(',')
+            .map((item) => item.trim())
+            .filter((item) => item !== '');
+      props.onChange(next);
+    },
+    [props.onChange, type],
+  );
+
   return <Input {...props} value={value} onChange={onChange} />;
 }
 
-// NOTE: observer for watching useProps
+/**
+ * @deprecated
+ */
 const CollectionFieldSet = observer(
   ({ value, disabled, onChange, filter }: any) => {
     const { token } = useToken();
     const { t } = useTranslation();
     const compile = useCompile();
     const form = useForm();
-    const { getCollection, getCollectionFields } = useCollectionManager();
+    const { getCollectionFields } = useCollectionManager_deprecated();
     const scope = useWorkflowVariableOptions();
     const { values: config } = form;
-    const collectionName = config?.collection;
-    const collectionFields = getCollectionFields(collectionName).filter((field) => field.uiSchema);
+    const [dataSourceName, collectionName] = parseCollectionName(config?.collection);
+    const collectionFields = getCollectionFields(collectionName, dataSourceName).filter((field) => field.uiSchema);
     const fields = filter ? collectionFields.filter(filter.bind(config)) : collectionFields;
 
     const unassignedFields = useMemo(() => fields.filter((field) => !value || !(field.name in value)), [fields, value]);
@@ -79,7 +102,7 @@ const CollectionFieldSet = observer(
         `}
       >
         {fields.length ? (
-          <CollectionProvider collection={getCollection(collectionName)}>
+          <CollectionProvider_deprecated name={collectionName} dataSource={dataSourceName}>
             {fields
               .filter((field) => value && field.name in value)
               .map((field) => {
@@ -141,7 +164,7 @@ const CollectionFieldSet = observer(
                 <Button icon={<PlusOutlined />}>{t('Add field')}</Button>
               </Dropdown>
             ) : null}
-          </CollectionProvider>
+          </CollectionProvider_deprecated>
         ) : (
           <p style={{ color: token.colorText }}>{lang('Please select collection first')}</p>
         )}

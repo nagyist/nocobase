@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import dayjs from 'dayjs';
 import { Database, mockDatabase } from '../..';
 import { DateValueParser } from '../../value-parsers';
@@ -6,8 +15,9 @@ describe('number value parser', () => {
   let parser: DateValueParser;
   let db: Database;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = mockDatabase();
+    await db.clean({ drop: true });
     db.collection({
       name: 'tests',
       fields: [
@@ -57,6 +67,10 @@ describe('number value parser', () => {
   };
 
   it('should be correct', () => {
+    expectValue('20231223').toBe(dayjs('2023-12-23 00:00:00.000').toISOString());
+    expectValue('20231223 08:01:01', 'dateTime').toBe(dayjs('2023-12-23 08:01:01').toISOString());
+    expectValue('2023/12/23').toBe(dayjs('2023-12-23 00:00:00.000').toISOString());
+    expectValue('2023-12-23').toBe(dayjs('2023-12-23 00:00:00.000').toISOString());
     expectValue(42510).toBe('2016-05-20T00:00:00.000Z');
     expectValue('42510').toBe('2016-05-20T00:00:00.000Z');
     expectValue('2016-05-20T00:00:00.000Z').toBe('2016-05-20T00:00:00.000Z');

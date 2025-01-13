@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema } from '@formily/react';
 import { uid } from '@formily/shared';
 import { NAMESPACE } from '../locale';
@@ -36,7 +45,7 @@ const collection = {
         type: 'string',
         'x-component': 'Select',
         required: true,
-        enum: '{{ storageTypes }}',
+        enum: '{{ storageTypeOptions }}',
       } as ISchema,
     },
     {
@@ -44,7 +53,7 @@ const collection = {
       name: 'baseUrl',
       interface: 'input',
       uiSchema: {
-        title: `{{t("Storage base URL", { ns: "${NAMESPACE}" })}}`,
+        title: `{{t("Access base URL", { ns: "${NAMESPACE}" })}}`,
         type: 'string',
         'x-component': 'Input',
         required: true,
@@ -102,7 +111,7 @@ export const storageSchema: ISchema = {
           },
         },
       },
-      'x-component': 'CollectionProvider',
+      'x-component': 'CollectionProvider_deprecated',
       'x-component-props': {
         collection,
       },

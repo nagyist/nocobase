@@ -1,5 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import lodash from 'lodash';
 import { useTranslation } from 'react-i18next';
+import { CollectionOptions } from '@nocobase/client';
 
 const { groupBy, reduce, uniq, uniqBy } = lodash;
 
@@ -49,8 +59,9 @@ export const getChildrenCollections = (collections, name) => {
 };
 export const formatData = (data) => {
   const edgeData = [];
-  const targetTablekeys = [];
-  const tableData = data.map((item, index) => {
+  const targetTableKeys = [];
+
+  const tableData = data.map((item) => {
     const ports = [];
     const totalFields = [...item.fields];
     const inheritCollections = getInheritCollections(data, item.name);
@@ -74,10 +85,10 @@ export const formatData = (data) => {
           group: 'list',
           ...field,
         });
-      ['obo', 'oho', 'o2o', 'o2m', 'm2o', 'm2m', 'linkTo'].includes(field.interface) && edgeData.push(field);
+      ['obo', 'oho', 'o2o', 'o2m', 'm2o', 'm2m', 'linkTo', 'mbm'].includes(field.interface) && edgeData.push(field);
     });
 
-    targetTablekeys.push(item.name);
+    targetTableKeys.push(item.name);
     const portsData = formatPortData(ports);
     return {
       id: item.name,
@@ -90,7 +101,7 @@ export const formatData = (data) => {
       item: item,
     };
   });
-  const edges = formatRelationEdgeData(edgeData, targetTablekeys, tableData);
+  const edges = formatRelationEdgeData(edgeData, targetTableKeys, tableData);
   const inheritEdges = formatInheritEdgeData(data);
   return { nodesData: tableData, edgesData: edges, inheritEdges };
 };
@@ -100,7 +111,7 @@ export const formatPortData = (ports) => {
     if (
       v.isForeignKey ||
       v.primaryKey ||
-      ['obo', 'oho', 'o2o', 'o2m', 'm2o', 'm2m', 'linkTo', 'id'].includes(v.interface)
+      ['obo', 'oho', 'o2o', 'o2m', 'm2o', 'm2m', 'linkTo', 'id', 'mbm'].includes(v.interface)
     ) {
       return 'initPorts';
     } else {
@@ -459,6 +470,8 @@ const getRelationship = (relatioship) => {
     case 'obo':
     case 'oho':
       return ['1', '1'];
+    case 'mbm':
+      return ['N', 'N'];
     default:
       return [];
   }
@@ -555,4 +568,78 @@ export const getPopupContainer = () => {
 
 export const cleanGraphContainer = () => {
   graphContainer = null;
+};
+
+export const collection: CollectionOptions = {
+  name: 'collections',
+  filterTargetKey: 'name',
+  targetKey: 'name',
+  sortable: true,
+  fields: [
+    {
+      type: 'integer',
+      name: 'title',
+      interface: 'input',
+      uiSchema: {
+        title: '{{ t("Collection display name") }}',
+        type: 'number',
+        'x-component': 'Input',
+        required: true,
+      },
+    },
+    {
+      type: 'string',
+      name: 'name',
+      interface: 'input',
+      uiSchema: {
+        title: '{{ t("Collection name") }}',
+        type: 'string',
+        'x-component': 'Input',
+        description:
+          '{{t("Randomly generated and can be modified. Support letters, numbers and underscores, must start with an letter.")}}',
+      },
+    },
+    {
+      type: 'string',
+      name: 'template',
+      interface: 'input',
+      uiSchema: {
+        title: '{{ t("Collection Template") }}',
+        type: 'string',
+        'x-component': 'Input',
+      },
+    },
+    {
+      type: 'hasMany',
+      name: 'fields',
+      target: 'fields',
+      collectionName: 'collections',
+      sourceKey: 'name',
+      targetKey: 'name',
+      uiSchema: {},
+    },
+    {
+      type: 'hasMany',
+      name: 'inherits',
+      interface: 'select',
+      uiSchema: {
+        title: '{{ t("Inherits") }}',
+        type: 'string',
+        'x-component': 'Select',
+        'x-component-props': {
+          mode: 'multiple',
+        },
+      },
+    },
+    {
+      type: 'string',
+      name: 'description',
+      interface: 'input',
+      uiSchema: {
+        title: '{{ t("Description") }}',
+        type: 'string',
+        'x-component': 'Input',
+      },
+    },
+  ],
 };

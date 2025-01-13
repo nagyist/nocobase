@@ -1,26 +1,46 @@
-import { RecursionField, connect, useField, useFieldSchema } from '@formily/react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { RecursionField, connect, useExpressionScope, useField, useFieldSchema } from '@formily/react';
 import { differenceBy, unionBy } from 'lodash';
+import cls from 'classnames';
 import React, { useContext, useEffect, useState } from 'react';
+import { Upload as AntdUpload } from 'antd';
 import {
+  AttachmentList,
   FormProvider,
   RecordPickerContext,
   RecordPickerProvider,
   SchemaComponentOptions,
+  Uploader,
   useActionContext,
+  useDesignable,
 } from '../..';
 import {
   TableSelectorParamsProvider,
   useTableSelectorProps as useTsp,
 } from '../../../block-provider/TableSelectorProvider';
-import { CollectionProvider, useCollection, useCollectionManager } from '../../../collection-manager';
+import {
+  CollectionProvider_deprecated,
+  useCollection_deprecated,
+  useCollectionManager_deprecated,
+} from '../../../collection-manager';
 import { useCompile } from '../../hooks';
 import { ActionContextProvider } from '../action';
 import { EllipsisWithTooltip } from '../input';
-import { FileSelector, Preview } from '../preview';
-import { ReadPrettyInternalViewer } from './InternalViewer';
+import { Upload } from '../upload';
 import { useFieldNames, useInsertSchema } from './hooks';
 import schema from './schema';
-import { flatData, getLabelFormatValue, isShowFilePicker, useLabelUiSchema } from './util';
+import { flatData, getLabelFormatValue, useLabelUiSchema } from './util';
+import { useTranslation } from 'react-i18next';
+import { PlusOutlined } from '@ant-design/icons';
+import { useStyles } from '../upload/style';
 
 const useTableSelectorProps = () => {
   const field: any = useField();
@@ -60,32 +80,110 @@ const useTableSelectorProps = () => {
     },
   };
 };
+
+function FileSelector(props) {
+  const { disabled, multiple, value, onChange, action, onSelect, quickUpload, selectFile, ...other } = props;
+  const { wrapSSR, hashId, componentCls: prefixCls } = useStyles();
+  const { useFileCollectionStorageRules } = useExpressionScope();
+  const { t } = useTranslation();
+  const rules = useFileCollectionStorageRules();
+  // 兼容旧版本
+  const showSelectButton = selectFile === undefined && quickUpload === undefined;
+  return wrapSSR(
+    <div className={cls(`${prefixCls}-wrapper`, `${prefixCls}-picture-card-wrapper`, 'nb-upload', hashId)}>
+      <div className={cls(`${prefixCls}-list`, `${prefixCls}-list-picture-card`)}>
+        <AttachmentList disabled={disabled} multiple={multiple} value={value} onChange={onChange} />
+        {showSelectButton ? (
+          <div className={cls(`${prefixCls}-list-picture-card-container`, `${prefixCls}-list-item-container`)}>
+            <AntdUpload disabled={disabled} multiple={multiple} listType={'picture-card'} showUploadList={false}>
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onClick={onSelect}
+              >
+                <PlusOutlined />
+                {t('Select')}
+              </div>
+            </AntdUpload>
+          </div>
+        ) : null}
+        {quickUpload ? (
+          <Uploader
+            value={value}
+            multiple={multiple}
+            // onRemove={handleRemove}
+            onChange={onChange}
+            action={action}
+            rules={rules}
+            disabled={disabled}
+            {...other}
+          />
+        ) : null}
+        {selectFile && (multiple || !value) ? (
+          <div className={cls(`${prefixCls}-list-picture-card-container`, `${prefixCls}-list-item-container`)}>
+            <AntdUpload disabled={disabled} multiple={multiple} listType={'picture-card'} showUploadList={false}>
+              <div
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onClick={onSelect}
+              >
+                <PlusOutlined />
+                {t('Select')}
+              </div>
+            </AntdUpload>
+          </div>
+        ) : null}
+      </div>
+    </div>,
+  );
+}
+
 const InternalFileManager = (props) => {
-  const { value, multiple, onChange, quickUpload, selectFile, ...others } = props;
+  const { value, multiple, onChange, ...others } = props;
   const fieldSchema = useFieldSchema();
   const [visibleSelector, setVisibleSelector] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const insertSelector = useInsertSchema('Selector');
   const fieldNames = useFieldNames(props);
+  const { designable } = useDesignable();
   const field: any = useField();
   const [options, setOptions] = useState([]);
-  const { getField } = useCollection();
+  const { getField } = useCollection_deprecated();
   const collectionField = getField(field.props.name);
   const labelUiSchema = useLabelUiSchema(collectionField?.target, fieldNames?.label || 'label');
   const compile = useCompile();
   const { modalProps } = useActionContext();
-  const getFilter = () => {
-    const targetKey = collectionField?.targetKey || 'id';
-    const list = options.map((option) => option[targetKey]).filter(Boolean);
-    const filter = list.length ? { $and: [{ [`${targetKey}.$ne`]: list }] } : {};
-    return filter;
-  };
-  const handleSelect = () => {
-    insertSelector(schema.Selector);
+  const handleSelect = (ev) => {
+    ev.stopPropagation();
+    ev.preventDefault();
+    if (designable) {
+      insertSelector(schema.Selector);
+    } else {
+      const selectSchema = fieldSchema.reduceProperties((buf, s) => {
+        if (s['x-component'] === 'AssociationField.Selector') {
+          return s;
+        }
+        return buf;
+      }, null);
+      if (!selectSchema) {
+        fieldSchema.addProperty('selector', schema.Selector);
+      }
+    }
     setVisibleSelector(true);
     setSelectedRows([]);
   };
-
   useEffect(() => {
     if (value && Object.keys(value).length > 0) {
       const opts = (Array.isArray(value) ? value : value ? [value] : []).filter(Boolean).map((option) => {
@@ -101,18 +199,10 @@ const InternalFileManager = (props) => {
     }
   }, [value, fieldNames?.label]);
 
-  const handleRemove = (file) => {
-    const newOptions = options.filter((option) => option.id !== file.id);
-    setOptions(newOptions);
-    if (newOptions.length === 0) {
-      return onChange(null);
-    }
-    onChange(newOptions);
-  };
   const pickerProps = {
     size: 'small',
     fieldNames,
-    multiple: ['o2m', 'm2m'].includes(collectionField?.interface) && multiple,
+    multiple: ['o2m', 'm2m', 'mbm'].includes(collectionField?.interface) && multiple,
     association: {
       target: collectionField?.target,
     },
@@ -139,23 +229,14 @@ const InternalFileManager = (props) => {
   return (
     <div style={{ width: '100%', overflow: 'auto' }}>
       <FileSelector
-        value={options}
+        {...others}
+        value={multiple ? options : options?.[0]}
         multiple={multiple}
-        quickUpload={quickUpload !== false}
-        selectFile={selectFile !== false}
+        quickUpload={fieldSchema['x-component-props']?.quickUpload !== false}
+        selectFile={fieldSchema['x-component-props']?.selectFile !== false}
         action={`${collectionField?.target}:create`}
         onSelect={handleSelect}
-        onRemove={handleRemove}
-        onChange={(changed) => {
-          if (changed.every((file) => file.status !== 'uploading')) {
-            changed = changed.filter((file) => file.status === 'done').map((file) => file.response.data);
-            if (multiple) {
-              onChange([...options, ...changed]);
-            } else {
-              onChange(changed[0]);
-            }
-          }
-        }}
+        onChange={onChange}
       />
       <ActionContextProvider
         value={{
@@ -169,9 +250,9 @@ const InternalFileManager = (props) => {
         }}
       >
         <RecordPickerProvider {...pickerProps}>
-          <CollectionProvider name={collectionField?.target}>
+          <CollectionProvider_deprecated name={collectionField?.target}>
             <FormProvider>
-              <TableSelectorParamsProvider params={{ filter: getFilter() }}>
+              <TableSelectorParamsProvider params={{}}>
                 <SchemaComponentOptions scope={{ usePickActionProps, useTableSelectorProps }}>
                   <RecursionField
                     onlyRenderProperties
@@ -184,7 +265,7 @@ const InternalFileManager = (props) => {
                 </SchemaComponentOptions>
               </TableSelectorParamsProvider>
             </FormProvider>
-          </CollectionProvider>
+          </CollectionProvider_deprecated>
         </RecordPickerProvider>
       </ActionContextProvider>
     </div>
@@ -192,22 +273,13 @@ const InternalFileManager = (props) => {
 };
 
 const FileManageReadPretty = connect((props) => {
-  const fieldNames = useFieldNames(props);
   const fieldSchema = useFieldSchema();
-  const { getField } = useCollection();
-  const { getCollectionJoinField } = useCollectionManager();
+  const { getField } = useCollection_deprecated();
+  const { getCollectionJoinField } = useCollectionManager_deprecated();
   const collectionField = getField(fieldSchema.name) || getCollectionJoinField(fieldSchema['x-collection-field']);
-  const labelUiSchema = useLabelUiSchema(collectionField?.target, fieldNames?.label || 'label');
-  const showFilePicker = isShowFilePicker(labelUiSchema);
-  if (showFilePicker) {
-    return (
-      <EllipsisWithTooltip ellipsis>
-        {collectionField ? <Preview {...props} fieldNames={fieldNames} /> : null}
-      </EllipsisWithTooltip>
-    );
-  } else {
-    return <ReadPrettyInternalViewer {...props} />;
-  }
+  return (
+    <EllipsisWithTooltip ellipsis>{collectionField ? <Upload.ReadPretty {...props} /> : null}</EllipsisWithTooltip>
+  );
 });
 
-export { FileManageReadPretty, InternalFileManager };
+export { FileManageReadPretty, InternalFileManager, FileSelector };

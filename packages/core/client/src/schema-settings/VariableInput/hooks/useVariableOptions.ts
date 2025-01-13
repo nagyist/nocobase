@@ -1,26 +1,38 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Form } from '@formily/core';
 import { ISchema, Schema } from '@formily/react';
-import _ from 'lodash';
 import { useMemo } from 'react';
-import { CollectionFieldOptions, useCollection } from '../../../collection-manager';
-import { useFlag } from '../../../flag-provider';
-import { useBlockCollection } from './useBlockCollection';
-import { useDateVariable } from './useDateVariable';
-import { useFormVariable } from './useFormVariable';
-import { useIterationVariable } from './useIterationVariable';
-import { useParentRecordVariable } from './useParentRecordVariable';
-import { useRecordVariable } from './useRecordVariable';
-import { useRoleVariable } from './useRoleVariable';
-import { useUserVariable } from './useUserVariable';
+import { useVariables } from '../../../';
+import { CollectionFieldOptions_deprecated } from '../../../collection-manager';
+import { useAPITokenVariable } from './useAPITokenVariable';
+import { useDatetimeVariable } from './useDateVariable';
+import { useCurrentFormVariable } from './useFormVariable';
+import { useCurrentObjectVariable } from './useIterationVariable';
+import { useParentObjectVariable } from './useParentIterationVariable';
+import { useParentPopupVariable } from './useParentPopupVariable';
+import { useCurrentParentRecordVariable } from './useParentRecordVariable';
+import { usePopupVariable } from './usePopupVariable';
+import { useCurrentRecordVariable } from './useRecordVariable';
+import { useCurrentRoleVariable } from './useRoleVariable';
+import { useURLSearchParamsVariable } from './useURLSearchParamsVariable';
+import { useCurrentUserVariable } from './useUserVariable';
 
 interface Props {
   /**
    * 消费该变量的字段
    */
-  collectionField: CollectionFieldOptions;
+  collectionField: CollectionFieldOptions_deprecated;
   form: Form;
   /**
-   * `useRecord` 返回的值
+   * `useRecord ` 返回的值
    */
   record?: Record<string, any>;
   /**
@@ -48,78 +60,103 @@ export const useVariableOptions = ({
   targetFieldSchema,
   record,
 }: Props) => {
-  const { name: blockCollectionName = record?.__collectionName } = useBlockCollection();
-  const { isInSubForm, isInSubTable } = useFlag() || {};
-  const { name } = useCollection();
+  const { filterVariables = () => true } = useVariables() || {};
   const blockParentCollectionName = record?.__parent?.__collectionName;
-  const userVariable = useUserVariable({
+  const { currentUserSettings } = useCurrentUserVariable({
     maxDepth: 3,
     uiSchema: uiSchema,
     collectionField,
     noDisabled,
     targetFieldSchema,
   });
-  const roleVariable = useRoleVariable({
+  const { currentRoleSettings } = useCurrentRoleVariable({
     uiSchema: uiSchema,
     collectionField,
     noDisabled,
     targetFieldSchema,
   });
-  const dateVariable = useDateVariable({ operator, schema: uiSchema, noDisabled });
-  const formVariable = useFormVariable({
+  const { apiTokenSettings } = useAPITokenVariable({ noDisabled });
+  const { datetimeSettings } = useDatetimeVariable({ operator, schema: uiSchema, noDisabled: true, targetFieldSchema });
+  const { currentFormSettings, shouldDisplayCurrentForm } = useCurrentFormVariable({
     schema: uiSchema,
-    collectionName: blockCollectionName,
+    collectionField,
+    noDisabled,
+    targetFieldSchema,
+    form,
+  });
+  const { currentObjectSettings, shouldDisplayCurrentObject } = useCurrentObjectVariable({
+    collectionField,
+    schema: uiSchema,
+    noDisabled,
+    targetFieldSchema,
+  });
+  const { parentObjectSettings, shouldDisplayParentObject } = useParentObjectVariable({
+    collectionField,
+    schema: uiSchema,
+    noDisabled,
+    targetFieldSchema,
+  });
+  const { currentRecordSettings, shouldDisplayCurrentRecord } = useCurrentRecordVariable({
+    schema: uiSchema,
     collectionField,
     noDisabled,
     targetFieldSchema,
   });
-  const iterationVariable = useIterationVariable({
-    currentCollection: name,
-    collectionField,
+  const { settings: popupRecordSettings, shouldDisplayPopupRecord } = usePopupVariable({
     schema: uiSchema,
-    noDisabled,
-    targetFieldSchema,
-  });
-  const currentRecordVariable = useRecordVariable({
-    schema: uiSchema,
-    collectionName: blockCollectionName,
     collectionField,
     noDisabled,
     targetFieldSchema,
   });
-  const currentParentRecordVariable = useParentRecordVariable({
+  const { settings: parentPopupRecordSettings, shouldDisplayParentPopupRecord } = useParentPopupVariable({
+    schema: uiSchema,
+    collectionField,
+    noDisabled,
+    targetFieldSchema,
+  });
+  const { currentParentRecordSettings, shouldDisplayCurrentParentRecord } = useCurrentParentRecordVariable({
     schema: uiSchema,
     collectionName: blockParentCollectionName,
     collectionField,
     noDisabled,
     targetFieldSchema,
   });
-
+  const { urlSearchParamsSettings, shouldDisplay: shouldDisplayURLSearchParams } = useURLSearchParamsVariable();
   return useMemo(() => {
     return [
-      userVariable,
-      roleVariable,
-      dateVariable,
-      form && !form.readPretty && formVariable,
-      (isInSubForm || isInSubTable) && iterationVariable,
-      blockCollectionName && !_.isEmpty(_.omit(record, ['__parent', '__collectionName'])) && currentRecordVariable,
-      blockParentCollectionName &&
-        !_.isEmpty(_.omit(record?.__parent, ['__parent', '__collectionName'])) &&
-        currentParentRecordVariable,
-    ].filter(Boolean);
+      currentUserSettings,
+      currentRoleSettings,
+      apiTokenSettings,
+      datetimeSettings,
+      shouldDisplayCurrentForm && currentFormSettings,
+      shouldDisplayCurrentObject && currentObjectSettings,
+      shouldDisplayParentObject && parentObjectSettings,
+      shouldDisplayCurrentRecord && currentRecordSettings,
+      shouldDisplayCurrentParentRecord && currentParentRecordSettings,
+      shouldDisplayPopupRecord && popupRecordSettings,
+      shouldDisplayParentPopupRecord && parentPopupRecordSettings,
+      shouldDisplayURLSearchParams && urlSearchParamsSettings,
+    ]
+      .filter(Boolean)
+      .filter(filterVariables);
   }, [
-    userVariable,
-    roleVariable,
-    dateVariable,
-    form,
-    formVariable,
-    isInSubForm,
-    isInSubTable,
-    iterationVariable,
-    blockCollectionName,
-    record,
-    currentRecordVariable,
-    blockParentCollectionName,
-    currentParentRecordVariable,
+    currentUserSettings,
+    currentRoleSettings,
+    apiTokenSettings,
+    datetimeSettings,
+    shouldDisplayCurrentForm,
+    currentFormSettings,
+    shouldDisplayCurrentObject,
+    currentObjectSettings,
+    shouldDisplayParentObject,
+    parentObjectSettings,
+    shouldDisplayCurrentRecord,
+    currentRecordSettings,
+    shouldDisplayCurrentParentRecord,
+    currentParentRecordSettings,
+    shouldDisplayPopupRecord,
+    popupRecordSettings,
+    shouldDisplayURLSearchParams,
+    urlSearchParamsSettings,
   ]);
 };

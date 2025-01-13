@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Plugin } from '@nocobase/client';
 import WorkflowPlugin from '@nocobase/plugin-workflow/client';
 
@@ -13,7 +22,6 @@ export default class extends Plugin {
   // You can get and modify the app instance here
   async load() {
     const workflow = this.app.pm.get('workflow') as WorkflowPlugin;
-    const requestInstruction = new RequestInstruction();
-    workflow.instructions.register(requestInstruction.type, requestInstruction);
+    workflow.registerInstruction('request', RequestInstruction);
   }
 }

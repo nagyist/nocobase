@@ -1,26 +1,35 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Form } from '@formily/core';
 // @ts-ignore
 import { Schema } from '@formily/json-schema';
 import _ from 'lodash';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CollectionFieldOptions } from '../../collection-manager';
+import { CollectionFieldOptions_deprecated } from '../../collection-manager';
 import { Variable, useVariableScope } from '../../schema-component';
 import { useValues } from '../../schema-component/antd/filter/useValues';
 import { VariableOption, VariablesContextType } from '../../variables/types';
 import { isVariable } from '../../variables/utils/isVariable';
 import { useBlockCollection } from './hooks/useBlockCollection';
 import { useContextAssociationFields } from './hooks/useContextAssociationFields';
-import { useRecordVariable } from './hooks/useRecordVariable';
-import { useUserVariable } from './hooks/useUserVariable';
+import { useCurrentRecordVariable } from './hooks/useRecordVariable';
+import { useCurrentUserVariable } from './hooks/useUserVariable';
 import { useVariableOptions } from './hooks/useVariableOptions';
 import { Option } from './type';
 
 interface GetShouldChangeProps {
-  collectionField: CollectionFieldOptions;
+  collectionField: CollectionFieldOptions_deprecated;
   variables: VariablesContextType;
   localVariables: VariableOption | VariableOption[];
-  /** `useCollectionManager` 返回的 */
+  /** `useCollectionManager_deprecated` 返回的 */
   getAllCollectionsInheritChain: (collectionName: string) => string[];
 }
 
@@ -39,7 +48,7 @@ type Props = {
   children?: any;
   className?: string;
   style?: React.CSSProperties;
-  collectionField: CollectionFieldOptions;
+  collectionField: CollectionFieldOptions_deprecated;
   contextCollectionName?: string;
   /**
    * 根据 `onChange` 的第一个参数，判断是否需要触发 `onChange`
@@ -58,6 +67,11 @@ type Props = {
    * @returns
    */
   returnScope?: (scope: Option[]) => any[];
+  /**
+   * 不需要禁用选项，一般会在表达式中使用
+   */
+  noDisabled?: boolean;
+  hideVariableButton?: boolean;
 };
 
 /**
@@ -82,12 +96,22 @@ export const VariableInput = (props: Props) => {
     record,
     returnScope = _.identity,
     targetFieldSchema,
+    noDisabled,
+    hideVariableButton,
   } = props;
   const { name: blockCollectionName } = useBlockCollection();
   const scope = useVariableScope();
   const { operator, schema: uiSchema = collectionField?.uiSchema } = useValues();
 
-  const variableOptions = useVariableOptions({ collectionField, form, record, operator, uiSchema, targetFieldSchema });
+  const variableOptions = useVariableOptions({
+    collectionField,
+    form,
+    record,
+    operator,
+    uiSchema,
+    targetFieldSchema,
+    noDisabled,
+  });
   const contextVariable = useContextAssociationFields({ schema, maxDepth: 2, contextCollectionName, collectionField });
   const { compatOldVariables } = useCompatOldVariables({
     collectionField,
@@ -115,7 +139,6 @@ export const VariableInput = (props: Props) => {
     },
     [onChange, shouldChange],
   );
-
   return (
     <Variable.Input
       className={className}
@@ -128,6 +151,7 @@ export const VariableInput = (props: Props) => {
       )}
       style={style}
       changeOnSelect
+      hideVariableButton={hideVariableButton}
     >
       <RenderSchemaComponent value={value} onChange={onChange} />
     </Variable.Input>
@@ -176,12 +200,12 @@ export const getShouldChange = ({
     if (['o2o', 'o2m', 'oho'].includes(collectionFieldOfVariable?.interface)) {
       return false;
     }
-    if (!collectionField.target && collectionFieldOfVariable?.target) {
-      return false;
-    }
-    if (collectionField.target && !collectionFieldOfVariable?.target) {
-      return false;
-    }
+    // if (!collectionField.target && collectionFieldOfVariable?.target) {
+    //   return false;
+    // }
+    // if (collectionField.target && !collectionFieldOfVariable?.target) {
+    //   return false;
+    // }
     if (
       collectionField.target &&
       collectionFieldOfVariable?.target &&
@@ -215,23 +239,22 @@ export interface FormatVariableScopeReturn {
  */
 export function useCompatOldVariables(props: {
   uiSchema: any;
-  collectionField: CollectionFieldOptions;
+  collectionField: CollectionFieldOptions_deprecated;
   blockCollectionName: string;
   noDisabled?: boolean;
   targetFieldSchema?: Schema;
 }) {
   const { uiSchema, collectionField, noDisabled, targetFieldSchema, blockCollectionName } = props;
   const { t } = useTranslation();
-  const lowLevelUserVariable = useUserVariable({
+  const { currentUserSettings } = useCurrentUserVariable({
     maxDepth: 1,
     uiSchema: uiSchema,
     collectionField,
     noDisabled,
     targetFieldSchema,
   });
-  const currentRecordVariable = useRecordVariable({
+  const { currentRecordSettings } = useCurrentRecordVariable({
     schema: uiSchema,
-    collectionName: blockCollectionName,
     collectionField,
     noDisabled,
     targetFieldSchema,
@@ -243,7 +266,7 @@ export function useCompatOldVariables(props: {
         return variables;
       }
 
-      variables = _.cloneDeep(variables);
+      variables = [...variables];
 
       const systemVariable: Option = {
         value: '$system',
@@ -290,7 +313,7 @@ export function useCompatOldVariables(props: {
         if (userVariable) {
           userVariable.value = 'currentUser';
         } else {
-          variables.unshift({ ...lowLevelUserVariable, value: 'currentUser' });
+          variables.unshift({ ...currentUserSettings, value: 'currentUser' });
         }
       }
 
@@ -299,7 +322,7 @@ export function useCompatOldVariables(props: {
         if (formVariable) {
           formVariable.value = 'currentRecord';
         } else {
-          variables.unshift({ ...currentRecordVariable, value: 'currentRecord' });
+          variables.unshift({ ...currentRecordSettings, value: 'currentRecord' });
         }
       }
 

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useField, useFieldSchema } from '@formily/react';
 import {
   GeneralSchemaDesigner,
@@ -5,7 +14,7 @@ import {
   SchemaSettingsDivider,
   SchemaSettingsRemove,
   SchemaSettingsSelectItem,
-  useCollection,
+  useCollection_deprecated,
   useDesignable,
   useFormBlockContext,
   useTableBlockContext,
@@ -14,7 +23,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 export const AuditLogsDesigner = () => {
-  const { name, title } = useCollection();
+  const { name, title } = useCollection_deprecated();
   const field = useField();
   const fieldSchema = useFieldSchema();
   const { form } = useFormBlockContext();
@@ -45,6 +54,7 @@ export const AuditLogsDesigner = () => {
         title={t('Records per page')}
         value={field.decoratorProps?.params?.pageSize || 20}
         options={[
+          { label: '5', value: 5 },
           { label: '10', value: 10 },
           { label: '20', value: 20 },
           { label: '50', value: 50 },

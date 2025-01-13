@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 export default {
   _isJSONSchemaObject: true,
   version: '2.0',
@@ -31,7 +40,7 @@ export default {
       _isJSONSchemaObject: true,
       version: '2.0',
       type: 'void',
-      'x-initializer': 'TableActionInitializers',
+      'x-initializer': 'table:configureActions',
       'x-component': 'ActionBar',
       'x-component-props': { style: { marginBottom: 16 } },
       properties: {
@@ -284,7 +293,7 @@ export default {
                                             rowSelection: { type: 'checkbox' },
                                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                           },
-                                          'x-initializer': 'TableColumnInitializers',
+                                          'x-initializer': 'table:configureColumns',
                                           'x-uid': 'nd7c9jym6f9',
                                           'x-async': false,
                                           'x-index': 1,
@@ -307,7 +316,7 @@ export default {
                                     drawer1: {
                                       _isJSONSchemaObject: true,
                                       version: '2.0',
-                                      'x-decorator': 'CollectionProvider',
+                                      'x-decorator': 'CollectionProvider_deprecated',
                                       'x-decorator-props': { name: 'attachments' },
                                       'x-component': 'Action.Drawer',
                                       'x-component-props': { className: 'nb-action-popup' },
@@ -336,7 +345,7 @@ export default {
                                                   version: '2.0',
                                                   type: 'void',
                                                   'x-component': 'Grid',
-                                                  'x-initializer': 'RecordBlockInitializers',
+                                                  'x-initializer': 'popup:common:addBlock',
                                                   'x-uid': '6vmvh862u5t',
                                                   'x-async': false,
                                                   'x-index': 1,
@@ -488,7 +497,7 @@ export default {
                                             rowSelection: { type: 'checkbox' },
                                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                           },
-                                          'x-initializer': 'TableColumnInitializers',
+                                          'x-initializer': 'table:configureColumns',
                                           properties: {
                                             gpysrsz6uw3: {
                                               _isJSONSchemaObject: true,
@@ -561,7 +570,7 @@ export default {
                                     drawer1: {
                                       _isJSONSchemaObject: true,
                                       version: '2.0',
-                                      'x-decorator': 'CollectionProvider',
+                                      'x-decorator': 'CollectionProvider_deprecated',
                                       'x-decorator-props': { name: 't_94rsj6kbzvn' },
                                       'x-component': 'Action.Drawer',
                                       'x-component-props': { className: 'nb-action-popup' },
@@ -590,7 +599,7 @@ export default {
                                                   version: '2.0',
                                                   type: 'void',
                                                   'x-component': 'Grid',
-                                                  'x-initializer': 'RecordBlockInitializers',
+                                                  'x-initializer': 'popup:common:addBlock',
                                                   'x-uid': 'q962oul9mfn',
                                                   'x-async': false,
                                                   'x-index': 1,
@@ -673,7 +682,7 @@ export default {
                                             rowSelection: { type: 'checkbox' },
                                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                           },
-                                          'x-initializer': 'TableColumnInitializers',
+                                          'x-initializer': 'table:configureColumns',
                                           properties: {
                                             ppttymwsr3d: {
                                               _isJSONSchemaObject: true,
@@ -722,7 +731,7 @@ export default {
                                     drawer1: {
                                       _isJSONSchemaObject: true,
                                       version: '2.0',
-                                      'x-decorator': 'CollectionProvider',
+                                      'x-decorator': 'CollectionProvider_deprecated',
                                       'x-decorator-props': { name: 'users' },
                                       'x-component': 'Action.Drawer',
                                       'x-component-props': { className: 'nb-action-popup' },
@@ -751,7 +760,7 @@ export default {
                                                   version: '2.0',
                                                   type: 'void',
                                                   'x-component': 'Grid',
-                                                  'x-initializer': 'RecordBlockInitializers',
+                                                  'x-initializer': 'popup:common:addBlock',
                                                   'x-uid': 'eoyjsxofwwp',
                                                   'x-async': false,
                                                   'x-index': 1,
@@ -901,7 +910,7 @@ export default {
                                             rowSelection: { type: 'checkbox' },
                                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                           },
-                                          'x-initializer': 'TableColumnInitializers',
+                                          'x-initializer': 'table:configureColumns',
                                           properties: {
                                             xfyrokl5xzu: {
                                               _isJSONSchemaObject: true,
@@ -950,7 +959,7 @@ export default {
                                     drawer1: {
                                       _isJSONSchemaObject: true,
                                       version: '2.0',
-                                      'x-decorator': 'CollectionProvider',
+                                      'x-decorator': 'CollectionProvider_deprecated',
                                       'x-decorator-props': { name: 't_j6omof6tza8' },
                                       'x-component': 'Action.Drawer',
                                       'x-component-props': { className: 'nb-action-popup' },
@@ -979,7 +988,7 @@ export default {
                                                   version: '2.0',
                                                   type: 'void',
                                                   'x-component': 'Grid',
-                                                  'x-initializer': 'RecordBlockInitializers',
+                                                  'x-initializer': 'popup:common:addBlock',
                                                   'x-uid': 'vooi5kwmy1y',
                                                   'x-async': false,
                                                   'x-index': 1,
@@ -1199,7 +1208,7 @@ export default {
                                                                             useDataSource:
                                                                               '{{ cm.useDataSourceFromRAC }}',
                                                                           },
-                                                                          'x-initializer': 'TableColumnInitializers',
+                                                                          'x-initializer': 'table:configureColumns',
                                                                           'x-uid': 'n1svf2lkvqd',
                                                                           'x-async': false,
                                                                           'x-index': 1,
@@ -1222,7 +1231,7 @@ export default {
                                                                     drawer1: {
                                                                       _isJSONSchemaObject: true,
                                                                       version: '2.0',
-                                                                      'x-decorator': 'CollectionProvider',
+                                                                      'x-decorator': 'CollectionProvider_deprecated',
                                                                       'x-decorator-props': { name: 'users' },
                                                                       'x-component': 'Action.Drawer',
                                                                       'x-component-props': {
@@ -1254,7 +1263,7 @@ export default {
                                                                                   type: 'void',
                                                                                   'x-component': 'Grid',
                                                                                   'x-initializer':
-                                                                                    'RecordBlockInitializers',
+                                                                                    'popup:common:addBlock',
                                                                                   'x-uid': 'tmlp8f9evtr',
                                                                                   'x-async': false,
                                                                                   'x-index': 1,
@@ -1390,7 +1399,7 @@ export default {
                                                                             useDataSource:
                                                                               '{{ cm.useDataSourceFromRAC }}',
                                                                           },
-                                                                          'x-initializer': 'TableColumnInitializers',
+                                                                          'x-initializer': 'table:configureColumns',
                                                                           'x-uid': 'ymddh2e0ufc',
                                                                           'x-async': false,
                                                                           'x-index': 1,
@@ -1413,7 +1422,7 @@ export default {
                                                                     drawer1: {
                                                                       _isJSONSchemaObject: true,
                                                                       version: '2.0',
-                                                                      'x-decorator': 'CollectionProvider',
+                                                                      'x-decorator': 'CollectionProvider_deprecated',
                                                                       'x-decorator-props': { name: 'attachments' },
                                                                       'x-component': 'Action.Drawer',
                                                                       'x-component-props': {
@@ -1445,7 +1454,7 @@ export default {
                                                                                   type: 'void',
                                                                                   'x-component': 'Grid',
                                                                                   'x-initializer':
-                                                                                    'RecordBlockInitializers',
+                                                                                    'popup:common:addBlock',
                                                                                   'x-uid': 'i4skuxv9uvn',
                                                                                   'x-async': false,
                                                                                   'x-index': 1,
@@ -1561,7 +1570,7 @@ export default {
                                       type: 'array',
                                       title: '{{t("Fields")}}',
                                       'x-component': 'Table.Array',
-                                      'x-initializer': 'TableColumnInitializers',
+                                      'x-initializer': 'table:configureColumns',
                                       'x-component-props': {
                                         pagination: false,
                                         expandable: { childrenColumnName: '__nochildren__' },
@@ -1831,7 +1840,7 @@ export default {
                                                             rowSelection: { type: 'checkbox' },
                                                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                           },
-                                                          'x-initializer': 'TableColumnInitializers',
+                                                          'x-initializer': 'table:configureColumns',
                                                           'x-uid': '0d2h3ova480',
                                                           'x-async': false,
                                                           'x-index': 1,
@@ -1854,7 +1863,7 @@ export default {
                                                     drawer1: {
                                                       _isJSONSchemaObject: true,
                                                       version: '2.0',
-                                                      'x-decorator': 'CollectionProvider',
+                                                      'x-decorator': 'CollectionProvider_deprecated',
                                                       'x-decorator-props': { name: 'users' },
                                                       'x-component': 'Action.Drawer',
                                                       'x-component-props': { className: 'nb-action-popup' },
@@ -1883,7 +1892,7 @@ export default {
                                                                   version: '2.0',
                                                                   type: 'void',
                                                                   'x-component': 'Grid',
-                                                                  'x-initializer': 'RecordBlockInitializers',
+                                                                  'x-initializer': 'popup:common:addBlock',
                                                                   'x-uid': 'bi0stpkdqj6',
                                                                   'x-async': false,
                                                                   'x-index': 1,
@@ -1995,7 +2004,7 @@ export default {
                                                             rowSelection: { type: 'checkbox' },
                                                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                           },
-                                                          'x-initializer': 'TableColumnInitializers',
+                                                          'x-initializer': 'table:configureColumns',
                                                           'x-uid': 'z4rlx8hfjtq',
                                                           'x-async': false,
                                                           'x-index': 1,
@@ -2018,7 +2027,7 @@ export default {
                                                     drawer1: {
                                                       _isJSONSchemaObject: true,
                                                       version: '2.0',
-                                                      'x-decorator': 'CollectionProvider',
+                                                      'x-decorator': 'CollectionProvider_deprecated',
                                                       'x-decorator-props': { name: 'attachments' },
                                                       'x-component': 'Action.Drawer',
                                                       'x-component-props': { className: 'nb-action-popup' },
@@ -2047,7 +2056,7 @@ export default {
                                                                   version: '2.0',
                                                                   type: 'void',
                                                                   'x-component': 'Grid',
-                                                                  'x-initializer': 'RecordBlockInitializers',
+                                                                  'x-initializer': 'popup:common:addBlock',
                                                                   'x-uid': 'z7glgapwa3g',
                                                                   'x-async': false,
                                                                   'x-index': 1,
@@ -2222,7 +2231,7 @@ export default {
         useAction: '{{cm.useMoveAction}}',
         useDataSource: '{{cm.useDataSourceFromRAC}}',
       },
-      'x-initializer': 'TableColumnInitializers',
+      'x-initializer': 'table:configureColumns',
       properties: {
         actions: {
           _isJSONSchemaObject: true,
@@ -2282,7 +2291,7 @@ export default {
                                   version: '2.0',
                                   type: 'void',
                                   'x-component': 'Grid',
-                                  'x-initializer': 'RecordBlockInitializers',
+                                  'x-initializer': 'popup:common:addBlock',
                                   properties: {
                                     mcadrj0ivmq: {
                                       _isJSONSchemaObject: true,
@@ -2454,8 +2463,7 @@ export default {
                                                                                 useDataSource:
                                                                                   '{{ cm.useDataSourceFromRAC }}',
                                                                               },
-                                                                              'x-initializer':
-                                                                                'TableColumnInitializers',
+                                                                              'x-initializer': 'table:configureColumns',
                                                                               'x-uid': '4ytlnx3h4r8',
                                                                               'x-async': false,
                                                                               'x-index': 1,
@@ -2478,7 +2486,8 @@ export default {
                                                                         drawer1: {
                                                                           _isJSONSchemaObject: true,
                                                                           version: '2.0',
-                                                                          'x-decorator': 'CollectionProvider',
+                                                                          'x-decorator':
+                                                                            'CollectionProvider_deprecated',
                                                                           'x-decorator-props': {
                                                                             name: 'attachments',
                                                                           },
@@ -2512,7 +2521,7 @@ export default {
                                                                                       type: 'void',
                                                                                       'x-component': 'Grid',
                                                                                       'x-initializer':
-                                                                                        'RecordBlockInitializers',
+                                                                                        'popup:common:addBlock',
                                                                                       'x-uid': 're1atuqva6w',
                                                                                       'x-async': false,
                                                                                       'x-index': 1,
@@ -2674,8 +2683,7 @@ export default {
                                                                                 useDataSource:
                                                                                   '{{ cm.useDataSourceFromRAC }}',
                                                                               },
-                                                                              'x-initializer':
-                                                                                'TableColumnInitializers',
+                                                                              'x-initializer': 'table:configureColumns',
                                                                               'x-uid': 'v25lnvhyzzf',
                                                                               'x-async': false,
                                                                               'x-index': 1,
@@ -2698,7 +2706,8 @@ export default {
                                                                         drawer1: {
                                                                           _isJSONSchemaObject: true,
                                                                           version: '2.0',
-                                                                          'x-decorator': 'CollectionProvider',
+                                                                          'x-decorator':
+                                                                            'CollectionProvider_deprecated',
                                                                           'x-decorator-props': {
                                                                             name: 't_94rsj6kbzvn',
                                                                           },
@@ -2732,7 +2741,7 @@ export default {
                                                                                       type: 'void',
                                                                                       'x-component': 'Grid',
                                                                                       'x-initializer':
-                                                                                        'RecordBlockInitializers',
+                                                                                        'popup:common:addBlock',
                                                                                       'x-uid': 'evaiu0uig7k',
                                                                                       'x-async': false,
                                                                                       'x-index': 1,
@@ -2823,8 +2832,7 @@ export default {
                                                                                 useDataSource:
                                                                                   '{{ cm.useDataSourceFromRAC }}',
                                                                               },
-                                                                              'x-initializer':
-                                                                                'TableColumnInitializers',
+                                                                              'x-initializer': 'table:configureColumns',
                                                                               'x-uid': 'zpvg0dqa6ah',
                                                                               'x-async': false,
                                                                               'x-index': 1,
@@ -2847,7 +2855,8 @@ export default {
                                                                         drawer1: {
                                                                           _isJSONSchemaObject: true,
                                                                           version: '2.0',
-                                                                          'x-decorator': 'CollectionProvider',
+                                                                          'x-decorator':
+                                                                            'CollectionProvider_deprecated',
                                                                           'x-decorator-props': { name: 'users' },
                                                                           'x-component': 'Action.Drawer',
                                                                           'x-component-props': {
@@ -2879,7 +2888,7 @@ export default {
                                                                                       type: 'void',
                                                                                       'x-component': 'Grid',
                                                                                       'x-initializer':
-                                                                                        'RecordBlockInitializers',
+                                                                                        'popup:common:addBlock',
                                                                                       'x-uid': 'e5rinu1bklz',
                                                                                       'x-async': false,
                                                                                       'x-index': 1,
@@ -3148,7 +3157,7 @@ export default {
                                                                           type: 'array',
                                                                           title: '{{t("Fields")}}',
                                                                           'x-component': 'Table.Array',
-                                                                          'x-initializer': 'TableColumnInitializers',
+                                                                          'x-initializer': 'table:configureColumns',
                                                                           'x-component-props': {
                                                                             pagination: false,
                                                                             expandable: {
@@ -3281,7 +3290,7 @@ export default {
                                                                                                   '{{ cm.useDataSourceFromRAC }}',
                                                                                               },
                                                                                               'x-initializer':
-                                                                                                'TableColumnInitializers',
+                                                                                                'table:configureColumns',
                                                                                               'x-uid': 'cobw3nz2wb7',
                                                                                               'x-async': false,
                                                                                               'x-index': 1,
@@ -3306,7 +3315,7 @@ export default {
                                                                                           _isJSONSchemaObject: true,
                                                                                           version: '2.0',
                                                                                           'x-decorator':
-                                                                                            'CollectionProvider',
+                                                                                            'CollectionProvider_deprecated',
                                                                                           'x-decorator-props': {
                                                                                             name: 'users',
                                                                                           },
@@ -3349,7 +3358,7 @@ export default {
                                                                                                       'x-component':
                                                                                                         'Grid',
                                                                                                       'x-initializer':
-                                                                                                        'RecordBlockInitializers',
+                                                                                                        'popup:common:addBlock',
                                                                                                       'x-uid':
                                                                                                         'wyk0354iblf',
                                                                                                       'x-async': false,
@@ -3685,7 +3694,7 @@ export default {
                                                     rowSelection: { type: 'checkbox' },
                                                     useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                   },
-                                                  'x-initializer': 'TableColumnInitializers',
+                                                  'x-initializer': 'table:configureColumns',
                                                   'x-uid': 'je1aq3fa393',
                                                   'x-async': false,
                                                   'x-index': 1,
@@ -3708,7 +3717,7 @@ export default {
                                             drawer1: {
                                               _isJSONSchemaObject: true,
                                               version: '2.0',
-                                              'x-decorator': 'CollectionProvider',
+                                              'x-decorator': 'CollectionProvider_deprecated',
                                               'x-decorator-props': { name: 'attachments' },
                                               'x-component': 'Action.Drawer',
                                               'x-component-props': { className: 'nb-action-popup' },
@@ -3737,7 +3746,7 @@ export default {
                                                           version: '2.0',
                                                           type: 'void',
                                                           'x-component': 'Grid',
-                                                          'x-initializer': 'RecordBlockInitializers',
+                                                          'x-initializer': 'popup:common:addBlock',
                                                           'x-uid': 'sv7t2pdx2vn',
                                                           'x-async': false,
                                                           'x-index': 1,
@@ -3889,7 +3898,7 @@ export default {
                                                     rowSelection: { type: 'checkbox' },
                                                     useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                   },
-                                                  'x-initializer': 'TableColumnInitializers',
+                                                  'x-initializer': 'table:configureColumns',
                                                   properties: {
                                                     cj30vjztnkq: {
                                                       _isJSONSchemaObject: true,
@@ -3962,7 +3971,7 @@ export default {
                                             drawer1: {
                                               _isJSONSchemaObject: true,
                                               version: '2.0',
-                                              'x-decorator': 'CollectionProvider',
+                                              'x-decorator': 'CollectionProvider_deprecated',
                                               'x-decorator-props': { name: 't_94rsj6kbzvn' },
                                               'x-component': 'Action.Drawer',
                                               'x-component-props': { className: 'nb-action-popup' },
@@ -3991,7 +4000,7 @@ export default {
                                                           version: '2.0',
                                                           type: 'void',
                                                           'x-component': 'Grid',
-                                                          'x-initializer': 'RecordBlockInitializers',
+                                                          'x-initializer': 'popup:common:addBlock',
                                                           'x-uid': 'rk1xp8n54cg',
                                                           'x-async': false,
                                                           'x-index': 1,
@@ -4075,7 +4084,7 @@ export default {
                                                     rowSelection: { type: 'checkbox' },
                                                     useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                   },
-                                                  'x-initializer': 'TableColumnInitializers',
+                                                  'x-initializer': 'table:configureColumns',
                                                   properties: {
                                                     dvv0tf3p4o9: {
                                                       _isJSONSchemaObject: true,
@@ -4124,7 +4133,7 @@ export default {
                                             drawer1: {
                                               _isJSONSchemaObject: true,
                                               version: '2.0',
-                                              'x-decorator': 'CollectionProvider',
+                                              'x-decorator': 'CollectionProvider_deprecated',
                                               'x-decorator-props': { name: 'users' },
                                               'x-component': 'Action.Drawer',
                                               'x-component-props': { className: 'nb-action-popup' },
@@ -4153,7 +4162,7 @@ export default {
                                                           version: '2.0',
                                                           type: 'void',
                                                           'x-component': 'Grid',
-                                                          'x-initializer': 'RecordBlockInitializers',
+                                                          'x-initializer': 'popup:common:addBlock',
                                                           'x-uid': 'lbv3i0i3j8v',
                                                           'x-async': false,
                                                           'x-index': 1,
@@ -4303,7 +4312,7 @@ export default {
                                                     rowSelection: { type: 'checkbox' },
                                                     useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                   },
-                                                  'x-initializer': 'TableColumnInitializers',
+                                                  'x-initializer': 'table:configureColumns',
                                                   properties: {
                                                     dncah8wtscx: {
                                                       _isJSONSchemaObject: true,
@@ -4352,7 +4361,7 @@ export default {
                                             drawer1: {
                                               _isJSONSchemaObject: true,
                                               version: '2.0',
-                                              'x-decorator': 'CollectionProvider',
+                                              'x-decorator': 'CollectionProvider_deprecated',
                                               'x-decorator-props': { name: 't_j6omof6tza8' },
                                               'x-component': 'Action.Drawer',
                                               'x-component-props': { className: 'nb-action-popup' },
@@ -4381,7 +4390,7 @@ export default {
                                                           version: '2.0',
                                                           type: 'void',
                                                           'x-component': 'Grid',
-                                                          'x-initializer': 'RecordBlockInitializers',
+                                                          'x-initializer': 'popup:common:addBlock',
                                                           'x-uid': 'ilkn8wpnox9',
                                                           'x-async': false,
                                                           'x-index': 1,
@@ -4607,7 +4616,7 @@ export default {
                                                                                       '{{ cm.useDataSourceFromRAC }}',
                                                                                   },
                                                                                   'x-initializer':
-                                                                                    'TableColumnInitializers',
+                                                                                    'table:configureColumns',
                                                                                   'x-uid': 's8hao0uqg8g',
                                                                                   'x-async': false,
                                                                                   'x-index': 1,
@@ -4630,7 +4639,8 @@ export default {
                                                                             drawer1: {
                                                                               _isJSONSchemaObject: true,
                                                                               version: '2.0',
-                                                                              'x-decorator': 'CollectionProvider',
+                                                                              'x-decorator':
+                                                                                'CollectionProvider_deprecated',
                                                                               'x-decorator-props': { name: 'users' },
                                                                               'x-component': 'Action.Drawer',
                                                                               'x-component-props': {
@@ -4663,7 +4673,7 @@ export default {
                                                                                           type: 'void',
                                                                                           'x-component': 'Grid',
                                                                                           'x-initializer':
-                                                                                            'RecordBlockInitializers',
+                                                                                            'popup:common:addBlock',
                                                                                           'x-uid': 'hzvevuvhee7',
                                                                                           'x-async': false,
                                                                                           'x-index': 1,
@@ -4804,7 +4814,7 @@ export default {
                                                                                       '{{ cm.useDataSourceFromRAC }}',
                                                                                   },
                                                                                   'x-initializer':
-                                                                                    'TableColumnInitializers',
+                                                                                    'table:configureColumns',
                                                                                   'x-uid': '0v1u8mu6z1p',
                                                                                   'x-async': false,
                                                                                   'x-index': 1,
@@ -4827,7 +4837,8 @@ export default {
                                                                             drawer1: {
                                                                               _isJSONSchemaObject: true,
                                                                               version: '2.0',
-                                                                              'x-decorator': 'CollectionProvider',
+                                                                              'x-decorator':
+                                                                                'CollectionProvider_deprecated',
                                                                               'x-decorator-props': {
                                                                                 name: 'attachments',
                                                                               },
@@ -4862,7 +4873,7 @@ export default {
                                                                                           type: 'void',
                                                                                           'x-component': 'Grid',
                                                                                           'x-initializer':
-                                                                                            'RecordBlockInitializers',
+                                                                                            'popup:common:addBlock',
                                                                                           'x-uid': '463r6uyvf67',
                                                                                           'x-async': false,
                                                                                           'x-index': 1,
@@ -4978,7 +4989,7 @@ export default {
                                               type: 'array',
                                               title: '{{t("Fields")}}',
                                               'x-component': 'Table.Array',
-                                              'x-initializer': 'TableColumnInitializers',
+                                              'x-initializer': 'table:configureColumns',
                                               'x-component-props': {
                                                 pagination: false,
                                                 expandable: { childrenColumnName: '__nochildren__' },
@@ -5140,7 +5151,7 @@ export default {
                                                                                               '{{ cm.useDataSourceFromRAC }}',
                                                                                           },
                                                                                           'x-initializer':
-                                                                                            'TableColumnInitializers',
+                                                                                            'table:configureColumns',
                                                                                           'x-uid': '369iecwk6gw',
                                                                                           'x-async': false,
                                                                                           'x-index': 1,
@@ -5165,7 +5176,7 @@ export default {
                                                                                       _isJSONSchemaObject: true,
                                                                                       version: '2.0',
                                                                                       'x-decorator':
-                                                                                        'CollectionProvider',
+                                                                                        'CollectionProvider_deprecated',
                                                                                       'x-decorator-props': {
                                                                                         name: 'users',
                                                                                       },
@@ -5203,7 +5214,7 @@ export default {
                                                                                                   type: 'void',
                                                                                                   'x-component': 'Grid',
                                                                                                   'x-initializer':
-                                                                                                    'RecordBlockInitializers',
+                                                                                                    'popup:common:addBlock',
                                                                                                   'x-uid':
                                                                                                     'o7g549xc7k9',
                                                                                                   'x-async': false,
@@ -5351,7 +5362,7 @@ export default {
                                                                                               '{{ cm.useDataSourceFromRAC }}',
                                                                                           },
                                                                                           'x-initializer':
-                                                                                            'TableColumnInitializers',
+                                                                                            'table:configureColumns',
                                                                                           'x-uid': 'jffadc6g4j0',
                                                                                           'x-async': false,
                                                                                           'x-index': 1,
@@ -5376,7 +5387,7 @@ export default {
                                                                                       _isJSONSchemaObject: true,
                                                                                       version: '2.0',
                                                                                       'x-decorator':
-                                                                                        'CollectionProvider',
+                                                                                        'CollectionProvider_deprecated',
                                                                                       'x-decorator-props': {
                                                                                         name: 'attachments',
                                                                                       },
@@ -5414,7 +5425,7 @@ export default {
                                                                                                   type: 'void',
                                                                                                   'x-component': 'Grid',
                                                                                                   'x-initializer':
-                                                                                                    'RecordBlockInitializers',
+                                                                                                    'popup:common:addBlock',
                                                                                                   'x-uid':
                                                                                                     'luefvfv1esl',
                                                                                                   'x-async': false,
@@ -5608,7 +5619,7 @@ export default {
                                                                     rowSelection: { type: 'checkbox' },
                                                                     useDataSource: '{{ cm.useDataSourceFromRAC }}',
                                                                   },
-                                                                  'x-initializer': 'TableColumnInitializers',
+                                                                  'x-initializer': 'table:configureColumns',
                                                                   'x-uid': 'i9y89citemg',
                                                                   'x-async': false,
                                                                   'x-index': 1,
@@ -5631,7 +5642,7 @@ export default {
                                                             drawer1: {
                                                               _isJSONSchemaObject: true,
                                                               version: '2.0',
-                                                              'x-decorator': 'CollectionProvider',
+                                                              'x-decorator': 'CollectionProvider_deprecated',
                                                               'x-decorator-props': { name: 'users' },
                                                               'x-component': 'Action.Drawer',
                                                               'x-component-props': { className: 'nb-action-popup' },
@@ -5660,7 +5671,7 @@ export default {
                                                                           version: '2.0',
                                                                           type: 'void',
                                                                           'x-component': 'Grid',
-                                                                          'x-initializer': 'RecordBlockInitializers',
+                                                                          'x-initializer': 'popup:common:addBlock',
                                                                           'x-uid': 'dh01zz2bsk9',
                                                                           'x-async': false,
                                                                           'x-index': 1,
@@ -5994,7 +6005,7 @@ export default {
                             rowSelection: { type: 'checkbox' },
                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                           },
-                          'x-initializer': 'TableColumnInitializers',
+                          'x-initializer': 'table:configureColumns',
                           'x-uid': 'v3abytn9e51',
                           'x-async': false,
                           'x-index': 1,
@@ -6017,7 +6028,7 @@ export default {
                     drawer1: {
                       _isJSONSchemaObject: true,
                       version: '2.0',
-                      'x-decorator': 'CollectionProvider',
+                      'x-decorator': 'CollectionProvider_deprecated',
                       'x-decorator-props': { name: 't_94rsj6kbzvn' },
                       'x-component': 'Action.Drawer',
                       'x-component-props': { className: 'nb-action-popup' },
@@ -6046,7 +6057,7 @@ export default {
                                   version: '2.0',
                                   type: 'void',
                                   'x-component': 'Grid',
-                                  'x-initializer': 'RecordBlockInitializers',
+                                  'x-initializer': 'popup:common:addBlock',
                                   'x-uid': 'l5758k9k08c',
                                   'x-async': false,
                                   'x-index': 1,
@@ -6179,7 +6190,7 @@ export default {
                             rowSelection: { type: 'checkbox' },
                             useDataSource: '{{ cm.useDataSourceFromRAC }}',
                           },
-                          'x-initializer': 'TableColumnInitializers',
+                          'x-initializer': 'table:configureColumns',
                           'x-uid': 'p1tbjz52j84',
                           'x-async': false,
                           'x-index': 1,
@@ -6202,7 +6213,7 @@ export default {
                     drawer1: {
                       _isJSONSchemaObject: true,
                       version: '2.0',
-                      'x-decorator': 'CollectionProvider',
+                      'x-decorator': 'CollectionProvider_deprecated',
                       'x-decorator-props': { name: 'users' },
                       'x-component': 'Action.Drawer',
                       'x-component-props': { className: 'nb-action-popup' },
@@ -6231,7 +6242,7 @@ export default {
                                   version: '2.0',
                                   type: 'void',
                                   'x-component': 'Grid',
-                                  'x-initializer': 'RecordBlockInitializers',
+                                  'x-initializer': 'popup:common:addBlock',
                                   'x-uid': 'skaxuehn8rd',
                                   'x-async': false,
                                   'x-index': 1,

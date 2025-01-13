@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import WorkflowPlugin, {
   Processor,
   Instruction,
@@ -16,15 +25,15 @@ interface DelayConfig {
 export default class extends Instruction {
   timers: Map<number, NodeJS.Timeout> = new Map();
 
-  constructor(public plugin: WorkflowPlugin) {
-    super(plugin);
+  constructor(public workflow: WorkflowPlugin) {
+    super(workflow);
 
-    plugin.app.on('afterStart', this.load);
-    plugin.app.on('beforeStop', this.unload);
+    workflow.app.on('afterStart', this.load);
+    workflow.app.on('beforeStop', this.unload);
   }
 
   load = async () => {
-    const { model } = this.plugin.db.getCollection('jobs');
+    const { model } = this.workflow.app.db.getCollection('jobs');
     const jobs = (await model.findAll({
       where: {
         status: JOB_STATUS.PENDING,
@@ -79,7 +88,7 @@ export default class extends Instruction {
       job.execution = await job.getExecution();
     }
     if (job.execution.status === EXECUTION_STATUS.STARTED) {
-      this.plugin.resume(job);
+      this.workflow.resume(job);
     }
     if (this.timers.get(job.id)) {
       this.timers.delete(job.id);
@@ -91,6 +100,7 @@ export default class extends Instruction {
       status: JOB_STATUS.PENDING,
       result: null,
       nodeId: node.id,
+      nodeKey: node.key,
       upstreamId: prevJob?.id ?? null,
     });
     job.node = node;

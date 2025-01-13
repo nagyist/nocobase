@@ -1,8 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayItems } from '@formily/antd-v5';
 import { ISchema, useField, useFieldSchema } from '@formily/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCollection, useResourceActionContext } from '../../../collection-manager';
+import { useCollection_deprecated, useResourceActionContext } from '../../../collection-manager';
 import { useCollectionFilterOptions, useSortFields } from '../../../collection-manager/action-hooks';
 import {
   GeneralSchemaDesigner,
@@ -11,13 +20,14 @@ import {
   SchemaSettingsRemove,
   SchemaSettingsSelectItem,
   SchemaSettingsSwitchItem,
-  SchemaSettingsTemplate,
 } from '../../../schema-settings';
+import { SchemaSettingsTemplate } from '../../../schema-settings/SchemaSettingsTemplate';
 import { useSchemaTemplate } from '../../../schema-templates';
+import { useBlockTemplateContext } from '../../../schema-templates/BlockTemplateProvider';
 import { useDesignable } from '../../hooks';
 
 export const TableVoidDesigner = () => {
-  const { name, title } = useCollection();
+  const { name, title } = useCollection_deprecated();
   const field = useField();
   const fieldSchema = useFieldSchema();
   const dataSource = useCollectionFilterOptions(name);
@@ -39,6 +49,7 @@ export const TableVoidDesigner = () => {
         };
   });
   const template = useSchemaTemplate();
+  const { componentNamePrefix } = useBlockTemplateContext();
   return (
     <GeneralSchemaDesigner template={template} title={title || name}>
       <SchemaSettingsSwitchItem
@@ -183,6 +194,7 @@ export const TableVoidDesigner = () => {
         title={'每页显示'}
         value={field.decoratorProps.request.params?.pageSize || 20}
         options={[
+          { label: '5', value: 5 },
           { label: '10', value: 10 },
           { label: '20', value: 20 },
           { label: '50', value: 50 },
@@ -204,7 +216,7 @@ export const TableVoidDesigner = () => {
         }}
       />
       <SchemaSettingsDivider />
-      <SchemaSettingsTemplate componentName={'Table'} collectionName={name} />
+      <SchemaSettingsTemplate componentName={`${componentNamePrefix}Table`} collectionName={name} />
       <SchemaSettingsDivider />
       <SchemaSettingsRemove
         removeParentsIfNoChildren

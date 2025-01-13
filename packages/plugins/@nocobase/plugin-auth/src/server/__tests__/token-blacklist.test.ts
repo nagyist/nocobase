@@ -1,6 +1,15 @@
-import Database, { Repository } from '@nocobase/database';
-import { MockServer, mockServer } from '@nocobase/test';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ITokenBlacklistService } from '@nocobase/auth';
+import Database, { Repository } from '@nocobase/database';
+import { MockServer, createMockServer } from '@nocobase/test';
 
 describe('token-blacklist', () => {
   let app: MockServer;
@@ -9,10 +18,9 @@ describe('token-blacklist', () => {
   let tokenBlacklist: ITokenBlacklistService;
 
   beforeAll(async () => {
-    app = mockServer({
+    app = await createMockServer({
       plugins: ['auth'],
     });
-    await app.loadAndInstall({ clean: true });
     db = app.db;
     repo = db.getRepository('tokenBlacklist');
     tokenBlacklist = app.authManager.jwt.blacklist;

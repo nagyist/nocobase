@@ -1,32 +1,41 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { UserOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { error } from '@nocobase/utils/client';
 import { App, Dropdown, Menu, MenuProps } from 'antd';
 import React, { createContext, useCallback, useMemo as useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { useACLRoleContext, useAPIClient, useCurrentUserContext, useToken } from '..';
-import { useCurrentAppInfo } from '../appInfo/CurrentAppInfoProvider';
+import { useNavigateNoUpdate } from '../application/CustomRouterContextProvider';
 import { useChangePassword } from './ChangePassword';
 import { useCurrentUserSettingsMenu } from './CurrentUserSettingsMenuProvider';
 import { useEditProfile } from './EditProfile';
 import { useLanguageSettings } from './LanguageSettings';
 import { useSwitchRole } from './SwitchRole';
-const useApplicationVersion = () => {
-  const data = useCurrentAppInfo();
+
+const useNickname = () => {
+  const { data } = useCurrentUserContext();
+  const { token } = useToken();
+
   return useEffect(() => {
     return {
-      key: 'version',
+      key: 'nickname',
       disabled: true,
       label: (
-        <span
-          role="button"
-          aria-label="app-version"
-          aria-disabled="false"
-          style={{ cursor: 'text' }}
-        >{`Version ${data?.data?.version}`}</span>
+        <span aria-disabled="false" style={{ cursor: 'text', color: token.colorTextDescription }}>
+          {data?.data?.nickname || data?.data?.username || data?.data?.email}
+        </span>
       ),
     };
-  }, [data?.data?.version]);
+  }, [data?.data?.email, data?.data?.nickname, data?.data?.username, data?.data.version, token.colorTextDescription]);
 };
 
 /**
@@ -39,7 +48,7 @@ export const SettingsMenu: React.FC<{
   const { redirectUrl = '' } = props;
   const { allowAll, snippets } = useACLRoleContext();
   const appAllowed = allowAll || snippets?.includes('app');
-  const navigate = useNavigate();
+  const navigate = useNavigateNoUpdate();
   const api = useAPIClient();
   const { t } = useTranslation();
   const silenceApi = useAPIClient();
@@ -63,7 +72,7 @@ export const SettingsMenu: React.FC<{
       }, 3000);
     });
   }, [silenceApi]);
-  const appVersion = useApplicationVersion();
+  const nickname = useNickname();
   const editProfile = useEditProfile();
   const changePassword = useChangePassword();
   const switchRole = useSwitchRole();
@@ -76,7 +85,6 @@ export const SettingsMenu: React.FC<{
 
     return [
       {
-        role: 'button',
         key: 'cache',
         label: t('Clear cache'),
         onClick: async () => {
@@ -85,7 +93,6 @@ export const SettingsMenu: React.FC<{
         },
       },
       {
-        role: 'button',
         key: 'reboot',
         label: t('Restart application'),
         onClick: async () => {
@@ -111,14 +118,14 @@ export const SettingsMenu: React.FC<{
 
   useEffect(() => {
     const items = [
-      appVersion,
+      nickname,
       {
         key: 'divider_1',
         type: 'divider',
       },
       editProfile,
       changePassword,
-      {
+      (editProfile || changePassword) && {
         key: 'divider_2',
         type: 'divider',
       },
@@ -129,12 +136,15 @@ export const SettingsMenu: React.FC<{
       },
       ...controlApp,
       {
-        role: 'button',
         key: 'signout',
         label: t('Sign out'),
         onClick: async () => {
-          await api.auth.signOut();
-          navigate(`/signin?redirect=${encodeURIComponent(redirectUrl)}`);
+          const { data } = await api.auth.signOut();
+          if (data?.data?.redirect) {
+            window.location.href = data.data.redirect;
+          } else {
+            navigate(`/signin?redirect=${encodeURIComponent(redirectUrl)}`);
+          }
         },
       },
     ];
@@ -150,7 +160,6 @@ export const SettingsMenu: React.FC<{
   }, [
     addMenuItem,
     api.auth,
-    appVersion,
     changePassword,
     controlApp,
     editProfile,
@@ -159,19 +168,31 @@ export const SettingsMenu: React.FC<{
     redirectUrl,
     switchRole,
     t,
+    nickname,
   ]);
 
   return <Menu items={getMenuItems()} />;
 };
 
 export const DropdownVisibleContext = createContext(null);
+DropdownVisibleContext.displayName = 'DropdownVisibleContext';
+
 export const CurrentUser = () => {
   const [visible, setVisible] = useState(false);
-  const { data } = useCurrentUserContext();
   const { token } = useToken();
 
   return (
-    <div style={{ display: 'inline-flex', verticalAlign: 'top' }}>
+    <div
+      className={css`
+        display: inline-block;
+        vertical-align: top;
+        width: 46px;
+        height: 46px;
+        &:hover {
+          background: rgba(255, 255, 255, 0.1) !important;
+        }
+      `}
+    >
       <DropdownVisibleContext.Provider value={{ visible, setVisible }}>
         <Dropdown
           open={visible}
@@ -192,9 +213,9 @@ export const CurrentUser = () => {
               white-space: nowrap;
               text-overflow: ellipsis;
             `}
-            style={{ cursor: 'pointer', border: 0, padding: '16px', color: token.colorTextHeaderMenu }}
+            style={{ cursor: 'pointer', padding: '16px', color: token.colorTextHeaderMenu }}
           >
-            {data?.data?.nickname || data?.data?.username || data?.data?.email}
+            <UserOutlined />
           </span>
         </Dropdown>
       </DropdownVisibleContext.Provider>

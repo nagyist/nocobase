@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import lodash from 'lodash';
 import { Model as SequelizeModel, ModelStatic } from 'sequelize';
 import { Collection } from './collection';
@@ -31,67 +40,29 @@ export class Model<TModelAttributes extends {} = any, TCreationAttributes extend
   protected _changedWithAssociations = new Set();
   protected _previousDataValuesWithAssociations = {};
 
-  static async sync(options) {
-    if (this.collection.isView()) {
-      return;
-    }
-
-    if (this.collection.options.sync === false) {
-      return;
-    }
-
+  public get db(): Database {
     // @ts-ignore
-    const collectionSyncOptions = this.database.collectionFactory.collectionTypes.get(this.collection.constructor)
-      ?.onSync;
+    return this.constructor.database;
+  }
 
-    if (collectionSyncOptions) {
-      await collectionSyncOptions(this, options);
-      return;
-    }
+  static async sync(options) {
+    const runner = new SyncRunner(this);
+    return await runner.runSync(options);
+  }
 
-    const model = this as any;
-
-    const _schema = model._schema;
-
-    if (_schema && _schema != 'public') {
-      await this.sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${_schema}";`, {
-        raw: true,
-        transaction: options?.transaction,
-      });
-    }
-
-    // fix sequelize sync with model that not have any column
-    if (Object.keys(model.tableAttributes).length === 0) {
-      if (this.database.inDialect('sqlite', 'mysql', 'mariadb')) {
-        console.error(`Zero-column tables aren't supported in ${this.database.sequelize.getDialect()}`);
-        return;
-      }
-
-      // @ts-ignore
-      const queryInterface = this.sequelize.queryInterface;
-
-      if (!queryInterface.patched) {
-        const oldDescribeTable = queryInterface.describeTable;
-        queryInterface.describeTable = async function (...args) {
-          try {
-            return await oldDescribeTable.call(this, ...args);
-          } catch (err) {
-            if (err.message.includes('No description found for')) {
-              return [];
-            } else {
-              throw err;
-            }
-          }
-        };
-        queryInterface.patched = true;
+  static callSetters(values, options) {
+    // map values
+    const result = {};
+    for (const key of Object.keys(values)) {
+      const field = this.collection.getField(key);
+      if (field && field.setter) {
+        result[key] = field.setter.call(field, values[key], options, values, key);
+      } else {
+        result[key] = values[key];
       }
     }
 
-    if (this.collection.isInherited()) {
-      return SyncRunner.syncInheritModel(model, options);
-    }
-
-    return SequelizeModel.sync.call(this, options);
+    return result;
   }
 
   // TODO
@@ -135,6 +106,7 @@ export class Model<TModelAttributes extends {} = any, TCreationAttributes extend
           return data;
         },
         this.hiddenObjKey,
+        this.handleBigInt,
       ];
       return handles.reduce((carry, fn) => fn.apply(this, [carry, options]), obj);
     };
@@ -170,6 +142,13 @@ export class Model<TModelAttributes extends {} = any, TCreationAttributes extend
 
           if (['HasMany', 'BelongsToMany'].includes(association.associationType)) {
             result[key] = handleArray(data[key], opts).map((item) => traverseJSON(item, opts));
+          } else if (association.associationType === 'BelongsToArray') {
+            const value = data[key];
+            if (!value || value.some((v) => typeof v !== 'object')) {
+              result[key] = value;
+            } else {
+              result[key] = handleArray(data[key], opts).map((item) => traverseJSON(item, opts));
+            }
           } else {
             result[key] = data[key] ? traverseJSON(data[key], opts) : null;
           }
@@ -190,6 +169,24 @@ export class Model<TModelAttributes extends {} = any, TCreationAttributes extend
       .map((field) => field.options.name);
 
     return lodash.omit(obj, hiddenFields);
+  }
+
+  private handleBigInt(obj, options) {
+    if (!options.db.inDialect('mariadb')) {
+      return obj;
+    }
+
+    const bigIntKeys = Object.keys(options.model.rawAttributes).filter((key) => {
+      return options.model.rawAttributes[key].type.constructor.name === 'BIGINT';
+    });
+
+    for (const key of bigIntKeys) {
+      if (obj[key] !== null && obj[key] !== undefined && typeof obj[key] !== 'string' && typeof obj[key] !== 'number') {
+        obj[key] = obj[key].toString();
+      }
+    }
+
+    return obj;
   }
 
   private sortAssociations(data, { field }: JSONTransformerOptions): any {

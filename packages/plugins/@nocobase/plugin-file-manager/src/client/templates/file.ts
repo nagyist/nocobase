@@ -1,13 +1,21 @@
-import { getConfigurableProperties } from '@nocobase/client';
-import { CollectionOptions } from '@nocobase/database';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { CollectionTemplate, getConfigurableProperties } from '@nocobase/client';
 import { NAMESPACE } from '../locale';
 
-export const file = {
-  name: 'file',
-  title: `{{t("File collection", { ns: "${NAMESPACE}" })}}`,
-  order: 3,
-  color: 'blue',
-  default: {
+export class FileCollectionTemplate extends CollectionTemplate {
+  name = 'file';
+  title = `{{t("File collection", { ns: "${NAMESPACE}" })}}`;
+  order = 3;
+  color = 'blue';
+  default = {
     createdBy: true,
     updatedBy: true,
     fields: [
@@ -85,14 +93,14 @@ export const file = {
         deletable: false,
         uiSchema: {
           type: 'string',
-          title: `{{t("Path")}}`,
+          title: `{{t("Path", { ns: "${NAMESPACE}" })}}`,
           'x-component': 'Input',
           'x-read-pretty': true,
         },
       },
       // 文件的可访问地址
       {
-        interface: 'input',
+        interface: 'url',
         type: 'string',
         name: 'url',
         deletable: false,
@@ -112,7 +120,7 @@ export const file = {
         deletable: false,
         uiSchema: {
           type: 'string',
-          title: `{{t("Preview")}}`,
+          title: `{{t("Preview", { ns: "${NAMESPACE}" })}}`,
           'x-component': 'Preview',
           'x-read-pretty': true,
         },
@@ -124,6 +132,12 @@ export const file = {
         target: 'storages',
         foreignKey: 'storageId',
         deletable: false,
+        uiSchema: {
+          type: 'string',
+          title: `{{t("Storage", { ns: "${NAMESPACE}" })}}`,
+          'x-component': 'Input',
+          'x-read-pretty': true,
+        },
       },
       // '其他文件信息（如图片的宽高）',
       {
@@ -133,8 +147,9 @@ export const file = {
         defaultValue: {},
       },
     ],
-  },
-  configurableProperties: {
+  };
+  presetFieldsDisabled = true;
+  configurableProperties = {
     ...getConfigurableProperties('title', 'name'),
     inherits: {
       ...getConfigurableProperties('inherits').inherits,
@@ -142,13 +157,25 @@ export const file = {
     },
     ...getConfigurableProperties('category', 'description'),
     storage: {
-      title: `{{t("File storage", { ns: "${NAMESPACE}" })}}`,
-      type: 'hasOne',
+      type: 'string',
       name: 'storage',
-      required: true,
+      title: `{{t("File storage", { ns: "${NAMESPACE}" })}}`,
       'x-decorator': 'FormItem',
-      'x-component': 'Select',
-      'x-reactions': ['{{useAsyncDataSource(loadStorages)}}'],
+      'x-component': 'RemoteSelect',
+      'x-component-props': {
+        service: {
+          resource: 'storages',
+          params: {
+            // pageSize: -1
+          },
+        },
+        manual: false,
+        fieldNames: {
+          label: 'title',
+          value: 'name',
+        },
+      },
     },
-  },
-} as CollectionOptions;
+    ...getConfigurableProperties('presetFields'),
+  };
+}

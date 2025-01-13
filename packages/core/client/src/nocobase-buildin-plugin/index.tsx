@@ -1,26 +1,34 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { DisconnectOutlined, LoadingOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { observer } from '@formily/reactive-react';
+import { getSubAppName } from '@nocobase/sdk';
 import { Button, Modal, Result, Spin } from 'antd';
 import React, { FC } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ACLPlugin } from '../acl';
-import { Application, useApp } from '../application';
+import { useAPIClient } from '../api-client';
+import { Application } from '../application';
 import { Plugin } from '../application/Plugin';
-import { SigninPage, SigninPageExtensionPlugin, SignupPage } from '../auth';
 import { BlockSchemaComponentPlugin } from '../block-provider';
+import { CollectionPlugin } from '../collection-manager';
 import { RemoteDocumentTitlePlugin } from '../document-title';
 import { PinnedListPlugin } from '../plugin-manager';
 import { PMPlugin } from '../pm';
-import { AdminLayoutPlugin, AuthLayout, RouteSchemaComponent } from '../route-switch';
-import {
-  AntdSchemaComponentPlugin,
-  KanbanPlugin,
-  SchemaComponentPlugin,
-  menuItemInitializer,
-} from '../schema-component';
+import { AdminLayoutPlugin, RouteSchemaComponent } from '../route-switch';
+import { AntdSchemaComponentPlugin, PageTabs, SchemaComponentPlugin } from '../schema-component';
 import { ErrorFallback } from '../schema-component/antd/error-fallback';
+import { PagePopups } from '../schema-component/antd/page/PagePopups';
 import { AssociationFilterPlugin, SchemaInitializerPlugin } from '../schema-initializer';
+import { SchemaSettingsPlugin } from '../schema-settings';
 import { BlockTemplateDetails, BlockTemplatePage } from '../schema-templates';
 import { SystemSettingsPlugin } from '../system-settings';
 import { CurrentUserProvider, CurrentUserSettingsMenuProvider } from '../user';
@@ -32,28 +40,67 @@ const AppSpin = () => {
   );
 };
 
-const AppError: FC<{ error: Error; app: Application }> = observer(({ app, error }) => {
-  return (
-    <div>
-      <Result
-        className={css`
-          top: 50%;
-          position: absolute;
-          width: 100%;
-          transform: translate(0, -50%);
-        `}
-        status="error"
-        title={app.i18n.t('Failed to load plugin')}
-        subTitle={app.i18n.t(error?.message)}
-        extra={[
-          <Button type="primary" key="try" onClick={() => window.location.reload()}>
-            {app.i18n.t('Try again')}
+const useErrorProps = (app: Application, error: any) => {
+  if (!error) {
+    return {};
+  }
+  const err = error?.response?.data?.errors?.[0] || error;
+  const subApp = getSubAppName(app.getPublicPath());
+  switch (err.code) {
+    case 'USER_HAS_NO_ROLES_ERR':
+      return {
+        title: app.i18n.t('Permission denied'),
+        subTitle: err.message,
+        extra: [
+          <Button
+            type="primary"
+            key="try"
+            onClick={() => {
+              app.apiClient.auth.setToken(null);
+              window.location.reload();
+            }}
+          >
+            {app.i18n.t('Sign in with another account')}
           </Button>,
-        ]}
-      />
-    </div>
-  );
-});
+          subApp ? (
+            <Button key="back" onClick={() => (window.location.href = '/admin')}>
+              {app.i18n.t('Return to the main application')}
+            </Button>
+          ) : null,
+        ],
+      };
+    default:
+      return {};
+  }
+};
+
+const AppError: FC<{ error: Error; app: Application }> = observer(
+  ({ app, error }) => {
+    const props = useErrorProps(app, error);
+    return (
+      <div>
+        <Result
+          className={css`
+            top: 50%;
+            position: absolute;
+            width: 100%;
+            transform: translate(0, -50%);
+          `}
+          status="error"
+          title={app.i18n.t('App error')}
+          subTitle={app.i18n.t(error?.message)}
+          extra={[
+            <Button type="primary" key="try" onClick={() => window.location.reload()}>
+              {app.i18n.t('Try again')}
+            </Button>,
+          ]}
+          {...props}
+        />
+      </div>
+    );
+  },
+  { displayName: 'AppError' },
+);
 
 const getProps = (app: Application) => {
   if (app.ws.serverDown) {
@@ -94,7 +141,7 @@ const getProps = (app: Application) => {
     };
   }
 
-  if (app.error.code === 'APP_ERROR') {
+  if (['ENOENT', 'APP_ERROR', 'LOAD_ERROR'].includes(app.error.code)) {
     return {
       status: 'error',
       title: 'App error',
@@ -157,42 +204,52 @@ const getProps = (app: Application) => {
     return { ...props, ...commands[app.error?.command?.name] };
   }
 
-  return {};
+  return {
+    status: 'warning',
+    title: 'App warning',
+    subTitle: app.error?.message,
+  };
 };
 
-const AppMaintaining: FC<{ app: Application; error: Error }> = observer(({ app }) => {
-  const { icon, status, title, subTitle } = getProps(app);
-  return (
-    <div>
-      <Result
-        className={css`
-          top: 50%;
-          position: absolute;
-          width: 100%;
-          transform: translate(0, -50%);
-        `}
-        icon={icon}
-        status={status}
-        title={app.i18n.t(title)}
-        subTitle={app.i18n.t(subTitle)}
-        // extra={[
-        //   <Button type="primary" key="try" onClick={() => window.location.reload()}>
-        //     {app.i18n.t('Try again')}
-        //   </Button>,
-        // ]}
-      />
-    </div>
-  );
-});
+const AppMaintaining: FC<{ app: Application; error: Error }> = observer(
+  ({ app }) => {
+    const { icon, status, title, subTitle } = getProps(app);
+    return (
+      <div>
+        <Result
+          className={css`
+            top: 50%;
+            position: absolute;
+            width: 100%;
+            transform: translate(0, -50%);
+          `}
+          icon={icon}
+          status={status}
+          title={app.i18n.t(title)}
+          subTitle={<div style={{ whiteSpace: 'pre-wrap' }}>{app.i18n.t(subTitle)}</div>}
+          // extra={[
+          //   <Button type="primary" key="try" onClick={() => window.location.reload()}>
+          //     {app.i18n.t('Try again')}
+          //   </Button>,
+          // ]}
+        />
+      </div>
+    );
+  },
+  { displayName: 'AppMaintaining' },
+);
 
-const AppMaintainingDialog: FC<{ app: Application; error: Error }> = observer(({ app }) => {
-  const { icon, status, title, subTitle } = getProps(app);
-  return (
-    <Modal open={true} footer={null} closable={false}>
-      <Result icon={icon} status={status} title={app.i18n.t(title)} subTitle={app.i18n.t(subTitle)} />
-    </Modal>
-  );
-});
+const AppMaintainingDialog: FC<{ app: Application; error: Error }> = observer(
+  ({ app }) => {
+    const { icon, status, title, subTitle } = getProps(app);
+    return (
+      <Modal open={true} footer={null} closable={false}>
+        <Result icon={icon} status={status} title={app.i18n.t(title)} subTitle={app.i18n.t(subTitle)} />
+      </Modal>
+    );
+  },
+  { displayName: 'AppMaintainingDialog' },
+);
 
 const AppNotFound = () => {
   const navigate = useNavigate();
@@ -228,8 +285,6 @@ export class NocoBaseBuildInPlugin extends Plugin {
 
     this.app.use(CurrentUserProvider);
     this.app.use(CurrentUserSettingsMenuProvider);
-
-    this.app.schemaInitializerManager.add(menuItemInitializer);
   }
 
   addRoutes() {
@@ -249,27 +304,24 @@ export class NocoBaseBuildInPlugin extends Plugin {
     });
     this.router.add('admin.page', {
       path: '/admin/:name',
-      Component: 'RouteSchemaComponent',
+      Component: 'AdminDynamicPage',
     });
-
-    this.router.add('auth', {
-      Component: 'AuthLayout',
+    this.router.add('admin.page.tab', {
+      path: '/admin/:name/tabs/:tabUid',
+      Component: PageTabs as any,
     });
-    this.router.add('auth.signin', {
-      path: '/signin',
-      Component: 'SigninPage',
+    this.router.add('admin.page.popup', {
+      path: '/admin/:name/popups/*',
+      Component: PagePopups,
     });
-    this.router.add('auth.signup', {
-      path: '/signup',
-      Component: 'SignupPage',
+    this.router.add('admin.page.tab.popup', {
+      path: '/admin/:name/tabs/:tabUid/popups/*',
+      Component: PagePopups,
     });
   }
 
   addComponents() {
     this.app.addComponents({
-      AuthLayout,
-      SigninPage,
-      SignupPage,
       ErrorFallback,
       RouteSchemaComponent,
       BlockTemplatePage,
@@ -278,7 +330,6 @@ export class NocoBaseBuildInPlugin extends Plugin {
   }
   async addPlugins() {
     await this.app.pm.add(AssociationFilterPlugin);
-    await this.app.pm.add(KanbanPlugin);
     await this.app.pm.add(LocalePlugin, { name: 'builtin-locale' });
     await this.app.pm.add(AdminLayoutPlugin, { name: 'admin-layout' });
     await this.app.pm.add(SystemSettingsPlugin, { name: 'system-setting' });
@@ -294,11 +345,12 @@ export class NocoBaseBuildInPlugin extends Plugin {
     });
     await this.app.pm.add(SchemaComponentPlugin, { name: 'schema-component' });
     await this.app.pm.add(SchemaInitializerPlugin, { name: 'schema-initializer' });
+    await this.app.pm.add(SchemaSettingsPlugin, { name: 'schema-settings' });
     await this.app.pm.add(BlockSchemaComponentPlugin, { name: 'block-schema-component' });
     await this.app.pm.add(AntdSchemaComponentPlugin, { name: 'antd-schema-component' });
-    await this.app.pm.add(SigninPageExtensionPlugin, { name: 'signin-page-extension' });
     await this.app.pm.add(ACLPlugin, { name: 'builtin-acl' });
     await this.app.pm.add(RemoteDocumentTitlePlugin, { name: 'remote-document-title' });
     await this.app.pm.add(PMPlugin, { name: 'builtin-pm' });
+    await this.app.pm.add(CollectionPlugin, { name: 'builtin-collection' });
   }
 }

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
 import {
   FieldContext,
@@ -11,16 +20,27 @@ import {
 import { uid } from '@formily/shared';
 import { error } from '@nocobase/utils/client';
 import { Menu as AntdMenu, MenuProps } from 'antd';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { createDesignable, DndContext, SortableItem, useDesignable, useDesigner } from '../..';
-import { Icon, useAPIClient, useSchemaInitializerRender } from '../../../';
+import { Icon, useAPIClient, useParseURLAndParams, useSchemaInitializerRender } from '../../../';
 import { useCollectMenuItems, useMenuItem } from '../../../hooks/useMenuItem';
 import { useProps } from '../../hooks/useProps';
+import { useMenuTranslation } from './locale';
 import { MenuDesigner } from './Menu.Designer';
 import { findKeysByUid, findMenuItem } from './util';
-import { useMenuTranslation } from './locale';
+
+import React, {
+  createContext,
+  // @ts-ignore
+  startTransition,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 const subMenuDesignerCss = css`
   position: relative;
@@ -30,6 +50,8 @@ const subMenuDesignerCss = css`
   padding: 0 34px 0 24px;
   width: calc(100% + 58px);
   height: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   &:hover {
     > .general-schema-designer {
       display: block;
@@ -218,47 +240,53 @@ const HeaderMenu = ({
     return result;
   }, [children, designable]);
 
+  const handleSelect = useCallback(
+    (info: { item; key; keyPath; domEvent }) => {
+      startTransition(() => {
+        const s = schema.properties?.[info.key];
+
+        if (!s) {
+          return;
+        }
+
+        if (mode === 'mix') {
+          if (s['x-component'] !== 'Menu.SubMenu') {
+            onSelect?.(info);
+          } else {
+            const menuItemSchema = findMenuItem(s);
+            if (!menuItemSchema) {
+              return onSelect?.(info);
+            }
+            // TODO
+            setLoading(true);
+            const keys = findKeysByUid(schema, menuItemSchema['x-uid']);
+            setDefaultSelectedKeys(keys);
+            setTimeout(() => {
+              setLoading(false);
+            }, 100);
+            onSelect?.({
+              key: menuItemSchema.name,
+              item: {
+                props: {
+                  schema: menuItemSchema,
+                },
+              },
+            });
+          }
+        } else {
+          onSelect?.(info);
+        }
+      });
+    },
+    [schema, mode, onSelect, setLoading, setDefaultSelectedKeys],
+  );
   return (
     <>
       <Component />
       <AntdMenu
         {...others}
         className={headerMenuClass}
-        onSelect={(info: any) => {
-          const s = schema.properties?.[info.key];
-
-          if (!s) {
-            return;
-          }
-
-          if (mode === 'mix') {
-            if (s['x-component'] !== 'Menu.SubMenu') {
-              onSelect?.(info);
-            } else {
-              const menuItemSchema = findMenuItem(s);
-              if (!menuItemSchema) {
-                return onSelect?.(info);
-              }
-              // TODO
-              setLoading(true);
-              const keys = findKeysByUid(schema, menuItemSchema['x-uid']);
-              setDefaultSelectedKeys(keys);
-              setTimeout(() => {
-                setLoading(false);
-              }, 100);
-              onSelect?.({
-                key: menuItemSchema.name,
-                item: {
-                  props: {
-                    schema: menuItemSchema,
-                  },
-                },
-              });
-            }
-          } else {
-            onSelect?.(info);
-          }
-        }}
+        onClick={handleSelect}
         mode={mode === 'mix' ? 'horizontal' : mode}
         defaultOpenKeys={defaultOpenKeys}
         defaultSelectedKeys={defaultSelectedKeys}
@@ -274,8 +302,9 @@ const SideMenu = ({
   mode,
   sideMenuSchema,
   sideMenuRef,
-  defaultOpenKeys,
-  defaultSelectedKeys,
+  openKeys,
+  setOpenKeys,
+  selectedKeys,
   onSelect,
   render,
   t,
@@ -284,6 +313,19 @@ const SideMenu = ({
   designable,
 }) => {
   const { Component, getMenuItems } = useMenuItem();
+
+  // 使用 ref 用来防止闭包问题
+  const sideMenuSchemaRef = useRef(sideMenuSchema);
+  sideMenuSchemaRef.current = sideMenuSchema;
+
+  const handleSelect = useCallback(
+    (info) => {
+      startTransition(() => {
+        onSelect?.(info);
+      });
+    },
+    [onSelect],
+  );
 
   const items = useMemo(() => {
     const result = getMenuItems(() => {
@@ -301,7 +343,7 @@ const SideMenu = ({
               t,
               api,
               refresh,
-              current: sideMenuSchema,
+              current: sideMenuSchemaRef.current,
             });
             dn.loadAPIClientEvents();
             dn.insertAdjacent('beforeEnd', s);
@@ -328,11 +370,10 @@ const SideMenu = ({
         <Component />
         <AntdMenu
           mode={'inline'}
-          defaultOpenKeys={defaultOpenKeys}
-          defaultSelectedKeys={defaultSelectedKeys}
-          onSelect={(info) => {
-            onSelect?.(info);
-          }}
+          openKeys={openKeys}
+          selectedKeys={selectedKeys}
+          onClick={handleSelect}
+          onOpenChange={setOpenKeys}
           className={sideMenuClass}
           items={items as MenuProps['items']}
         />
@@ -343,7 +384,6 @@ const SideMenu = ({
 };
 
 const MenuModeContext = createContext(null);
-
 MenuModeContext.displayName = 'MenuModeContext';
 
 const useSideMenuRef = () => {
@@ -459,8 +499,9 @@ export const Menu: ComposedMenu = observer(
               mode={mode}
               sideMenuSchema={sideMenuSchema}
               sideMenuRef={sideMenuRef}
-              defaultOpenKeys={defaultOpenKeys}
-              defaultSelectedKeys={defaultSelectedKeys}
+              openKeys={defaultOpenKeys}
+              setOpenKeys={setDefaultOpenKeys}
+              selectedKeys={selectedKeys}
               onSelect={onSelect}
               render={render}
               t={t}
@@ -476,17 +517,27 @@ export const Menu: ComposedMenu = observer(
   { displayName: 'Menu' },
 );
 
+const menuItemTitleStyle = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  display: 'inline-block',
+  width: '100%',
+  verticalAlign: 'middle',
+};
+
 Menu.Item = observer(
   (props) => {
     const { t } = useMenuTranslation();
+    const { designable } = useDesignable();
     const { pushMenuItem } = useCollectMenuItems();
-    const { icon, children, ...others } = props;
+    const { icon, children, hidden, ...others } = props;
     const schema = useFieldSchema();
     const field = useField();
     const Designer = useContext(MenuItemDesignerContext);
     const item = useMemo(() => {
       return {
         ...others,
+        hidden: designable ? false : hidden,
         className: menuItemClass,
         key: schema.name,
         eventKey: schema.name,
@@ -501,24 +552,14 @@ Menu.Item = observer(
                 removeParentsIfNoChildren={false}
               >
                 <Icon type={icon} />
-                <span
-                  style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: 'inline-block',
-                    width: '100%',
-                    verticalAlign: 'middle',
-                  }}
-                >
-                  {t(field.title)}
-                </span>
+                <span style={menuItemTitleStyle}>{t(schema.title)}</span>
                 <Designer />
               </SortableItem>
             </FieldContext.Provider>
           </SchemaContext.Provider>
         ),
       };
-    }, [field.title, icon, schema, Designer]);
+    }, [schema.title, icon, schema, Designer]);
 
     if (!pushMenuItem) {
       error('Menu.Item must be wrapped by GetMenuItemsContext.Provider');
@@ -531,11 +572,58 @@ Menu.Item = observer(
   { displayName: 'Menu.Item' },
 );
 
+const MenuURLButton = ({ href, params, icon }) => {
+  const field = useField();
+  const { t } = useMenuTranslation();
+  const Designer = useContext(MenuItemDesignerContext);
+  const { parseURLAndParams } = useParseURLAndParams();
+  const urlRef = useRef(href);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        urlRef.current = await parseURLAndParams(href, params || []);
+      } catch (err) {
+        console.error(err);
+        urlRef.current = href;
+      }
+    };
+    run();
+  }, [href, JSON.stringify(params), parseURLAndParams]);
+
+  return (
+    <SortableItem
+      className={designerCss}
+      onClick={(event) => {
+        window.open(urlRef.current, '_blank');
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      removeParentsIfNoChildren={false}
+      aria-label={t(field.title)}
+    >
+      <Icon type={icon} />
+      <span
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: 'inline-block',
+          width: '100%',
+          verticalAlign: 'middle',
+        }}
+      >
+        {t(field.title)}
+      </span>
+      <Designer />
+    </SortableItem>
+  );
+};
+
 Menu.URL = observer(
   (props) => {
-    const { t } = useMenuTranslation();
     const { pushMenuItem } = useCollectMenuItems();
-    const { icon, children, ...others } = props;
+    const { designable } = useDesignable();
+    const { icon, children, hidden, ...others } = props;
     const schema = useFieldSchema();
     const field = useField();
     const Designer = useContext(MenuItemDesignerContext);
@@ -548,36 +636,21 @@ Menu.URL = observer(
     const item = useMemo(() => {
       return {
         ...others,
+        hidden: designable ? false : hidden,
         className: menuItemClass,
         key: schema.name,
         eventKey: schema.name,
         schema,
-        onClick: () => {
-          window.open(props.href, '_blank');
-        },
+        onClick: () => {},
         label: (
           <SchemaContext.Provider value={schema}>
             <FieldContext.Provider value={field}>
-              <SortableItem className={designerCss} removeParentsIfNoChildren={false} aria-label={t(field.title)}>
-                <Icon type={icon} />
-                <span
-                  style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: 'inline-block',
-                    width: '100%',
-                    verticalAlign: 'middle',
-                  }}
-                >
-                  {t(field.title)}
-                </span>
-                <Designer />
-              </SortableItem>
+              <MenuURLButton icon={icon} href={props.href} params={props.params} />
             </FieldContext.Provider>
           </SchemaContext.Provider>
         ),
       };
-    }, [field.title, icon, props.href, schema, Designer]);
+    }, [field.title, designable, hidden, icon, props.href, schema, JSON.stringify(props.params)]);
 
     pushMenuItem(item);
     return null;
@@ -588,9 +661,10 @@ Menu.URL = observer(
 Menu.SubMenu = observer(
   (props) => {
     const { t } = useMenuTranslation();
+    const { designable } = useDesignable();
     const { Component, getMenuItems } = useMenuItem();
     const { pushMenuItem } = useCollectMenuItems();
-    const { icon, children, ...others } = props;
+    const { icon, children, hidden, ...others } = props;
     const schema = useFieldSchema();
     const field = useField();
     const mode = useContext(MenuModeContext);
@@ -598,6 +672,7 @@ Menu.SubMenu = observer(
     const submenu = useMemo(() => {
       return {
         ...others,
+        hidden: designable ? false : hidden,
         className: menuItemClass,
         key: schema.name,
         eventKey: schema.name,

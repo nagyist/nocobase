@@ -1,9 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { setValidateLanguage } from '@formily/validator';
 import { App, ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import { loadConstrueLocale } from '../../antd-config-provider/loadConstrueLocale';
 import { Plugin } from '../../application/Plugin';
 import { dayjsLocale } from '../../locale';
-import { setValidateLanguage } from '@formily/validator';
 
 export class LocalePlugin extends Plugin {
   locales: any = {};
@@ -16,12 +25,15 @@ export class LocalePlugin extends Plugin {
         params: {
           locale,
         },
+        headers: {
+          'X-Role': 'anonymous',
+        },
       });
       const data = res?.data;
       this.locales = data?.data || {};
       this.app.use(ConfigProvider, { locale: this.locales.antd, popupMatchSelectWidth: false });
-      this.app.use(App);
-      if (data?.data?.lang && !locale) {
+      this.app.use(App, { component: false });
+      if (data?.data?.lang) {
         api.auth.setLocale(data?.data?.lang);
         this.app.i18n.changeLanguage(data?.data?.lang);
       }

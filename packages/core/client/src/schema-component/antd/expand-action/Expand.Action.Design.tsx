@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema, useField, useFieldSchema } from '@formily/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +18,11 @@ import {
   SchemaSettingsRemove,
 } from '../../../schema-settings';
 
+/**
+ *
+ * @deprecated
+ * @returns
+ */
 export const ExpandActionDesign = (props) => {
   const { t } = useTranslation();
   const fieldSchema = useFieldSchema();
@@ -56,8 +70,8 @@ export const ExpandActionDesign = (props) => {
                 default: fieldSchema?.['x-component-props']?.danger
                   ? 'danger'
                   : fieldSchema?.['x-component-props']?.type === 'primary'
-                  ? 'primary'
-                  : 'default',
+                    ? 'primary'
+                    : 'default',
                 enum: [
                   { value: 'default', label: '{{t("Default")}}' },
                   { value: 'primary', label: '{{t("Highlight")}}' },

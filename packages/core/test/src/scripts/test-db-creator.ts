@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import http from 'http';
 import url from 'url';
 import pg from 'pg';
@@ -27,6 +36,14 @@ abstract class BaseClient<Client> {
 
     await this._createDB(name);
     this.createdDBs.add(name);
+
+    // remove db after 3 minutes
+    setTimeout(
+      async () => {
+        await this.removeDB(name);
+      },
+      3 * 60 * 1000,
+    );
   }
 
   async releaseAll() {
@@ -38,6 +55,16 @@ abstract class BaseClient<Client> {
 
     for (const name of dbNames) {
       console.log(`Removing database: ${name}`);
+      await this._removeDB(name);
+      this.createdDBs.delete(name);
+    }
+  }
+
+  async removeDB(name: string) {
+    if (!this._client) {
+      return;
+    }
+    if (this.createdDBs.has(name)) {
       await this._removeDB(name);
       this.createdDBs.delete(name);
     }
@@ -147,8 +174,9 @@ const server = http.createServer((req, res) => {
         res.end(JSON.stringify({ error }));
       });
   } else if (trimmedPath === 'release') {
+    const name = parsedUrl.query.name as string | undefined;
     dbClient
-      .releaseAll()
+      .removeDB(name)
       .then(() => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end();

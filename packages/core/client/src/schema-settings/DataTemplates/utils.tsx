@@ -1,17 +1,26 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayBase } from '@formily/antd-v5';
 import { useForm } from '@formily/react';
 import { message } from 'antd';
 import React, { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAssociationPath } from '../../block-provider/hooks';
-import { useCollectionManager } from '../../collection-manager';
+import { useCollectionManager_deprecated } from '../../collection-manager';
 import { useCompile } from '../../schema-component';
 import { TreeNode } from './TreeLabel';
 import { systemKeys } from './hooks/useCollectionState';
 import LRUCache from 'lru-cache';
 
 export const useSyncFromForm = (fieldSchema, collection?, callBack?) => {
-  const { getCollectionJoinField, getCollectionFields } = useCollectionManager();
+  const { getCollectionJoinField, getCollectionFields } = useCollectionManager_deprecated();
   const array = ArrayBase.useArray();
   const index = ArrayBase.useIndex();
   const record = ArrayBase.useRecord();
@@ -166,7 +175,7 @@ export const useSyncFromForm = (fieldSchema, collection?, callBack?) => {
       const formData = new Set([]);
       const selectFields = new Set([]);
       const getAssociationAppends = (schema, str) => {
-        schema.reduceProperties((pre, s) => {
+        schema?.reduceProperties?.((pre, s) => {
           const prefix = pre || str;
           const collectionfield = s['x-collection-field'] && getCollectionJoinField(s['x-collection-field']);
           const isAssociationSubfield = s.name.includes('.');
@@ -184,7 +193,7 @@ export const useSyncFromForm = (fieldSchema, collection?, callBack?) => {
             selectFields.add(path);
           }
           if (collectionfield && (isAssociationField || isAssociationSubfield) && s['x-component'] !== 'TableField') {
-            formData.add({ name: path, fieldMode: s['x-component-props']['mode'] || 'Select' });
+            formData.add({ name: path, fieldMode: s['x-component-props']?.['mode'] || 'Select' });
             if (['Nester', 'SubTable'].includes(s['x-component-props']?.mode)) {
               const bufPrefix = prefix && prefix !== '' ? prefix + '.' + s.name : s.name;
               getAssociationAppends(s, bufPrefix);

@@ -1,40 +1,61 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css, cx } from '@emotion/css';
-import { FormItem as Item } from '@formily/antd-v5';
+import { IFormItemProps, FormItem as Item } from '@formily/antd-v5';
 import { Field } from '@formily/core';
 import { observer, useField, useFieldSchema } from '@formily/react';
 import React, { useEffect, useMemo } from 'react';
 import { ACLCollectionFieldProvider } from '../../../acl/ACLProvider';
 import { useApp } from '../../../application';
-import { useFormActiveFields } from '../../../block-provider';
-import { Collection } from '../../../collection-manager';
+import { useFormActiveFields } from '../../../block-provider/hooks/useFormActiveFields';
+import { Collection_deprecated } from '../../../collection-manager';
+import { CollectionFieldProvider } from '../../../data-source/collection-field/CollectionFieldProvider';
+import { withDynamicSchemaProps } from '../../../hoc/withDynamicSchemaProps';
+import { useDataFormItemProps } from '../../../modules/blocks/data-blocks/form/hooks/useDataFormItemProps';
 import { GeneralSchemaDesigner } from '../../../schema-settings';
-import { useVariables } from '../../../variables';
-import useContextVariable from '../../../variables/hooks/useContextVariable';
 import { BlockItem } from '../block-item';
 import { HTMLEncode } from '../input/shared';
 import { FilterFormDesigner } from './FormItem.FilterFormDesigner';
 import { useEnsureOperatorsValid } from './SchemaSettingOptions';
-import useLazyLoadAssociationFieldOfForm from './hooks/useLazyLoadAssociationFieldOfForm';
 import useLazyLoadDisplayAssociationFieldsOfForm from './hooks/useLazyLoadDisplayAssociationFieldsOfForm';
+import { useLinkageRulesForSubTableOrSubForm } from './hooks/useLinkageRulesForSubTableOrSubForm';
 import useParseDefaultValue from './hooks/useParseDefaultValue';
 
-export const FormItem: any = observer(
-  (props: any) => {
+Item.displayName = 'FormilyFormItem';
+
+const formItemWrapCss = css`
+  & .ant-space {
+    flex-wrap: wrap;
+  }
+  .ant-description-textarea img {
+    max-width: 100%;
+  }
+`;
+
+const formItemLabelCss = css`
+  > .ant-formily-item-label {
+    display: none;
+  }
+`;
+
+export const FormItem: any = withDynamicSchemaProps(
+  observer((props: IFormItemProps) => {
     useEnsureOperatorsValid();
     const field = useField<Field>();
     const schema = useFieldSchema();
-    const contextVariable = useContextVariable();
-    const variables = useVariables();
     const { addActiveFieldName } = useFormActiveFields() || {};
+    const { wrapperStyle }: { wrapperStyle: any } = useDataFormItemProps();
 
-    useEffect(() => {
-      variables?.registerVariable(contextVariable);
-    }, [contextVariable]);
-
-    // 需要放在注冊完变量之后
     useParseDefaultValue();
     useLazyLoadDisplayAssociationFieldsOfForm();
-    useLazyLoadAssociationFieldOfForm();
+    useLinkageRulesForSubTableOrSubForm();
 
     useEffect(() => {
       addActiveFieldName?.(schema.name as string);
@@ -42,41 +63,52 @@ export const FormItem: any = observer(
 
     const showTitle = schema['x-decorator-props']?.showTitle ?? true;
     const extra = useMemo(() => {
-      return typeof field.description === 'string' ? (
-        <div
-          dangerouslySetInnerHTML={{
-            __html: HTMLEncode(field.description).split('\n').join('<br/>'),
-          }}
-        />
-      ) : (
-        field.description
-      );
+      if (field.description && field.description !== '') {
+        return typeof field.description === 'string' ? (
+          <div
+            dangerouslySetInnerHTML={{
+              __html: HTMLEncode(field.description).split('\n').join('<br/>'),
+            }}
+          />
+        ) : (
+          field.description
+        );
+      }
     }, [field.description]);
     const className = useMemo(() => {
-      return cx(
-        css`
-          & .ant-space {
-            flex-wrap: wrap;
-          }
-        `,
-        {
-          [css`
-            > .ant-formily-item-label {
-              display: none;
-            }
-          `]: showTitle === false,
-        },
-      );
+      return cx(formItemWrapCss, {
+        [formItemLabelCss]: showTitle === false,
+      });
     }, [showTitle]);
-
     return (
-      <ACLCollectionFieldProvider>
-        <BlockItem className={'nb-form-item'}>
-          <Item className={className} {...props} extra={extra} />
+      <CollectionFieldProvider allowNull={true}>
+        <BlockItem
+          className={cx(
+            'nb-form-item',
+            css`
+              .ant-formily-item-layout-horizontal .ant-formily-item-control {
+                max-width: ${showTitle === false || schema['x-component'] !== 'CollectionField'
+                  ? '100% !important'
+                  : null};
+              }
+            `,
+          )}
+        >
+          <ACLCollectionFieldProvider>
+            <Item
+              className={className}
+              {...props}
+              extra={extra}
+              wrapperStyle={{
+                ...(wrapperStyle.backgroundColor ? { paddingLeft: '5px', paddingRight: '5px' } : {}),
+                ...wrapperStyle,
+              }}
+            />
+          </ACLCollectionFieldProvider>
         </BlockItem>
-      </ACLCollectionFieldProvider>
+      </CollectionFieldProvider>
     );
-  },
+  }),
   { displayName: 'FormItem' },
 );
 
@@ -91,7 +123,7 @@ FormItem.Designer = function Designer() {
   );
 };
 
-export function isFileCollection(collection: Collection) {
+export function isFileCollection(collection: Collection_deprecated) {
   return collection?.template === 'file';
 }
 

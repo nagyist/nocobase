@@ -1,10 +1,25 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Context, Next } from '@nocobase/actions';
 import { koaMulter as multer } from '@nocobase/utils';
-import path from 'path';
+import Path from 'path';
 
-import { DEFAULT_MAX_FILE_SIZE, FILE_FIELD_NAME, LIMIT_FILES } from '../constants';
+import Plugin from '..';
+import {
+  FILE_FIELD_NAME,
+  FILE_SIZE_LIMIT_DEFAULT,
+  FILE_SIZE_LIMIT_MAX,
+  FILE_SIZE_LIMIT_MIN,
+  LIMIT_FILES,
+} from '../../constants';
 import * as Rules from '../rules';
-import { getStorageConfig } from '../storages';
 
 // TODO(optimize): 需要优化错误处理，计算失败后需要抛出对应错误，以便程序处理
 function getFileFilter(storage) {
@@ -18,28 +33,30 @@ function getFileFilter(storage) {
   };
 }
 
-function getFileData(ctx: Context) {
+export function getFileData(ctx: Context) {
   const { [FILE_FIELD_NAME]: file, storage } = ctx;
   if (!file) {
     return ctx.throw(400, 'file validation failed');
   }
 
-  const storageConfig = getStorageConfig(storage.type);
+  const storageConfig = ctx.app.pm.get(Plugin).storageTypes.get(storage.type);
   const { [storageConfig.filenameKey || 'filename']: name } = file;
   // make compatible filename across cloud service (with path)
-  const filename = path.basename(name);
-  const extname = path.extname(filename);
-  const urlPath = storage.path ? storage.path.replace(/^([^/])/, '/$1') : '';
+  const filename = Path.basename(name);
+  const extname = Path.extname(filename);
+  const path = (storage.path || '').replace(/^\/|\/$/g, '');
+  const baseUrl = storage.baseUrl.replace(/\/+$/, '');
+  const pathname = [path, filename].filter(Boolean).join('/');
 
   return {
     title: Buffer.from(file.originalname, 'latin1').toString('utf8').replace(extname, ''),
     filename,
     extname,
     // TODO(feature): 暂时两者相同，后面 storage.path 模版化以后，这里只是 file 实际的 path
-    path: storage.path,
+    path,
     size: file.size,
     // 直接缓存起来
-    url: `${storage.baseUrl}${urlPath}/${filename}`,
+    url: `${baseUrl}/${pathname}`,
     mimetype: file.mimetype,
     // @ts-ignore
     meta: ctx.request.body,
@@ -55,7 +72,7 @@ async function multipart(ctx: Context, next: Next) {
     return ctx.throw(500);
   }
 
-  const storageConfig = getStorageConfig(storage.type);
+  const storageConfig = ctx.app.pm.get(Plugin).storageTypes.get(storage.type);
   if (!storageConfig) {
     ctx.logger.error(`[file-manager] storage type "${storage.type}" is not defined`);
     return ctx.throw(500);
@@ -64,12 +81,16 @@ async function multipart(ctx: Context, next: Next) {
   const multerOptions = {
     fileFilter: getFileFilter(storage),
     limits: {
-      fileSize: storage.rules.size ?? DEFAULT_MAX_FILE_SIZE,
       // 每次只允许提交一个文件
       files: LIMIT_FILES,
     },
     storage: storageConfig.make(storage),
   };
+  multerOptions.limits['fileSize'] = Math.min(
+    Math.max(FILE_SIZE_LIMIT_MIN, storage.rules.size ?? FILE_SIZE_LIMIT_DEFAULT),
+    FILE_SIZE_LIMIT_MAX,
+  );
+
   const upload = multer(multerOptions).single(FILE_FIELD_NAME);
   try {
     // NOTE: empty next and invoke after success
@@ -79,7 +100,7 @@ async function multipart(ctx: Context, next: Next) {
       return ctx.throw(400, err);
     }
     ctx.logger.error(err);
-    return ctx.throw(500);
+    return ctx.throw(500, err);
   }
 
   const values = getFileData(ctx);
@@ -110,14 +131,14 @@ export async function createMiddleware(ctx: Context, next: Next) {
 }
 
 export async function destroyMiddleware(ctx: Context, next: Next) {
-  const { resourceName, actionName } = ctx.action;
+  const { resourceName, actionName, sourceId } = ctx.action;
   const collection = ctx.db.getCollection(resourceName);
 
   if (collection?.options?.template !== 'file' || actionName !== 'destroy') {
     return next();
   }
 
-  const repository = ctx.db.getRepository(resourceName);
+  const repository = ctx.db.getRepository(resourceName, sourceId);
 
   const { filterByTk, filter } = ctx.action.params;
 
@@ -151,7 +172,7 @@ export async function destroyMiddleware(ctx: Context, next: Next) {
   await storages.reduce(
     (promise, storage) =>
       promise.then(async () => {
-        const storageConfig = getStorageConfig(storage.type);
+        const storageConfig = ctx.app.pm.get(Plugin).storageTypes.get(storage.type);
         const result = await storageConfig.delete(storage, storageGroupedRecords[storage.id]);
         count += result[0];
         undeleted.push(...result[1]);

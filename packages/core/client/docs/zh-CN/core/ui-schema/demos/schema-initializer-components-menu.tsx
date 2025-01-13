@@ -1,11 +1,12 @@
 /**
  * defaultShowCode: true
  */
-import { Application, SchemaInitializer } from '@nocobase/client';
+import { Application, SchemaInitializer, SchemaInitializerSubMenu } from '@nocobase/client';
+import React from 'react';
 import { appOptions } from './schema-initializer-common';
 
 const myInitializer = new SchemaInitializer({
-  name: 'MyInitializer',
+  name: 'myInitializer',
   title: 'Button Text',
   items: [
     {
@@ -41,6 +42,24 @@ const myInitializer = new SchemaInitializer({
           title: 'B2',
         },
       ],
+    },
+    {
+      name: 'c',
+      Component: () => {
+        return (
+          <SchemaInitializerSubMenu
+            name={'c'}
+            title="C subMenu"
+            items={[
+              {
+                name: 'c1',
+                type: 'item',
+                title: 'C1',
+              },
+            ]}
+          />
+        );
+      },
     },
   ],
 });

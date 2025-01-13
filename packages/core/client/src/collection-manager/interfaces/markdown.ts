@@ -1,14 +1,23 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ISchema } from '@formily/react';
 import { i18n } from '../../i18n';
 import { defaultProps, operators } from './properties';
-import { IField } from './types';
+import { CollectionFieldInterface } from '../../data-source/collection-field-interface/CollectionFieldInterface';
 
-export const markdown: IField = {
-  name: 'markdown',
-  type: 'object',
-  title: '{{t("Markdown")}}',
-  group: 'media',
-  default: {
+export class MarkdownFieldInterface extends CollectionFieldInterface {
+  name = 'markdown';
+  type = 'object';
+  title = '{{t("Markdown")}}';
+  group = 'media';
+  default = {
     type: 'text',
     // name,
     uiSchema: {
@@ -16,18 +25,18 @@ export const markdown: IField = {
       // title,
       'x-component': 'Markdown',
     },
-  },
-  availableTypes: ['text'],
-  hasDefaultValue: true,
-  properties: {
+  };
+  availableTypes = ['text', 'json', 'string'];
+  hasDefaultValue = true;
+  properties = {
     ...defaultProps,
-  },
+  };
   schemaInitialize(schema: ISchema, { block }) {
     if (['Table', 'Kanban'].includes(block)) {
       schema['x-component-props'] = schema['x-component-props'] || {};
       schema['x-component-props']['ellipsis'] = true;
     }
-  },
+  }
   validateSchema(fieldSchema) {
     return {
       max: {
@@ -68,8 +77,8 @@ export const markdown: IField = {
         },
       },
     };
-  },
-  filterable: {
-    operators: operators.string,
-  },
-};
+  }
+  filterable = {
+    operators: operators.bigField,
+  };
+}

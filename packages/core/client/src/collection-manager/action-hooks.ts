@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useField, useForm } from '@formily/react';
 import { message } from 'antd';
 import _ from 'lodash';
@@ -5,7 +14,7 @@ import cloneDeep from 'lodash/cloneDeep';
 import omit from 'lodash/omit';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCollection, useCollectionManager } from '.';
+import { useCollection_deprecated, useCollectionManager_deprecated } from '.';
 import { useRequest } from '../api-client';
 import { useRecord } from '../record-provider';
 import { useActionContext } from '../schema-component';
@@ -56,7 +65,7 @@ export const useResetFilterAction = () => {
 };
 
 export const useKanbanEvents = () => {
-  const { resource } = useCollection();
+  const { resource } = useCollection_deprecated();
   return {
     async onCardDragEnd({ columns, groupField }, { fromColumnId, fromPosition }, { toColumnId, toPosition }) {
       const sourceColumn = columns.find((column) => column.id === fromColumnId);
@@ -80,7 +89,7 @@ export const useKanbanEvents = () => {
 };
 
 export const useSortFields = (collectionName: string) => {
-  const { getCollectionFields, getInterface } = useCollectionManager();
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
   const fields = getCollectionFields(collectionName);
   return fields
     .filter((field: any) => {
@@ -102,7 +111,7 @@ export const useSortFields = (collectionName: string) => {
 };
 
 export const useChildrenCollections = (collectionName: string) => {
-  const { getChildrenCollections } = useCollectionManager();
+  const { getChildrenCollections } = useCollectionManager_deprecated();
   const childrenCollections = getChildrenCollections(collectionName);
   return childrenCollections.map((collection: any) => {
     return {
@@ -113,7 +122,7 @@ export const useChildrenCollections = (collectionName: string) => {
 };
 
 export const useSelfAndChildrenCollections = (collectionName: string) => {
-  const { getChildrenCollections, getCollection } = useCollectionManager();
+  const { getChildrenCollections, getCollection } = useCollectionManager_deprecated();
   const childrenCollections = getChildrenCollections(collectionName);
   const self = getCollection(collectionName);
   if (!collectionName) {
@@ -132,10 +141,10 @@ export const useSelfAndChildrenCollections = (collectionName: string) => {
   return options;
 };
 
-export const useCollectionFilterOptions = (collection: any) => {
-  const { getCollectionFields, getInterface } = useCollectionManager();
+export const useCollectionFilterOptions = (collection: any, dataSource?: string) => {
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
   return useMemo(() => {
-    const fields = getCollectionFields(collection);
+    const fields = getCollectionFields(collection, dataSource);
     const field2option = (field, depth) => {
       if (!field.interface) {
         return;
@@ -165,7 +174,7 @@ export const useCollectionFilterOptions = (collection: any) => {
         option['children'] = children;
       }
       if (nested) {
-        const targetFields = getCollectionFields(field.target);
+        const targetFields = getCollectionFields(field.target, dataSource);
         const options = getOptions(targetFields, depth + 1).filter(Boolean);
         option['children'] = option['children'] || [];
         option['children'].push(...options);
@@ -184,11 +193,11 @@ export const useCollectionFilterOptions = (collection: any) => {
     };
     const options = getOptions(fields, 1);
     return options;
-  }, [_.isString(collection) ? collection : collection?.name]);
+  }, [_.isString(collection) ? collection : collection?.name, dataSource]);
 };
 
 export const useCollectionFilterOptionsV2 = (collection: any) => {
-  const { getCollectionFields, getInterface } = useCollectionManager();
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
 
   const getFields = useCallback(() => {
     const fields = getCollectionFields(collection);
@@ -246,7 +255,7 @@ export const useCollectionFilterOptionsV2 = (collection: any) => {
 };
 
 export const useLinkageCollectionFilterOptions = (collectionName: string) => {
-  const { getCollectionFields, getInterface } = useCollectionManager();
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
   const fields = getCollectionFields(collectionName);
   const field2option = (field, depth) => {
     if (!field.interface) {
@@ -304,7 +313,7 @@ export const useLinkageCollectionFilterOptions = (collectionName: string) => {
 };
 // 通用
 export const useCollectionFieldsOptions = (collectionName: string, maxDepth = 2, excludes = []) => {
-  const { getCollectionFields, getInterface } = useCollectionManager();
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
   const fields = getCollectionFields(collectionName).filter((v) => !excludes.includes(v.interface));
 
   const field2option = (field, depth, prefix?) => {
@@ -361,7 +370,7 @@ export const useCollectionFieldsOptions = (collectionName: string, maxDepth = 2,
 };
 
 export const useFilterDataSource = (options) => {
-  const { name } = useCollection();
+  const { name } = useCollection_deprecated();
   const data = useCollectionFilterOptions(name);
   return useRequest(
     () =>
@@ -387,7 +396,7 @@ export const useFilterAction = () => {
   };
 };
 
-export const useCreateAction = () => {
+export const useCreateAction = (actionCallback?: (values: any) => void) => {
   const form = useForm();
   const field = useField();
   const ctx = useActionContext();
@@ -399,8 +408,9 @@ export const useCreateAction = () => {
         await form.submit();
         field.data = field.data || {};
         field.data.loading = true;
-        await resource.create({ values: form.values });
+        const res = await resource.create({ values: form.values });
         ctx.setVisible(false);
+        actionCallback?.(res?.data?.data);
         await form.reset();
         field.data.loading = false;
         refresh();
@@ -413,19 +423,20 @@ export const useCreateAction = () => {
   };
 };
 
-export const useCreateActionWithoutRefresh = () => {
+export const useCreateActionWithoutRefresh = (actionCallback?: (values: any) => void) => {
   const form = useForm();
   const { resource } = useResourceContext();
   return {
     async run() {
       await form.submit();
-      await resource.create({ values: form.values });
+      const res = await resource.create({ values: form.values });
+      actionCallback?.(res?.data?.data);
       await form.reset();
     },
   };
 };
 
-export const useUpdateViewAction = () => {
+export const useUpdateViewAction = (actionCallback?: (filterByTk: string, values: any) => void) => {
   const form = useForm();
   const ctx = useActionContext();
   // const { refresh } = useResourceActionContext();
@@ -434,7 +445,8 @@ export const useUpdateViewAction = () => {
   return {
     async run() {
       await form.submit();
-      await resource.update({ filterByTk, values: form.values });
+      const res = await resource.update({ filterByTk, values: form.values });
+      actionCallback?.(filterByTk, res?.data?.data);
       // refresh();
       message.success('保存成功');
     },
@@ -455,7 +467,7 @@ export const useMoveAction = () => {
   };
 };
 
-export const useUpdateAction = () => {
+export const useUpdateAction = (actionCallback?: (key: string, values: any) => void) => {
   const field = useField();
   const form = useForm();
   const ctx = useActionContext();
@@ -468,8 +480,9 @@ export const useUpdateAction = () => {
       field.data = field.data || {};
       field.data.loading = true;
       try {
-        await resource.update({ filterByTk, values: form.values });
+        const res = await resource.update({ filterByTk, values: form.values });
         ctx.setVisible(false);
+        actionCallback?.(filterByTk, res?.data?.data);
         await form.reset();
         refresh();
       } catch (e) {
@@ -481,19 +494,20 @@ export const useUpdateAction = () => {
   };
 };
 
-export const useDestroyAction = () => {
+export const useDestroyAction = (actionCallback?: (key: string) => void) => {
   const { refresh } = useResourceActionContext();
   const { resource, targetKey } = useResourceContext();
   const { [targetKey]: filterByTk } = useRecord();
   return {
     async run() {
       await resource.destroy({ filterByTk });
+      actionCallback?.(filterByTk);
       refresh();
     },
   };
 };
 
-export const useBulkDestroyAction = () => {
+export const useBulkDestroyAction = (actionCallback?: (keys: string[]) => void) => {
   const { state, setState, refresh } = useResourceActionContext();
   const { resource } = useResourceContext();
   const { t } = useTranslation();
@@ -505,6 +519,7 @@ export const useBulkDestroyAction = () => {
       await resource.destroy({
         filterByTk: state?.selectedRowKeys || [],
       });
+      actionCallback?.(state?.selectedRowKeys);
       setState?.({ selectedRowKeys: [] });
       refresh();
     },
@@ -521,7 +536,7 @@ export const useValuesFromRA = (options) => {
 
 export const useCreateActionAndRefreshCM = () => {
   const { run } = useCreateAction();
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   return {
     async run() {
       await run();
@@ -532,7 +547,7 @@ export const useCreateActionAndRefreshCM = () => {
 
 export const useUpdateActionAndRefreshCM = () => {
   const { run } = useUpdateAction();
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   return {
     async run() {
       await run();
@@ -543,7 +558,7 @@ export const useUpdateActionAndRefreshCM = () => {
 
 export const useDestroyActionAndRefreshCM = () => {
   const { run } = useDestroyAction();
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   return {
     async run() {
       await run();
@@ -565,7 +580,7 @@ export const isDeleteButtonDisabled = (record?: any) => {
 
 export const useBulkDestroyActionAndRefreshCM = () => {
   const { run } = useBulkDestroyAction();
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   return {
     async run() {
       await run();
@@ -579,7 +594,8 @@ export const useFilterActionProps = () => {
   const options = useFilterFieldOptions(collection.fields);
   const service = useResourceActionContext();
   return useFilterFieldProps({
-    options,
+    // 目前仅需要支持筛选 title 和 name，其它字段可能会报错。详见：https://nocobase.height.app/T-2745
+    options: options.filter((option) => ['title', 'name'].includes(option.name)),
     params: service.state?.params?.[0] || service.params,
     service,
   });

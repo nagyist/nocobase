@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useField } from '@formily/react';
 import { useEffect, useContext } from 'react';
 import { LinkageLogicContext } from './context';
@@ -36,6 +45,9 @@ export const useValues = (options) => {
       field.data = field.data || {};
       const operators = option?.operators;
       field.data.operators = operators?.filter((v) => {
+        if (dataIndex.length > 1) {
+          return v.value !== 'value';
+        }
         return true;
       });
       field.data.schema = option?.schema;

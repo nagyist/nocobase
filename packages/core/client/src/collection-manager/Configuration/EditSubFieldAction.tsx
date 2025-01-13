@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ArrayTable } from '@formily/antd-v5';
 import { ISchema, useForm } from '@formily/react';
 import { uid } from '@formily/shared';
@@ -8,7 +17,7 @@ import { useAPIClient, useRequest } from '../../api-client';
 import { useRecord } from '../../record-provider';
 import { ActionContextProvider, SchemaComponent } from '../../schema-component';
 import { useUpdateAction } from '../action-hooks';
-import { useCollectionManager } from '../hooks';
+import { useCollectionManager_deprecated } from '../hooks';
 import { IField } from '../interfaces/types';
 import * as components from './components';
 
@@ -70,7 +79,7 @@ const getSchema = (schema: IField): ISchema => {
 const useUpdateCollectionField = () => {
   const form = useForm();
   const { run } = useUpdateAction();
-  const { refreshCM } = useCollectionManager();
+  const { refreshCM } = useCollectionManager_deprecated();
   return {
     async run() {
       await form.submit();
@@ -92,7 +101,7 @@ const useUpdateCollectionField = () => {
 
 export const EditSubFieldAction = (props) => {
   const record = useRecord();
-  const { getInterface } = useCollectionManager();
+  const { getInterface } = useCollectionManager_deprecated();
   const [visible, setVisible] = useState(false);
   const [schema, setSchema] = useState({});
   const api = useAPIClient();

@@ -1,9 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import lodash from 'lodash';
 import { BelongsToMany, Op, Transaction } from 'sequelize';
 import { AggregateOptions, CreateOptions, DestroyOptions, TargetKey } from '../repository';
-import { updateThroughTableValue } from '../update-associations';
+import { updateAssociations, updateThroughTableValue } from '../update-associations';
 import { MultipleRelationRepository } from './multiple-relation-repository';
 import { transaction } from './relation-repository';
+
 import { AssociatedOptions, PrimaryKeyWithThroughValues } from './types';
 
 type CreateBelongsToManyOptions = CreateOptions;
@@ -53,7 +63,9 @@ export class BelongsToManyRepository extends MultipleRelationRepository {
       transaction,
     };
 
-    return sourceModel[createAccessor](values, createOptions);
+    const instance = await sourceModel[createAccessor](values, createOptions);
+    await updateAssociations(instance, values, { ...options, transaction });
+    return instance;
   }
 
   @transaction((args, transaction) => {
@@ -129,49 +141,6 @@ export class BelongsToManyRepository extends MultipleRelationRepository {
     return true;
   }
 
-  protected async setTargets(
-    call: 'add' | 'set',
-    options: TargetKey | TargetKey[] | PrimaryKeyWithThroughValues | PrimaryKeyWithThroughValues[] | AssociatedOptions,
-  ) {
-    const handleKeys: TargetKey[] | PrimaryKeyWithThroughValues[] = this.convertTks(options) as any;
-
-    const transaction = await this.getTransaction(options, false);
-
-    const sourceModel = await this.getSourceModel(transaction);
-
-    const setObj = (<any>handleKeys).reduce((carry, item) => {
-      if (Array.isArray(item)) {
-        carry[item[0]] = item[1];
-      } else {
-        carry[item] = true;
-      }
-      return carry;
-    }, {});
-
-    const targetKeys = Object.keys(setObj);
-    const association = this.association;
-
-    const targetObjects = await this.targetModel.findAll({
-      where: {
-        [association['targetKey']]: targetKeys,
-      },
-      transaction,
-    });
-
-    await sourceModel[this.accessors()[call]](targetObjects, {
-      transaction,
-    });
-
-    for (const [id, throughValues] of Object.entries(setObj)) {
-      if (typeof throughValues === 'object') {
-        const instance = await this.targetModel.findByPk(id, {
-          transaction,
-        });
-        await updateThroughTableValue(instance, this.throughName(), throughValues, sourceModel, transaction);
-      }
-    }
-  }
-
   @transaction((args, transaction) => {
     return {
       tk: args[0],
@@ -225,23 +194,54 @@ export class BelongsToManyRepository extends MultipleRelationRepository {
     return;
   }
 
-  extendFindOptions(findOptions) {
-    let joinTableAttributes;
-    if (lodash.get(findOptions, 'fields')) {
-      joinTableAttributes = [];
-    }
-
-    return {
-      ...findOptions,
-      joinTableAttributes,
-    };
-  }
-
   throughName() {
     return this.throughModel().name;
   }
 
   throughModel() {
     return (<any>this.association).through.model;
+  }
+
+  protected async setTargets(
+    call: 'add' | 'set',
+    options: TargetKey | TargetKey[] | PrimaryKeyWithThroughValues | PrimaryKeyWithThroughValues[] | AssociatedOptions,
+  ) {
+    const handleKeys: TargetKey[] | PrimaryKeyWithThroughValues[] = this.convertTks(options) as any;
+
+    const transaction = await this.getTransaction(options, false);
+
+    const sourceModel = await this.getSourceModel(transaction);
+
+    const setObj = (<any>handleKeys).reduce((carry, item) => {
+      if (Array.isArray(item)) {
+        carry[item[0]] = item[1];
+      } else {
+        carry[item] = true;
+      }
+      return carry;
+    }, {});
+
+    const targetKeys = Object.keys(setObj);
+    const association = this.association;
+
+    const targetObjects = await this.targetModel.findAll({
+      where: {
+        [association['targetKey']]: targetKeys,
+      },
+      transaction,
+    });
+
+    await sourceModel[this.accessors()[call]](targetObjects, {
+      transaction,
+    });
+
+    for (const [id, throughValues] of Object.entries(setObj)) {
+      if (typeof throughValues === 'object') {
+        const instance = await this.targetModel.findByPk(id, {
+          transaction,
+        });
+        await updateThroughTableValue(instance, this.throughName(), throughValues, sourceModel, transaction);
+      }
+    }
   }
 }

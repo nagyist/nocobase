@@ -1,21 +1,37 @@
-import { MockServer, mockServer } from '@nocobase/test';
-const formatter = require('../actions/formatter');
-import { cacheMiddleware, parseBuilder, parseFieldAndAssociations } from '../actions/query';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { createMockServer, MockServer } from '@nocobase/test';
 import compose from 'koa-compose';
+import { vi } from 'vitest';
+import {
+  cacheMiddleware,
+  checkPermission,
+  parseFieldAndAssociations,
+  parseVariables,
+  postProcess,
+} from '../actions/query';
+import { Database } from '@nocobase/database';
+import { createQueryParser } from '../query-parser';
 
 describe('query', () => {
   describe('parseBuilder', () => {
-    const sequelize = {
-      fn: jest.fn().mockImplementation((fn: string, field: string) => [fn, field]),
-      col: jest.fn().mockImplementation((field: string) => field),
-    };
     let ctx: any;
     let app: MockServer;
-
-    beforeAll(() => {
-      app = mockServer();
-      app.db.options.underscored = true;
-      app.db.collection({
+    let db: Database;
+    beforeAll(async () => {
+      app = await createMockServer({
+        plugins: ['data-source-manager', 'users', 'acl'],
+      });
+      db = app.db;
+      db.options.underscored = true;
+      db.collection({
         name: 'orders',
         fields: [
           {
@@ -39,31 +55,33 @@ describe('query', () => {
           },
         ],
       });
-      app.db.collection({
-        name: 'users',
-        fields: [
-          {
-            name: 'id',
-            type: 'bigInt',
-          },
-          {
-            name: 'name',
-            type: 'string',
-          },
-        ],
-      });
       ctx = {
         app,
-        db: {
-          sequelize,
-          getRepository: (name: string) => app.db.getRepository(name),
-          getModel: (name: string) => app.db.getModel(name),
-          getCollection: (name: string) => app.db.getCollection(name),
-          options: {
-            underscored: true,
+        db,
+      };
+    });
+
+    afterAll(async () => {
+      await app.destroy();
+    });
+
+    it('should check permissions', async () => {
+      const context = {
+        ...ctx,
+        state: {
+          currentRole: '',
+        },
+        action: {
+          params: {
+            values: {
+              collection: 'users',
+            },
           },
         },
+        throw: vi.fn(),
       };
+      await checkPermission(context, async () => {});
+      expect(context.throw).toBeCalledWith(403, 'No permissions');
     });
 
     it('should parse field and associations', async () => {
@@ -73,20 +91,51 @@ describe('query', () => {
           params: {
             values: {
               collection: 'orders',
-              measures: [{ field: ['price'], aggregation: 'sum', alias: 'price' }],
-              dimensions: [{ field: ['createdAt'] }, { field: ['user', 'name'] }],
+              measures: [
+                {
+                  field: ['price'],
+                  aggregation: 'sum',
+                  alias: 'price',
+                },
+              ],
+              dimensions: [
+                {
+                  field: ['createdAt'],
+                },
+                {
+                  field: ['user', 'name'],
+                },
+              ],
             },
           },
         },
       };
       await parseFieldAndAssociations(context, async () => {});
       expect(context.action.params.values).toMatchObject({
-        measures: [{ field: 'orders.price', aggregation: 'sum', alias: 'price', type: 'double' }],
-        dimensions: [
-          { field: 'orders.created_at', alias: 'createdAt', type: 'date' },
-          { field: 'user.name', alias: 'user.name' },
+        measures: [
+          {
+            field: 'orders.price',
+            aggregation: 'sum',
+            alias: 'price',
+            type: 'double',
+          },
         ],
-        include: [{ association: 'user' }],
+        dimensions: [
+          {
+            field: 'orders.created_at',
+            alias: 'createdAt',
+            type: 'date',
+          },
+          {
+            field: 'user.name',
+            alias: 'user.name',
+          },
+        ],
+        include: [
+          {
+            association: 'user',
+          },
+        ],
       });
     });
 
@@ -100,13 +149,18 @@ describe('query', () => {
         ...ctx,
         action: {
           params: {
-            values: { collection: 'orders', measures: measures1 },
+            values: {
+              collection: 'orders',
+              measures: measures1,
+            },
           },
         },
       };
-      await compose([parseFieldAndAssociations, parseBuilder])(context, async () => {});
-      expect(context.action.params.values.queryParams.attributes).toEqual([['orders.price', 'price']]);
-
+      const queryParser = createQueryParser(db);
+      await compose([parseFieldAndAssociations, queryParser.parse()])(context, async () => {});
+      expect(context.action.params.values.queryParams.attributes).toEqual([
+        [db.sequelize.col('orders.price'), 'price'],
+      ]);
       const measures2 = [
         {
           field: ['price'],
@@ -118,17 +172,48 @@ describe('query', () => {
         ...ctx,
         action: {
           params: {
-            values: { collection: 'orders', measures: measures2 },
+            values: {
+              collection: 'orders',
+              measures: measures2,
+            },
           },
         },
       };
-      await compose([parseFieldAndAssociations, parseBuilder])(context2, async () => {});
-      expect(context2.action.params.values.queryParams.attributes).toEqual([[['sum', 'orders.price'], 'price-alias']]);
+      await compose([parseFieldAndAssociations, queryParser.parse()])(context2, async () => {});
+      expect(context2.action.params.values.queryParams.attributes).toEqual([
+        [db.sequelize.fn('sum', db.sequelize.col('orders.price')), 'price-alias'],
+      ]);
+    });
+
+    it('should throw error if invalid aggregation function', async () => {
+      const measures = [
+        {
+          field: ['price'],
+          aggregation: 'if(1=2,sleep(1),sleep(3)) and sum',
+        },
+      ];
+      const context = {
+        ...ctx,
+        action: {
+          params: {
+            values: {
+              collection: 'orders',
+              measures,
+            },
+          },
+        },
+      };
+      const queryParser = createQueryParser(db);
+      try {
+        await compose([parseFieldAndAssociations, queryParser.parse()])(context, async () => {});
+      } catch (error) {
+        expect(error.message).toBe('Invalid aggregation function: if(1=2,sleep(1),sleep(3)) and sum');
+      }
     });
 
     it('should parse dimensions', async () => {
-      jest.spyOn(formatter, 'formatter').mockReturnValue('formatted-field');
-
+      const queryParser = createQueryParser(db);
+      vi.spyOn(queryParser.formatter, 'format').mockImplementation(() => 'formatted-field' as any);
       const dimensions = [
         {
           field: ['createdAt'],
@@ -140,14 +225,16 @@ describe('query', () => {
         ...ctx,
         action: {
           params: {
-            values: { collection: 'orders', dimensions },
+            values: {
+              collection: 'orders',
+              dimensions,
+            },
           },
         },
       };
-      await compose([parseFieldAndAssociations, parseBuilder])(context, async () => {});
+      await compose([parseFieldAndAssociations, queryParser.parse()])(context, async () => {});
       expect(context.action.params.values.queryParams.attributes).toEqual([['formatted-field', 'Created at']]);
       expect(context.action.params.values.queryParams.group).toEqual([]);
-
       const measures = [
         {
           field: ['field'],
@@ -158,11 +245,15 @@ describe('query', () => {
         ...ctx,
         action: {
           params: {
-            values: { collection: 'orders', measures, dimensions },
+            values: {
+              collection: 'orders',
+              measures,
+              dimensions,
+            },
           },
         },
       };
-      await compose([parseFieldAndAssociations, parseBuilder])(context2, async () => {});
+      await compose([parseFieldAndAssociations, queryParser.parse()])(context2, async () => {});
       expect(context2.action.params.values.queryParams.group).toEqual(['formatted-field']);
     });
 
@@ -176,31 +267,95 @@ describe('query', () => {
         ...ctx,
         action: {
           params: {
-            values: { collection: 'orders', filter },
+            values: {
+              collection: 'orders',
+              filter,
+            },
           },
         },
       };
-      await compose([parseFieldAndAssociations, parseBuilder])(context, async () => {});
+      const queryParser = createQueryParser(db);
+      await compose([parseFieldAndAssociations, queryParser.parse()])(context, async () => {});
       expect(context.action.params.values.queryParams.where.createdAt).toBeDefined();
+    });
+
+    it('post process', async () => {
+      const context = {
+        ...ctx,
+        action: {
+          params: {
+            values: {
+              data: [{ key: '123' }],
+              fieldMap: {
+                key: { type: 'bigInt' },
+              },
+            },
+          },
+        },
+      };
+      await postProcess(context, async () => {});
+      expect(context.body).toEqual([{ key: 123 }]);
+    });
+
+    it('parse variables', async () => {
+      const context = {
+        ...ctx,
+        state: {
+          currentUser: {
+            id: 1,
+          },
+        },
+        get: (key: string) => {
+          return {
+            'x-timezone': '',
+          }[key];
+        },
+        action: {
+          params: {
+            values: {
+              filter: {
+                $and: [
+                  {
+                    createdAt: { $dateOn: '{{$nDate.now}}' },
+                  },
+                  {
+                    userId: { $eq: '{{$user.id}}' },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      };
+      await parseVariables(context, async () => {});
+      const { filter } = context.action.params.values;
+      const dateOn = filter.$and[0].createdAt.$dateOn;
+      expect(new Date(dateOn).getTime()).toBeLessThanOrEqual(new Date().getTime());
+      const userId = filter.$and[1].userId.$eq;
+      expect(userId).toBe(1);
     });
   });
 
   describe('cacheMiddleware', () => {
     const key = 'test-key';
     const value = 'test-val';
-    const query = jest.fn().mockImplementation(async (ctx, next) => {
+    const query = vi.fn().mockImplementation(async (ctx, next) => {
       ctx.body = value;
       await next();
     });
+
     class MockCache {
       map: Map<string, any> = new Map();
+
       get(key: string) {
         return this.map.get(key);
       }
+
       set(key: string, value: any) {
         this.map.set(key, value);
       }
     }
+
     let ctx: any;
     beforeEach(() => {
       const cache = new MockCache();
@@ -212,13 +367,18 @@ describe('query', () => {
         },
       };
     });
-
     it('should use cache', async () => {
       const context = {
         ...ctx,
         action: {
           params: {
-            values: { cache: { enabled: true }, refresh: false, uid: key },
+            values: {
+              cache: {
+                enabled: true,
+              },
+              refresh: false,
+              uid: key,
+            },
           },
         },
       };
@@ -228,19 +388,19 @@ describe('query', () => {
       expect(query).toBeCalled();
       expect(context.body).toEqual(value);
       expect(cache.get(key)).toEqual(value);
-
-      jest.clearAllMocks();
+      vi.clearAllMocks();
       await compose([cacheMiddleware, query])(context, async () => {});
       expect(context.body).toEqual(value);
       expect(query).not.toBeCalled();
     });
-
     it('should not use cache', async () => {
       const context = {
         ...ctx,
         action: {
           params: {
-            values: { uid: key },
+            values: {
+              uid: key,
+            },
           },
         },
       };
@@ -251,13 +411,18 @@ describe('query', () => {
       expect(query).toBeCalled();
       expect(context.body).toEqual(value);
     });
-
     it('should refresh', async () => {
       const context = {
         ...ctx,
         action: {
           params: {
-            values: { cache: { enabled: true }, refresh: true, uid: key },
+            values: {
+              cache: {
+                enabled: true,
+              },
+              refresh: true,
+              uid: key,
+            },
           },
         },
       };
@@ -267,7 +432,6 @@ describe('query', () => {
       expect(query).toBeCalled();
       expect(context.body).toEqual(value);
       expect(cache.get(key)).toEqual(value);
-
       await compose([cacheMiddleware, query])(context, async () => {});
       expect(query).toBeCalled();
       expect(context.body).toEqual(value);

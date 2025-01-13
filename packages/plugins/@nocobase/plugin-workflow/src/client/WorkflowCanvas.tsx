@@ -1,3 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link, useNavigate } from 'react-router-dom';
+import { App, Breadcrumb, Button, Dropdown, Result, Spin, Switch, Tag, Tooltip, message } from 'antd';
 import { DownOutlined, EllipsisOutlined, RightOutlined } from '@ant-design/icons';
 import {
   ActionContextProvider,
@@ -10,10 +23,6 @@ import {
   useResourceContext,
 } from '@nocobase/client';
 import { str2moment } from '@nocobase/utils/client';
-import { App, Breadcrumb, Button, Dropdown, Result, Spin, Switch, message } from 'antd';
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import { CanvasContent } from './CanvasContent';
 import { ExecutionLink } from './ExecutionLink';
@@ -21,8 +30,9 @@ import { FlowContext, useFlowContext } from './FlowContext';
 import { lang } from './locale';
 import { executionSchema } from './schemas/executions';
 import useStyles from './style';
-import { linkNodes } from './utils';
-import { getWorkflowDetailPath } from './constant';
+import { linkNodes, getWorkflowDetailPath } from './utils';
+import { ExecutionStatusColumn } from './components/ExecutionStatus';
+import { useRefreshActionProps } from './hooks/useRefreshActionProps';
 
 function ExecutionResourceProvider({ request, filter = {}, ...others }) {
   const { workflow } = useFlowContext();
@@ -63,7 +73,9 @@ export function WorkflowCanvas() {
     if (loading) {
       return <Spin />;
     }
-    return <Result status="404" title="Not found" />;
+    return (
+      <Result status="404" title="Not found" extra={<Button onClick={() => navigate(-1)}>{lang('Go back')}</Button>} />
+    );
   }
 
   const { nodes = [], revisions = [], ...workflow } = data?.data ?? {};
@@ -154,46 +166,56 @@ export function WorkflowCanvas() {
           <Breadcrumb
             items={[
               { title: <Link to={app.pluginSettingsManager.getRoutePath('workflow')}>{lang('Workflow')}</Link> },
-              { title: <strong>{workflow.title}</strong> },
+              {
+                title: (
+                  <Tooltip title={`Key: ${workflow.key}`}>
+                    <strong>{workflow.title}</strong>
+                  </Tooltip>
+                ),
+              },
             ]}
           />
         </header>
         <aside>
-          <div className="workflow-versions">
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                onClick: onSwitchVersion,
-                defaultSelectedKeys: [`${workflow.id}`],
-                className: cx(styles.dropdownClass, styles.workflowVersionDropdownClass),
-                items: revisions
-                  .sort((a, b) => b.id - a.id)
-                  .map((item, index) => ({
-                    role: 'button',
-                    'aria-label': `version-${index}`,
-                    key: `${item.id}`,
-                    icon: item.current ? <RightOutlined /> : null,
-                    className: cx({
-                      executed: item.executed,
-                      unexecuted: !item.executed,
-                      enabled: item.enabled,
-                    }),
-                    label: (
-                      <>
-                        <strong>{`#${item.id}`}</strong>
-                        <time>{str2moment(item.createdAt).format('YYYY-MM-DD HH:mm:ss')}</time>
-                      </>
-                    ),
-                  })),
-              }}
-            >
-              <Button type="text" aria-label="version">
-                <label>{lang('Version')}</label>
-                <span>{workflow?.id ? `#${workflow.id}` : null}</span>
-                <DownOutlined />
-              </Button>
-            </Dropdown>
-          </div>
+          {workflow.sync ? (
+            <Tag color="orange">{lang('Synchronously')}</Tag>
+          ) : (
+            <Tag color="cyan">{lang('Asynchronously')}</Tag>
+          )}
+          <Dropdown
+            className="workflow-versions"
+            trigger={['click']}
+            menu={{
+              onClick: onSwitchVersion,
+              defaultSelectedKeys: [`${workflow.id}`],
+              className: cx(styles.dropdownClass, styles.workflowVersionDropdownClass),
+              items: revisions
+                .sort((a, b) => b.id - a.id)
+                .map((item, index) => ({
+                  role: 'button',
+                  'aria-label': `version-${index}`,
+                  key: `${item.id}`,
+                  icon: item.current ? <RightOutlined /> : null,
+                  className: cx({
+                    executed: item.executed,
+                    unexecuted: !item.executed,
+                    enabled: item.enabled,
+                  }),
+                  label: (
+                    <>
+                      <strong>{`#${item.id}`}</strong>
+                      <time>{str2moment(item.createdAt).format('YYYY-MM-DD HH:mm:ss')}</time>
+                    </>
+                  ),
+                })),
+            }}
+          >
+            <Button type="text" aria-label="version">
+              <label>{lang('Version')}</label>
+              <span>{workflow?.id ? `#${workflow.id}` : null}</span>
+              <DownOutlined />
+            </Button>
+          </Dropdown>
           <Switch
             checked={workflow.enabled}
             onChange={onToggle}
@@ -203,6 +225,14 @@ export function WorkflowCanvas() {
           <Dropdown
             menu={{
               items: [
+                {
+                  key: 'key',
+                  label: `Key: ${workflow.key}`,
+                  disabled: true,
+                },
+                {
+                  type: 'divider',
+                },
                 {
                   role: 'button',
                   'aria-label': 'history',
@@ -217,7 +247,10 @@ export function WorkflowCanvas() {
                   label: lang('Copy to new version'),
                   disabled: !revisionable,
                 },
-                { role: 'button', 'aria-label': 'delete', key: 'delete', label: t('Delete') },
+                {
+                  type: 'divider',
+                },
+                { role: 'button', 'aria-label': 'delete', danger: true, key: 'delete', label: t('Delete') },
               ] as any[],
               onClick: onMenuCommand,
             }}
@@ -230,6 +263,10 @@ export function WorkflowCanvas() {
               components={{
                 ExecutionResourceProvider,
                 ExecutionLink,
+                ExecutionStatusColumn,
+              }}
+              scope={{
+                useRefreshActionProps,
               }}
             />
           </ActionContextProvider>

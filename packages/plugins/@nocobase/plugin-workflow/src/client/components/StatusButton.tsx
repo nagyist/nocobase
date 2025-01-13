@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React from 'react';
 import { Button, Tag } from 'antd';
 import classnames from 'classnames';
@@ -22,16 +31,17 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 export function StatusButton(props) {
+  const { status, statusMap, ...others } = props;
   const { styles } = useStyles();
   let tag = null;
-  if (typeof props.status !== 'undefined' && props.statusMap?.[props.status]) {
-    const { icon, color } = props.statusMap[props.status];
+  if (typeof status !== 'undefined' && statusMap?.[status]) {
+    const { icon, color } = statusMap[status];
     tag = <Tag color={color}>{icon}</Tag>;
   }
 
   return (
     <Button
-      {...props}
+      {...others}
       shape="circle"
       size="small"
       className={classnames(tag ? styles.statusButtonClass : styles.noStatusButtonClass, props.className)}

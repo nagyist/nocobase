@@ -2,13 +2,13 @@
 
 ## new Application(options)
 
-创建一个 NocoBase 应用。
+Creates an instance of a NocoBase application.
 
-- 类型
+- Type
 
 ```tsx | pure
 export interface ApplicationOptions {
-  apiClient?: APIClientOptions;
+  apiClient?: APIClientOptions | APIClient;
   ws?: WebSocketClientOptions | boolean;
   i18n?: i18next;
   providers?: (ComponentType | ComponentAndProps)[];
@@ -19,22 +19,26 @@ export interface ApplicationOptions {
   schemaSettings?: SchemaSetting[];
   schemaInitializers?: SchemaInitializer[];
   loadRemotePlugins?: boolean;
+  dataSourceManager?: DataSourceManagerOptions;
+  addFieldInterfaceComponentOption(fieldName: string, componentOption: CollectionFieldInterfaceComponentOption): void;
 }
 ```
 
-- 详细信息
-  - apiClient：API 请求实例，具体说明请参见：[https://docs.nocobase.com/api/sdk](https://docs.nocobase.com/api/sdk)
-  - i18n：国际化，具体请参考：[https://www.i18next.com/overview/api#createinstance](https://www.i18next.com/overview/api#createinstance)
-  - providers：上下文
-  - components：全局组件
-  - scopes：全局 scopes
-  - router：配置路由，具体请参考：[RouterManager](/core/application/router-manager)
-  - pluginSettings: [PluginSettingsManager](/core/application/plugin-settings-manager)
-  - schemaSettings：Schema 设置工具，具体参考：[SchemaSettingsManager](/core/ui-schema/schema-initializer-manager)
-  - schemaInitializers：Schema 添加工具，具体参考：[SchemaInitializerManager](/core/ui-schema/schema-initializer-manager)
-  - loadRemotePlugins：用于控制是否加载远程插件，默认为 `false`，即不加载远程插件（方便单测和 DEMO 环境）。
+## Details
+- `apiClient`: API request instance. For more details, refer to: [NocoBase API SDK Documentation](https://docs.nocobase.com/api/sdk)
+- `i18n`: Internationalization. For specifics, see: [i18next API Documentation](https://www.i18next.com/overview/api#createinstance)
+- `providers`: Context providers
+- `components`: Global components
+- `scopes`: Global scopes
+- `router`: Route configuration. Refer to: [RouterManager](/core/application/router-manager)
+- `pluginSettings`: [PluginSettingsManager](/core/application/plugin-settings-manager)
+- `schemaSettings`: Schema settings tool. For more information, refer to: [SchemaSettingsManager](/core/ui-schema/schema-initializer-manager)
+- `schemaInitializers`: Schema addition tool. For more information, refer to: [SchemaInitializerManager](/core/ui-schema/schema-initializer-manager)
+- `loadRemotePlugins`: Used to control whether to load remote plugins. Default is `false`, meaning remote plugins are not loaded (convenient for unit testing and DEMO environments).
+- `dataSourceManager`: Data source manager. For more details, refer to: [DataSourceManager](/core/data-source/data-source-manager)
+- `addFieldInterfaceComponentOption`: Add field interface component options. For more details, refer to: [CollectionFieldInterfaceManager](/core/data-source/collection-field-interface-manager#addfieldinterfacecomponentoption)
 
-- 示例
+## Example
 
 ```tsx
 /**
@@ -70,7 +74,7 @@ const app = new Application({
 export default app.getRootComponent();
 ```
 
-## 实例属性
+## Instance Properties
 
 ### app.i18n
 
@@ -80,7 +84,7 @@ class Application {
 }
 ```
 
-详细介绍，请参考：[i18next](https://www.i18next.com/overview/api#createinstance)
+For a detailed introduction, please refer to: [i18next](https://www.i18next.com/overview/api#createinstance)
 
 ### app.apiClient
 
@@ -90,31 +94,35 @@ class Application {
 }
 ```
 
-详细介绍，请参考：[APIClient](https://docs.nocobase.com/api/sdk)
+For a detailed introduction, please refer to: [APIClient](https://docs.nocobase.com/api/sdk)
 
 ### app.router
 
-详细介绍，请参考：[RouterManager](/core/application/router-manager)
+For a detailed introduction, please refer to: [RouterManager](/core/application/router-manager)
 
 ### app.pluginSettingsManager
 
-详细介绍，请参考：[PluginSettingsManager](/core/application/plugin-settings-manager)
+For a detailed introduction, please refer to: [PluginSettingsManager](/core/application/plugin-settings-manager)
 
 ### app.schemaSettingsManager
 
-详细介绍，请参考：[SchemaSettingsManager](/core/ui-schema/schema-initializer-manager)
+For a detailed introduction, please refer to: [SchemaSettingsManager](/core/ui-schema/schema-initializer-manager)
 
 ### app.schemaInitializerManager
 
-详细介绍，请参考：[SchemaInitializerManager](/core/ui-schema/schema-initializer-manager)
+For a detailed introduction, please refer to: [SchemaInitializerManager](/core/ui-schema/schema-initializer-manager)
 
-## 实例方法
+### app.dataSourceManager
+
+For a detailed introduction, please refer to: [dataSourceManager](/core/data-source/data-source-manager)
+
+## Instance Methods
 
 ### app.getRootComponent()
 
-获取应用的根组件。
+Get the root component of the application.
 
-- 类型
+- Type
 
 ```tsx | pure
 class Application {
@@ -122,7 +130,7 @@ class Application {
 }
 ```
 
-- 示例
+- Example
 
 ```tsx | pure
 import { Application } from '@nocobase/client';
@@ -134,9 +142,9 @@ const App = app.getRootComponent();
 
 ### app.mount()
 
-将应用实例挂载在一个容器元素中。
+Mount the application instance in a container element.
 
-- 类型
+- Type
 
 ```tsx | pure
 class Application {
@@ -144,7 +152,7 @@ class Application {
 }
 ```
 
-- 示例
+- Example
 
 ```tsx | pure
 import { Application } from '@nocobase/client';
@@ -156,9 +164,9 @@ app.mount('#root');
 
 ### app.addProvider()
 
-添加 `Provider` 上下文。
+Add `Provider` context.
 
-- 类型
+- Type
 
 ```tsx | pure
 class Application {
@@ -166,14 +174,14 @@ class Application {
 }
 ```
 
-- 详细信息
+- Details
 
-第一个参数是组件，第二个参数是组件的参数。注意 `Provider` 一定要渲染 `children`。
+The first parameter is the component, and the second parameter is the component's props. Note that the `Provider` must render its `children`.
 
-- 示例
+- Example
 
 ```tsx | pure
-// 场景1：第三方库，或者自己创建的 Context
+// Scenario 1: Third-party library or self-created Context
 const MyContext = createContext({});
 app.addProvider(MyContext.provider, { value: { color: 'red' } });
 ```
@@ -211,7 +219,7 @@ export default app.getRootComponent();
 ```
 
 ```tsx | pure
-// 场景2：自定义的组件，注意 children
+// Scenario 2: Custom component, pay attention to children
 const GlobalDemo = ({ name, children }) => {
     return <div>
         <div>hello, { name }</div>
@@ -256,9 +264,9 @@ export default app.getRootComponent();
 
 ### app.addProviders()
 
-添加多个 `Provider` 上下文。
+Add multiple `Provider` contexts.
 
-- 类型
+- Type
 
 ```tsx | pure
 class Application {
@@ -266,11 +274,11 @@ class Application {
 }
 ```
 
-- 详细信息
+- Details
 
-一次添加多个 `Provider`。
+Add multiple `Provider` contexts at once.
 
-- 示例
+- Example
 
 ```tsx | pure
 app.addProviders([[MyContext.provider, { value: { color: 'red' } }], [GlobalDemo, { name: 'nocobase' }]])
@@ -278,11 +286,11 @@ app.addProviders([[MyContext.provider, { value: { color: 'red' } }], [GlobalDemo
 
 ### app.addComponents()
 
-添加全局组件。
+Add global components.
 
-全局组件可以使用在 [RouterManager](/core/application/router-manager) 和 [UI Schema](/core/ui-schema/schema-component)上。
+Global components can be used in [RouterManager](/core/application/router-manager) and [UI Schema](/core/ui-schema/schema-component).
 
-- 类型
+- Type
 
 ```tsx | pure
 class Application {
@@ -290,7 +298,7 @@ class Application {
 }
 ```
 
-- 示例
+- Example
 
 ```tsx | pure
 app.addComponents({ Demo, Foo, Bar })
@@ -298,11 +306,11 @@ app.addComponents({ Demo, Foo, Bar })
 
 ### app.addScopes()
 
-添加全局的 scope。
+Add global scopes.
 
-全局组 scope 可以 [UI Schema](/core/ui-schema/schema-component) 上。
+Global scopes can be used in [UI Schema](/core/ui-schema/schema-component).
 
-- 类型
+- Type
 
 ```tsx | pure
 class Application {
@@ -310,7 +318,7 @@ class Application {
 }
 ```
 
-- 示例
+- Example
 
 ```tsx | pure
 function useSomeThing() {}
@@ -319,19 +327,55 @@ const anyVar = '';
 app.addScopes({ useSomeThing, anyVar })
 ```
 
+### app.getCollectionManager()
+
+Get the [collection manager](/core/data-source/collection-manager) instance of the specified data source.
+
+- Type
+
+```tsx | pure
+class Application {
+  getCollectionManager(dataSource?: string): CollectionManager;
+}
+```
+
+- Example
+
+```tsx | pure
+app.getCollectionManager() // Get the default data source collection manager
+app.getCollectionManager('test') // Get the specified data source collection manager
+```
+
+### app.addFieldInterfaceComponentOption()
+
+Add field interface component option.
+
+For a detailed introduction, please refer to: [CollectionFieldInterfaceManager](/core/data-source/collection-field-interface-manager#addfieldinterfacecomponentoption)
+
+```tsx | pure
+class MyPlugin extends Plugin {
+  async load() {
+    this.app.addFieldInterfaceComponentOption('url', {
+      label: 'Preview',
+      value: 'Input.Preview',
+    });
+  }
+}
+```
+
 ## Hooks
 
 ### useApp()
 
-获取当前应用的实例。
+Get the instance of the current application.
 
-- 类型
+- Type
 
 ```tsx | pure
 const useApp: () => Application
 ```
 
-- 示例
+- Example
 
 ```tsx | pure
 const Demo = () => {

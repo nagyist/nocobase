@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Checkbox, message, Table } from 'antd';
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +16,7 @@ import { useRecord } from '../../record-provider';
 import { useStyles } from '../style';
 import { useApp } from '../../application';
 import { useCompile } from '../../schema-component';
+import { omit } from 'lodash';
 
 const getParentKeys = (tree, func, path = []) => {
   if (!tree) return [];
@@ -30,6 +40,7 @@ const getChildrenKeys = (data = [], arr = []) => {
 };
 
 const SettingMenuContext = createContext(null);
+SettingMenuContext.displayName = 'SettingMenuContext';
 
 export const SettingCenterProvider = (props) => {
   const configureItems = useContext(SettingsCenterContext);
@@ -130,7 +141,16 @@ export const SettingsCenterConfigure = () => {
           },
         },
       ]}
-      dataSource={settings}
+      dataSource={settings
+        .filter((v) => {
+          return v.isTopLevel !== false;
+        })
+        .map((v) => {
+          if (v.showTabs !== false) {
+            return v;
+          }
+          return omit(v, 'children');
+        })}
     />
   );
 };

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { ConfigProvider, Segmented, Space, theme as antdTheme } from 'antd';
 import type { FC } from 'react';
 import React from 'react';
@@ -59,8 +68,8 @@ const ComponentDemoPro: FC<ComponentDemoProProps> = ({
       <div style={{ margin: 'auto', maxWidth: 960 }}>
         <Segmented
           options={[
-            { value: 'overview', label: locale.demo.overview },
-            { value: 'component', label: locale.demo.components },
+            { value: 'overview', label: locale.overview },
+            { value: 'component', label: locale.components },
           ]}
           value={mode}
           onChange={setMode as any}

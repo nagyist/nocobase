@@ -1,9 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { flatten, unflatten } from 'flat';
 import { default as lodash, default as _ } from 'lodash';
 import { ModelStatic } from 'sequelize';
 import { Collection } from './collection';
 import { Database } from './database';
 import { Model } from './model';
+import { BelongsToArrayAssociation } from './relation-repository/belongs-to-array-repository';
 
 const debug = require('debug')('noco-database');
 
@@ -84,7 +94,9 @@ export default class FilterParser {
 
     debug('associations %O', associations);
 
-    for (let [key, value] of Object.entries(flattenedFilter)) {
+    for (const entry of Object.entries(flattenedFilter)) {
+      const key = entry[0];
+      let value = entry[1];
       // 处理 filter 条件
       if (skipPrefix && key.startsWith(skipPrefix)) {
         continue;
@@ -158,6 +170,7 @@ export default class FilterParser {
           continue;
         }
 
+        const association = associations[firstKey];
         const associationKeys = [];
 
         associationKeys.push(firstKey);
@@ -168,10 +181,17 @@ export default class FilterParser {
 
         if (!existInclude) {
           // set sequelize include option
-          _.set(include, firstKey, {
+          let includeOptions = {
             association: firstKey,
             attributes: [], // out put empty fields by default
-          });
+          };
+          if (association.associationType === 'BelongsToArray') {
+            includeOptions = {
+              ...includeOptions,
+              ...(association as any as BelongsToArrayAssociation).generateInclude(),
+            };
+          }
+          _.set(include, firstKey, includeOptions);
         }
 
         // association target model

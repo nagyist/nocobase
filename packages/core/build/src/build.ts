@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import execa from 'execa';
 import chalk from 'chalk';
 import path from 'path';
@@ -9,20 +18,30 @@ import {
   getCjsPackages,
   getPresetsPackages,
   ROOT_PATH,
+  ESM_PACKAGES,
 } from './constant';
 import { buildClient } from './buildClient';
 import { buildCjs } from './buildCjs';
 import { buildPlugin } from './buildPlugin';
 import { buildDeclaration } from './buildDeclaration';
-import { PkgLog, getPkgLog, toUnixPath, getPackageJson, getUserConfig, UserConfig } from './utils';
+import { PkgLog, getPkgLog, toUnixPath, getPackageJson, getUserConfig, UserConfig, writeToCache, readFromCache } from './utils';
 import { getPackages } from './utils/getPackages';
 import { Package } from '@lerna/package';
 import { tarPlugin } from './tarPlugin'
+import { buildEsm } from './buildEsm';
+import { addLicense } from './utils/addlicense';
+
+const BUILD_ERROR = 'build-error';
 
 export async function build(pkgs: string[]) {
-  process.env.NODE_ENV = 'production';
+  const isDev = process.argv.includes('--development');
+  process.env.NODE_ENV = isDev ? 'development' : 'production';
 
-  const packages = getPackages(pkgs);
+  let packages = getPackages(pkgs);
+  const cachePkg = readFromCache(BUILD_ERROR);
+  if (process.argv.includes('--retry') && cachePkg?.pkg) {
+    packages = packages.slice(packages.findIndex((item) => item.name === cachePkg.pkg));
+  }
   if (packages.length === 0) {
     let msg = '';
     if (pkgs.length) {
@@ -44,6 +63,9 @@ export async function build(pkgs: string[]) {
   if (clientCore) {
     await buildPackage(clientCore, 'es', buildClient);
   }
+  const esmPackages = packages.filter(pkg => ESM_PACKAGES.includes(pkg.name));
+  await buildPackages(esmPackages, 'lib', buildCjs);
+  await buildPackages(esmPackages, 'es', buildEsm);
 
   // plugins/*、samples/*
   await buildPackages(pluginPackages, 'dist', buildPlugin);
@@ -58,6 +80,7 @@ export async function build(pkgs: string[]) {
       APP_ROOT: path.join(CORE_APP, 'client'),
     });
   }
+  writeToCache(BUILD_ERROR, {});
 }
 
 export async function buildPackages(
@@ -66,6 +89,7 @@ export async function buildPackages(
   doBuildPackage: (cwd: string, userConfig: UserConfig, sourcemap: boolean, log?: PkgLog) => Promise<any>,
 ) {
   for await (const pkg of packages) {
+    writeToCache(BUILD_ERROR, { pkg: pkg.name })
     await buildPackage(pkg, targetDir, doBuildPackage);
   }
 }
@@ -122,6 +146,8 @@ export async function buildPackage(
     await userConfig.afterBuild(log);
   }
 
+  await addLicense(path.join(pkg.location, targetDir), log);
+
   // tar
   if (hasTar) {
     await tarPlugin(pkg.location, log);
@@ -135,7 +161,8 @@ function runScript(args: string[], cwd: string, envs: Record<string, string> = {
     env: {
       ...process.env,
       ...envs,
-      NODE_ENV: 'production',
+      sourcemap: process.argv.includes('--sourcemap') ? 'sourcemap' : undefined,
+      NODE_ENV: process.env.NODE_ENV || 'production',
     },
   });
 }

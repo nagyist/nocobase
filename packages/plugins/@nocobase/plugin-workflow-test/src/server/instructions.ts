@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { lodash } from '@nocobase/utils';
 
 export default {
@@ -6,6 +15,21 @@ export default {
       return {
         status: 1,
         result: config.path == null ? result : lodash.get(result, config.path),
+      };
+    },
+    test(config = {}) {
+      return {
+        status: 1,
+        result: null,
+      };
+    },
+  },
+
+  echoVariable: {
+    run({ id, config = {} }: any, job, processor) {
+      return {
+        status: 1,
+        result: config.variable ? processor.getParsedValue(config.variable, id) : null,
       };
     },
   },
@@ -18,6 +42,11 @@ export default {
 
   pending: {
     run(node, input, processor) {
+      return {
+        status: 0,
+      };
+    },
+    test() {
       return {
         status: 0,
       };
@@ -45,6 +74,31 @@ export default {
     },
     resume(node, input, processor) {
       throw new Error('input failed');
+      return null;
+    },
+  },
+
+  asyncResume: {
+    async run(node, input, processor) {
+      const job = await processor.saveJob({
+        status: 0,
+        nodeId: node.id,
+        nodeKey: node.key,
+        upstreamId: input?.id ?? null,
+      });
+
+      setTimeout(() => {
+        job.set({
+          status: 1,
+        });
+
+        processor.options.plugin.resume(job);
+      }, 100);
+
+      return null;
+    },
+    resume(node, job, processor) {
+      return job;
     },
   },
 

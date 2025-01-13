@@ -1,6 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Breadcrumb, Dropdown, Result, Space, Spin, Tag } from 'antd';
+import { Breadcrumb, Button, Dropdown, message, Modal, Result, Space, Spin, Tag, Tooltip } from 'antd';
 
 import {
   ActionContextProvider,
@@ -21,10 +30,10 @@ import { ExecutionStatusOptionsMap, JobStatusOptions } from './constants';
 import { FlowContext, useFlowContext } from './FlowContext';
 import { lang, NAMESPACE } from './locale';
 import useStyles from './style';
-import { linkNodes } from './utils';
-import { DownOutlined } from '@ant-design/icons';
+import { linkNodes, getWorkflowDetailPath, getWorkflowExecutionsPath } from './utils';
+import { DownOutlined, ExclamationCircleFilled, StopOutlined } from '@ant-design/icons';
 import { StatusButton } from './components/StatusButton';
-import { getWorkflowDetailPath, getWorkflowExecutionsPath } from './constant';
+import { useTranslation } from 'react-i18next';
 
 function attachJobs(nodes, jobs: any[] = []): void {
   const nodesMap = new Map();
@@ -210,14 +219,38 @@ function ExecutionsDropdown(props) {
 }
 
 export function ExecutionCanvas() {
+  const { t } = useTranslation();
   const compile = useCompile();
-  const { data, loading } = useResourceActionContext();
+  const { data, loading, refresh } = useResourceActionContext();
   const { setTitle } = useDocumentTitle();
   const [viewJob, setViewJob] = useState(null);
   const app = useApp();
+  const apiClient = useAPIClient();
   useEffect(() => {
     const { workflow } = data?.data ?? {};
     setTitle?.(`${workflow?.title ? `${workflow.title} - ` : ''}${lang('Execution history')}`);
+  }, [data?.data]);
+
+  const onCancel = useCallback(() => {
+    Modal.confirm({
+      title: lang('Cancel the execution'),
+      icon: <ExclamationCircleFilled />,
+      content: lang('Are you sure you want to cancel the execution?'),
+      onOk: () => {
+        apiClient
+          .resource('executions')
+          .cancel({
+            filterByTk: data?.data.id,
+          })
+          .then(() => {
+            message.success(t('Operation succeeded'));
+            refresh();
+          })
+          .catch((response) => {
+            console.error(response.data.error);
+          });
+      },
+    });
   }, [data?.data]);
 
   if (!data?.data) {
@@ -251,13 +284,24 @@ export function ExecutionCanvas() {
           <Breadcrumb
             items={[
               { title: <Link to={app.pluginSettingsManager.getRoutePath('workflow')}>{lang('Workflow')}</Link> },
-              { title: <Link to={getWorkflowDetailPath(workflow.id)}>{workflow.title}</Link> },
+              {
+                title: (
+                  <Tooltip title={`Key: ${workflow.key}`}>
+                    <Link to={getWorkflowDetailPath(workflow.id)}>{workflow.title}</Link>
+                  </Tooltip>
+                ),
+              },
               { title: <ExecutionsDropdown /> },
             ]}
           />
         </header>
         <aside>
           <Tag color={statusOption.color}>{compile(statusOption.label)}</Tag>
+          {execution.status ? null : (
+            <Tooltip title={lang('Cancel the execution')}>
+              <Button type="link" danger onClick={onCancel} shape="circle" size="small" icon={<StopOutlined />} />
+            </Tooltip>
+          )}
           <time>{str2moment(execution.updatedAt).format('YYYY-MM-DD HH:mm:ss')}</time>
         </aside>
       </div>

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Context, utils } from '@nocobase/actions';
 import WorkflowPlugin, { EXECUTION_STATUS, JOB_STATUS } from '@nocobase/plugin-workflow';
 
@@ -12,7 +21,7 @@ export async function submit(context: Context, next) {
     return context.throw(401);
   }
 
-  const plugin: WorkflowPlugin = context.app.pm.get('workflow') as WorkflowPlugin;
+  const plugin: WorkflowPlugin = context.app.getPlugin(WorkflowPlugin);
   const instruction = plugin.instructions.get('manual') as ManualInstruction;
 
   const userJob = await repository.findOne({
@@ -50,21 +59,26 @@ export async function submit(context: Context, next) {
   await processor.prepare();
 
   // NOTE: validate assignee
-  const assignees = processor.getParsedValue(userJob.node.config.assignees ?? [], userJob.nodeId);
+  const assignees = processor
+    .getParsedValue(userJob.node.config.assignees ?? [], userJob.nodeId)
+    .flat()
+    .filter(Boolean);
   if (!assignees.includes(currentUser.id) || userJob.userId !== currentUser.id) {
     return context.throw(403);
   }
   const presetValues = processor.getParsedValue(actionItem.values ?? {}, userJob.nodeId, {
-    // @deprecated
-    currentUser: currentUser,
-    // @deprecated
-    currentRecord: values.result[formKey],
-    // @deprecated
-    currentTime: new Date(),
-    $user: currentUser,
-    $nForm: values.result[formKey],
-    $nDate: {
-      now: new Date(),
+    additionalScope: {
+      // @deprecated
+      currentUser: currentUser,
+      // @deprecated
+      currentRecord: values.result[formKey],
+      // @deprecated
+      currentTime: new Date(),
+      $user: currentUser,
+      $nForm: values.result[formKey],
+      $nDate: {
+        now: new Date(),
+      },
     },
   });
 
@@ -81,7 +95,7 @@ export async function submit(context: Context, next) {
     await handler.call(instruction, userJob, forms[formKey], processor);
   }
 
-  await userJob.save({ transaction: processor.transaction });
+  await userJob.save();
 
   await processor.exit();
 

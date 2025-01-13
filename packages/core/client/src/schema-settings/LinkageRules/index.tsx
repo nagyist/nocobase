@@ -1,45 +1,40 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
-import { Form } from '@formily/core';
 import { observer, useFieldSchema } from '@formily/react';
 import React, { useMemo } from 'react';
-import { FormBlockContext } from '../../block-provider';
-import { useCollectionManager } from '../../collection-manager';
+import { useCollectionManager_deprecated } from '../../collection-manager';
+import { useCollectionParentRecordData } from '../../data-source/collection-record/CollectionRecordProvider';
+import { CollectionProvider } from '../../data-source/collection/CollectionProvider';
+import { withDynamicSchemaProps } from '../../hoc/withDynamicSchemaProps';
 import { RecordProvider } from '../../record-provider';
-import { SchemaComponent } from '../../schema-component';
+import { SchemaComponent, useProps } from '../../schema-component';
+import { SubFormProvider } from '../../schema-component/antd/association-field/hooks';
 import { DynamicComponentProps } from '../../schema-component/antd/filter/DynamicComponent';
 import { FilterContext } from '../../schema-component/antd/filter/context';
-import { VariableOption, VariablesContextType } from '../../variables/types';
 import { VariableInput, getShouldChange } from '../VariableInput/VariableInput';
 import { LinkageRuleActionGroup } from './LinkageRuleActionGroup';
 import { EnableLinkage } from './components/EnableLinkage';
 import { ArrayCollapse } from './components/LinkageHeader';
 
-interface usePropsReturn {
-  options: any;
-  defaultValues: any[];
-  collectionName: string;
-  form: Form;
-  variables: VariablesContextType;
-  localVariables: VariableOption | VariableOption[];
-  record: Record<string, any>;
-  /**
-   * create 表示创建表单，update 表示更新表单
-   */
-  formBlockType: 'create' | 'update';
-}
-
-interface Props {
-  useProps: () => usePropsReturn;
+export interface Props {
   dynamicComponent: any;
 }
 
-export const FormLinkageRules = observer(
-  (props: Props) => {
+export const FormLinkageRules = withDynamicSchemaProps(
+  observer((props: Props) => {
     const fieldSchema = useFieldSchema();
-    const { useProps, dynamicComponent } = props;
-    const { options, defaultValues, collectionName, form, formBlockType, variables, localVariables, record } =
-      useProps();
-    const { getAllCollectionsInheritChain } = useCollectionManager();
+    const { options, defaultValues, collectionName, form, variables, localVariables, record, dynamicComponent } =
+      useProps(props); // 新版 UISchema（1.0 之后）中已经废弃了 useProps，这里之所以继续保留是为了兼容旧版的 UISchema
+    const { getAllCollectionsInheritChain } = useCollectionManager_deprecated();
+    const parentRecordData = useCollectionParentRecordData();
 
     const components = useMemo(() => ({ ArrayCollapse }), []);
     const schema = useMemo(
@@ -78,18 +73,18 @@ export const FormLinkageRules = observer(
                     },
                     condition: {
                       'x-component': 'Filter',
+                      'x-use-component-props': () => {
+                        return {
+                          options,
+                          className: css`
+                            position: relative;
+                            width: 100%;
+                            margin-left: 10px;
+                          `,
+                        };
+                      },
                       'x-component-props': {
                         collectionName,
-                        useProps() {
-                          return {
-                            options,
-                            className: css`
-                              position: relative;
-                              width: 100%;
-                              margin-left: 10px;
-                            `,
-                          };
-                        },
                         dynamicComponent: (props: DynamicComponentProps) => {
                           const { collectionField } = props;
                           return (
@@ -114,10 +109,7 @@ export const FormLinkageRules = observer(
                     },
                     action: {
                       type: 'void',
-                      'x-component': LinkageRuleActionGroup,
-                      'x-component-props': {
-                        ...props,
-                      },
+                      'x-component': (_props) => <LinkageRuleActionGroup {..._props} {...props} />,
                     },
                   },
                 },
@@ -157,7 +149,17 @@ export const FormLinkageRules = observer(
           },
         },
       }),
-      [collectionName, defaultValues, form, localVariables, options, props, record, variables],
+      [
+        collectionName,
+        defaultValues,
+        form,
+        getAllCollectionsInheritChain,
+        localVariables,
+        options,
+        props,
+        record,
+        variables,
+      ],
     );
     const value = useMemo(
       () => ({ field: options, fieldSchema, dynamicComponent, options: options || [] }),
@@ -165,14 +167,17 @@ export const FormLinkageRules = observer(
     );
 
     return (
-      <FormBlockContext.Provider value={{ form, type: formBlockType }}>
-        <RecordProvider record={record}>
+      // 这里使用 SubFormProvider 包裹，是为了让子表格的联动规则中 “当前对象” 的配置显示正确
+      <SubFormProvider value={{ value: null, collection: { name: collectionName } as any }}>
+        <RecordProvider record={record} parent={parentRecordData}>
           <FilterContext.Provider value={value}>
-            <SchemaComponent components={components} schema={schema} />
+            <CollectionProvider name={collectionName}>
+              <SchemaComponent components={components} schema={schema} />
+            </CollectionProvider>
           </FilterContext.Provider>
         </RecordProvider>
-      </FormBlockContext.Provider>
+      </SubFormProvider>
     );
-  },
+  }),
   { displayName: 'FormLinkageRules' },
 );

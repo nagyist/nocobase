@@ -1,4 +1,13 @@
-import { SchemaInitializerItemType, useCollectionManager, useCompile } from '@nocobase/client';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { SchemaInitializerItemType, useCollectionManager_deprecated, useCompile, usePlugin } from '@nocobase/client';
 
 import {
   defaultFieldNames,
@@ -19,6 +28,47 @@ const MULTIPLE_ASSIGNED_MODE = {
   ALL_PERCENTAGE: Symbol('all percentage'),
   ANY_PERCENTAGE: Symbol('any percentage'),
 };
+
+function useVariables({ key, title, config }, { types, fieldNames = defaultFieldNames }) {
+  const compile = useCompile();
+  const { getCollectionFields } = useCollectionManager_deprecated();
+  const formKeys = Object.keys(config.forms ?? {});
+  if (!formKeys.length) {
+    return null;
+  }
+
+  const options = formKeys
+    .map((formKey) => {
+      const form = config.forms[formKey];
+
+      const fieldsOptions = getCollectionFieldOptions({
+        fields: form.collection?.fields,
+        collection: form.collection,
+        types,
+        compile,
+        getCollectionFields,
+      });
+      const label = compile(form.title) || formKey;
+      return fieldsOptions.length
+        ? {
+            key: formKey,
+            value: formKey,
+            label,
+            title: label,
+            children: fieldsOptions,
+          }
+        : null;
+    })
+    .filter(Boolean);
+
+  return options.length
+    ? {
+        [fieldNames.value]: key,
+        [fieldNames.label]: title,
+        [fieldNames.children]: options,
+      }
+    : null;
+}
 
 export default class extends Instruction {
   title = `{{t("Manual", { ns: "${NAMESPACE}" })}}`;
@@ -76,51 +126,10 @@ export default class extends Instruction {
     ModeConfig,
     AssigneesSelect,
   };
-  useVariables({ key, title, config }, { types, fieldNames = defaultFieldNames }) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const compile = useCompile();
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { getCollectionFields } = useCollectionManager();
-    const formKeys = Object.keys(config.forms ?? {});
-    if (!formKeys.length) {
-      return null;
-    }
-
-    const options = formKeys
-      .map((formKey) => {
-        const form = config.forms[formKey];
-
-        const fieldsOptions = getCollectionFieldOptions({
-          fields: form.collection?.fields,
-          collection: form.collection,
-          types,
-          compile,
-          getCollectionFields,
-        });
-        const label = compile(form.title) || formKey;
-        return fieldsOptions.length
-          ? {
-              key: formKey,
-              value: formKey,
-              label,
-              title: label,
-              children: fieldsOptions,
-            }
-          : null;
-      })
-      .filter(Boolean);
-
-    return options.length
-      ? {
-          [fieldNames.value]: key,
-          [fieldNames.label]: title,
-          [fieldNames.children]: options,
-        }
-      : null;
-  }
+  useVariables = useVariables;
   useInitializers(node): SchemaInitializerItemType | null {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { getCollection } = useCollectionManager();
+    const { getCollection } = useCollectionManager_deprecated();
     const formKeys = Object.keys(node.config.forms ?? {});
     if (!formKeys.length || node.config.mode) {
       return null;
@@ -138,7 +147,7 @@ export default class extends Instruction {
               title: form.title ?? formKey,
               Component: CollectionBlockInitializer,
               collection: form.collection,
-              dataSource: `{{$jobsMapByNodeKey.${node.key}.${formKey}}}`,
+              dataPath: `$jobsMapByNodeKey.${node.key}.${formKey}`,
             } as SchemaInitializerItemType)
           : null;
       })
@@ -153,5 +162,8 @@ export default class extends Instruction {
           children: forms,
         }
       : null;
+  }
+  isAvailable({ engine, workflow, upstream, branchIndex }) {
+    return !engine.isWorkflowSync(workflow);
   }
 }

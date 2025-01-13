@@ -1,15 +1,28 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { AppSupervisor, Plugin, PluginManager } from '@nocobase/server';
-import { mockServer } from '@nocobase/test';
+import { createMockServer } from '@nocobase/test';
 import { uid } from '@nocobase/utils';
-import { PluginMultiAppManager } from '../server';
+import { vi } from 'vitest';
 
 describe('test with start', () => {
   it('should load subApp on create', async () => {
-    const loadFn = jest.fn();
-    const installFn = jest.fn();
+    const loadFn = vi.fn();
+    const installFn = vi.fn();
 
     class TestPlugin extends Plugin {
       getName(): string {
+        return 'test-package';
+      }
+
+      get name() {
         return 'test-package';
       }
 
@@ -23,20 +36,16 @@ describe('test with start', () => {
     }
 
     const resolvePlugin = PluginManager.resolvePlugin;
-
-    PluginManager.resolvePlugin = (name) => {
+    PluginManager.resolvePlugin = function (name, ...args) {
       if (name === 'test-package') {
         return TestPlugin;
       }
-      return resolvePlugin(name);
+      return resolvePlugin.bind(this)(name, ...args);
     };
 
-    const app = mockServer();
-
-    app.plugin(PluginMultiAppManager);
-
-    await app.loadAndInstall({ clean: true });
-    await app.start();
+    const app = await createMockServer({
+      plugins: ['multi-app-manager'],
+    });
 
     const db = app.db;
 
@@ -64,11 +73,9 @@ describe('test with start', () => {
   });
 
   it('should install into difference database', async () => {
-    const app = mockServer();
-    app.plugin(PluginMultiAppManager);
-
-    await app.loadAndInstall({ clean: true });
-    await app.start();
+    const app = await createMockServer({
+      plugins: ['multi-app-manager'],
+    });
 
     const db = app.db;
 

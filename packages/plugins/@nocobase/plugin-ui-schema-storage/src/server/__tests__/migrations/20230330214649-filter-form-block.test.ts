@@ -1,8 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import Migration from '../../migrations/20230330214649-filter-form-block';
 
 import { Database } from '@nocobase/database';
-import { mockServer, MockServer } from '@nocobase/test';
-import PluginUiSchema, { UiSchemaRepository } from '../..';
+import { createMockServer, MockServer } from '@nocobase/test';
+import { UiSchemaRepository } from '../..';
 
 describe.skip('migration-20230330214649-filter-form-block', () => {
   let app: MockServer;
@@ -15,17 +24,11 @@ describe.skip('migration-20230330214649-filter-form-block', () => {
   });
 
   beforeEach(async () => {
-    app = mockServer({
+    app = await createMockServer({
       registerActions: true,
+      plugins: ['ui-schema-storage'],
     });
-
     db = app.db;
-
-    await db.clean({ drop: true });
-
-    app.plugin(PluginUiSchema, { name: 'ui-schema-storage' });
-
-    await app.loadAndInstall();
     uiSchemaRepository = db.getCollection('uiSchemas').repository as UiSchemaRepository;
   });
 

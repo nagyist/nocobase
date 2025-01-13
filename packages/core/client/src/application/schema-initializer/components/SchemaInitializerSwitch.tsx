@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Switch } from 'antd';
 import React, { FC } from 'react';
 import { SchemaInitializerItemProps, SchemaInitializerItem } from './SchemaInitializerItem';
@@ -13,14 +22,18 @@ export const SchemaInitializerSwitch: FC<SchemaInitializerSwitchItemProps> = (pr
   const { title, checked, ...resets } = props;
   const compile = useCompile();
   return (
-    <SchemaInitializerItem {...resets}>
+    <SchemaInitializerItem {...resets} closeInitializerMenuWhenClick={false}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {compile(title)} <Switch style={{ marginLeft: 20 }} size={'small'} checked={checked} />
+        {compile(title)}
+        <Switch disabled={props.disabled} style={{ marginLeft: 20 }} size={'small'} checked={checked} />
       </div>
     </SchemaInitializerItem>
   );
 };
 
+/**
+ * @internal
+ */
 export const SchemaInitializerSwitchInternal = () => {
   const itemConfig = useSchemaInitializerItem<SchemaInitializerSwitchItemProps>();
   return <SchemaInitializerSwitch {...itemConfig} />;

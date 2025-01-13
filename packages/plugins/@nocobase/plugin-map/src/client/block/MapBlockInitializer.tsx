@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { TableOutlined } from '@ant-design/icons';
 import { FormLayout } from '@formily/antd-v5';
 import { SchemaOptionsContext } from '@formily/react';
@@ -6,31 +15,36 @@ import {
   FormDialog,
   SchemaComponent,
   SchemaComponentOptions,
-  useCollectionManager,
+  useCollectionManager_deprecated,
   useGlobalTheme,
   useSchemaInitializer,
   useSchemaInitializerItem,
 } from '@nocobase/client';
 import React, { useContext } from 'react';
 import { useMapTranslation } from '../locale';
-import { createMapBlockSchema, findNestedOption } from './utils';
+import { createMapBlockUISchema } from './createMapBlockUISchema';
+import { findNestedOption } from './utils';
 
 export const MapBlockInitializer = () => {
   const itemConfig = useSchemaInitializerItem();
   const { insert } = useSchemaInitializer();
   const options = useContext(SchemaOptionsContext);
-  const { getCollectionFieldsOptions } = useCollectionManager();
+  const { getCollectionFieldsOptions } = useCollectionManager_deprecated();
   const { t } = useMapTranslation();
   const { theme } = useGlobalTheme();
+
   return (
     <DataBlockInitializer
-      componentType={'Map'}
+      componentType={`Map`}
       icon={<TableOutlined />}
       onCreateBlockSchema={async ({ item }) => {
         const mapFieldOptions = getCollectionFieldsOptions(item.name, ['point', 'lineString', 'polygon'], {
           association: ['o2o', 'obo', 'oho', 'o2m', 'm2o', 'm2m'],
+          dataSource: item.dataSource,
         });
-        const markerFieldOptions = getCollectionFieldsOptions(item.name, 'string');
+        const markerFieldOptions = getCollectionFieldsOptions(item.name, 'string', {
+          dataSource: item.dataSource,
+        });
         const values = await FormDialog(
           t('Create map block'),
           () => {
@@ -81,8 +95,9 @@ export const MapBlockInitializer = () => {
           initialValues: {},
         });
         insert(
-          createMapBlockSchema({
-            collection: item.name,
+          createMapBlockUISchema({
+            collectionName: item.name,
+            dataSource: item.dataSource,
             fieldNames: {
               ...values,
             },

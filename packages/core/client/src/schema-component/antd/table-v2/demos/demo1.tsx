@@ -1,10 +1,12 @@
+
+
 import { ISchema, useForm } from '@formily/react';
 import {
   APIClientProvider,
   AntdSchemaComponentProvider,
   Application,
   BlockSchemaComponentProvider,
-  CollectionManagerProvider,
+  ExtendCollectionsProvider,
   SchemaComponent,
   SchemaComponentProvider,
   useFormBlockContext,
@@ -99,9 +101,7 @@ const formSchema: ISchema = {
     form: {
       type: 'void',
       'x-component': 'FormV2',
-      'x-component-props': {
-        useProps: '{{ useFormBlockProps }}',
-      },
+      'x-use-component-props': 'useFormBlockProps',
       properties: {
         id: {
           type: 'string',
@@ -157,12 +157,12 @@ const schema: ISchema = {
           type: 'array',
           title: `编辑模式`,
           'x-component': 'TableV2',
+          'x-use-component-props': 'useTableBlockProps',
           'x-component-props': {
             rowKey: 'id',
             rowSelection: {
               type: 'checkbox',
             },
-            useProps: '{{ useTableBlockProps }}',
           },
           properties: {
             column1: {
@@ -211,13 +211,13 @@ const Root = () => {
   return (
     <APIClientProvider apiClient={apiClient}>
       <SchemaComponentProvider>
-        <CollectionManagerProvider collections={collections.data}>
+        <ExtendCollectionsProvider collections={collections.data as any}>
           <AntdSchemaComponentProvider>
             <BlockSchemaComponentProvider>
               <SchemaComponent schema={schema} scope={{ useCreateAction }} />
             </BlockSchemaComponentProvider>
           </AntdSchemaComponentProvider>
-        </CollectionManagerProvider>
+        </ExtendCollectionsProvider>
       </SchemaComponentProvider>
     </APIClientProvider>
   );

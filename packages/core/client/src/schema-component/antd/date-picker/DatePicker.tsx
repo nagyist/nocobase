@@ -1,21 +1,35 @@
-import { connect, mapProps, mapReadPretty } from '@formily/react';
-import { DatePicker as AntdDatePicker } from 'antd';
-import type {
-  DatePickerProps as AntdDatePickerProps,
-  RangePickerProps as AntdRangePickerProps,
-} from 'antd/es/date-picker';
-import React from 'react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { connect, mapProps, mapReadPretty, useField, useFieldSchema } from '@formily/react';
+import { DatePicker as AntdDatePicker, DatePickerProps as AntdDatePickerProps, Space, Select } from 'antd';
+import { RangePickerProps } from 'antd/es/date-picker';
+import dayjs from 'dayjs';
+import React, { useState } from 'react';
+import { getPickerFormat, getDateTimeFormat } from '@nocobase/utils/client';
 import { useTranslation } from 'react-i18next';
-import { ReadPretty } from './ReadPretty';
-import { getDateRanges, mapDatePicker, mapRangePicker } from './util';
+import { ReadPretty, ReadPrettyComposed } from './ReadPretty';
+import { getDateRanges, mapDatePicker, mapRangePicker, inferPickerType } from './util';
+import { useCompile } from '../../';
 
 interface IDatePickerProps {
   utc?: boolean;
 }
 
 type ComposedDatePicker = React.FC<AntdDatePickerProps> & {
-  ReadPretty?: React.FC<AntdDatePickerProps>;
-  RangePicker?: React.FC<AntdRangePickerProps>;
+  ReadPretty?: ReadPrettyComposed['DatePicker'];
+  RangePicker?: ComposedRangePicker;
+  FilterWithPicker?: any;
+};
+
+type ComposedRangePicker = React.FC<RangePickerProps> & {
+  ReadPretty?: ReadPrettyComposed['DateRangePicker'];
 };
 
 const DatePickerContext = React.createContext<IDatePickerProps>({ utc: true });
@@ -35,19 +49,28 @@ const InternalRangePicker = connect(
   mapReadPretty(ReadPretty.DateRangePicker),
 );
 
-export const DatePicker = (props) => {
+export const DatePicker: ComposedDatePicker = (props: any) => {
   const { utc = true } = useDatePickerContext();
   const value = Array.isArray(props.value) ? props.value[0] : props.value;
-  props = { utc, ...props };
-  return <InternalDatePicker {...props} value={value} />;
+  const newProps = {
+    utc,
+    ...props,
+    showTime: props.showTime ? { defaultValue: dayjs('00:00:00', 'HH:mm:ss') } : false,
+  };
+  return <InternalDatePicker {...newProps} value={value} />;
 };
 
 DatePicker.ReadPretty = ReadPretty.DatePicker;
 
-DatePicker.RangePicker = function RangePicker(props) {
+DatePicker.RangePicker = function RangePicker(props: any) {
+  const { value, picker = 'date', format, showTime, timeFormat } = props;
   const { t } = useTranslation();
+  const fieldSchema = useFieldSchema();
+  const field: any = useField();
   const { utc = true } = useDatePickerContext();
   const rangesValue = getDateRanges();
+  const compile = useCompile();
+  const isFilterAction: any = !fieldSchema['x-filter-operator']; // 在筛选按钮中使用
   const presets = [
     { label: t('Today'), value: rangesValue.today },
     { label: t('Last week'), value: rangesValue.lastWeek },
@@ -69,8 +92,147 @@ DatePicker.RangePicker = function RangePicker(props) {
     { label: t('Last 90 days'), value: rangesValue.last90Days },
     { label: t('Next 90 days'), value: rangesValue.next90Days },
   ];
-  props = { utc, presets, ...props };
-  return <InternalRangePicker {...props} />;
+
+  const targetPicker = value ? inferPickerType(value?.[0]) : picker;
+  const targetDateFormat = getPickerFormat(targetPicker) || format;
+  const newProps: any = {
+    utc,
+    presets,
+    ...props,
+    format: getDateTimeFormat(targetPicker, targetDateFormat, showTime, timeFormat),
+    picker: targetPicker,
+    showTime: showTime ? { defaultValue: [dayjs('00:00:00', 'HH:mm:ss'), dayjs('23:59:59', 'HH:mm:ss')] } : false,
+  };
+  const [stateProps, setStateProps] = useState(newProps);
+  if (isFilterAction) {
+    return (
+      <Space.Compact>
+        <Select
+          // @ts-ignore
+          role="button"
+          data-testid="select-picker"
+          style={{ width: '100px' }}
+          popupMatchSelectWidth={false}
+          defaultValue={targetPicker}
+          options={compile([
+            {
+              label: '{{t("Date")}}',
+              value: 'date',
+            },
+
+            {
+              label: '{{t("Month")}}',
+              value: 'month',
+            },
+            {
+              label: '{{t("Quarter")}}',
+              value: 'quarter',
+            },
+            {
+              label: '{{t("Year")}}',
+              value: 'year',
+            },
+          ])}
+          onChange={(value) => {
+            const format = getPickerFormat(value);
+            const dateTimeFormat = getDateTimeFormat(value, format, showTime, timeFormat);
+
+            field.setComponentProps({
+              picker: value,
+              format,
+            });
+            newProps.picker = value;
+            newProps.format = dateTimeFormat;
+            setStateProps(newProps);
+            fieldSchema['x-component-props'] = {
+              ...props,
+              picker: value,
+              format: dateTimeFormat,
+            };
+            field.value = undefined;
+          }}
+        />
+        <InternalRangePicker {...stateProps} value={value} />
+      </Space.Compact>
+    );
+  }
+  return <InternalRangePicker {...newProps} />;
+};
+
+DatePicker.FilterWithPicker = function FilterWithPicker(props: any) {
+  const { picker = 'date', format, showTime, timeFormat } = props;
+  const { utc = true } = useDatePickerContext();
+  const value = Array.isArray(props.value) ? props.value[0] : props.value;
+  const compile = useCompile();
+  const fieldSchema = useFieldSchema();
+  const targetPicker = value ? inferPickerType(value) : picker;
+  const targetDateFormat = getPickerFormat(targetPicker) || format;
+  const newProps = {
+    utc,
+    ...props,
+    underFilter: true,
+    showTime: showTime ? { defaultValue: dayjs('00:00:00', 'HH:mm:ss') } : false,
+    format: getDateTimeFormat(targetPicker, targetDateFormat, showTime, timeFormat),
+    picker: targetPicker,
+    onChange: (val) => {
+      props.onChange(undefined);
+      setTimeout(() => {
+        props.onChange(val);
+      });
+    },
+  };
+  const field: any = useField();
+  const [stateProps, setStateProps] = useState(newProps);
+  return (
+    <Space.Compact>
+      <Select
+        // @ts-ignore
+        role="button"
+        data-testid="select-picker"
+        style={{ width: '100px' }}
+        popupMatchSelectWidth={false}
+        defaultValue={targetPicker}
+        options={compile([
+          {
+            label: '{{t("Date")}}',
+            value: 'date',
+          },
+
+          {
+            label: '{{t("Month")}}',
+            value: 'month',
+          },
+          {
+            label: '{{t("Quarter")}}',
+            value: 'quarter',
+          },
+          {
+            label: '{{t("Year")}}',
+            value: 'year',
+          },
+        ])}
+        onChange={(value) => {
+          const format = getPickerFormat(value);
+          const dateTimeFormat = getDateTimeFormat(value, format, showTime, timeFormat);
+
+          field.setComponentProps({
+            picker: value,
+            format,
+          });
+          newProps.picker = value;
+          newProps.format = dateTimeFormat;
+          setStateProps(newProps);
+          fieldSchema['x-component-props'] = {
+            ...props,
+            picker: value,
+            format: dateTimeFormat,
+          };
+          field.value = null;
+        }}
+      />
+      <InternalDatePicker {...stateProps} value={value} />
+    </Space.Compact>
+  );
 };
 
 export default DatePicker;

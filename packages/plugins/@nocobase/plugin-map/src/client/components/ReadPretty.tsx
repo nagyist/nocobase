@@ -1,18 +1,27 @@
-import { useFieldSchema, useForm } from '@formily/react';
-import { EllipsisWithTooltip, useCollection, useFieldTitle } from '@nocobase/client';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { useFieldSchema } from '@formily/react';
+import { EllipsisWithTooltip, useCollection, useFieldTitle, useFlag } from '@nocobase/client';
 import React from 'react';
 import { MapComponent } from './MapComponent';
 
 const ReadPretty = (props) => {
   const { value } = props;
   const fieldSchema = useFieldSchema();
-  const { getField } = useCollection();
-  const collectionField = getField(fieldSchema.name);
+  const collection = useCollection();
+  const collectionField = collection.getField(fieldSchema.name);
   const mapType = props.mapType || collectionField?.uiSchema['x-component-props']?.mapType;
-  const form = useForm();
+  const { isInSubTable } = useFlag();
+  const displayText = fieldSchema?.parent?.['x-component'] === 'TableV2.Column' || isInSubTable;
   useFieldTitle();
-
-  if (!form.readPretty) {
+  if (displayText) {
     return (
       <div>
         <EllipsisWithTooltip ellipsis={true}>

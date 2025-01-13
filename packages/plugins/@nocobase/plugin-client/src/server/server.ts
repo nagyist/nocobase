@@ -1,9 +1,18 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Plugin } from '@nocobase/server';
-import fs from 'fs';
 import { resolve } from 'path';
 import { getAntdLocale } from './antd';
 import { getCronLocale } from './cron';
 import { getCronstrueLocale } from './cronstrue';
+import * as process from 'node:process';
 
 async function getLang(ctx) {
   const SystemSetting = ctx.db.getRepository('systemSettings');
@@ -14,45 +23,31 @@ async function getLang(ctx) {
   if (enabledLanguages.includes(currentUser?.appLang)) {
     lang = currentUser?.appLang;
   }
-  if (ctx.request.query.locale) {
+  if (ctx.request.query.locale && enabledLanguages.includes(ctx.request.query.locale)) {
     lang = ctx.request.query.locale;
   }
   return lang;
 }
 
-export class ClientPlugin extends Plugin {
-  async beforeLoad() {
-    // const cmd = this.app.findCommand('install');
-    // if (cmd) {
-    //   cmd.option('--import-demo');
-    // }
-    this.app.on('afterInstall', async (app, options) => {
-      const [opts] = options?.cliArgs || [{}];
-      if (opts?.importDemo) {
-        //
-      }
-    });
+export class PluginClientServer extends Plugin {
+  async beforeLoad() {}
 
-    this.db.on('systemSettings.beforeCreate', async (instance, { transaction }) => {
-      const uiSchemas = this.db.getRepository<any>('uiSchemas');
-      const schema = await uiSchemas.insert(
-        {
-          type: 'void',
-          'x-component': 'Menu',
-          'x-designer': 'Menu.Designer',
-          'x-initializer': 'MenuItemInitializers',
-          'x-component-props': {
-            mode: 'mix',
-            theme: 'dark',
-            // defaultSelectedUid: 'u8',
-            onSelect: '{{ onSelect }}',
-            sideMenuRefScopeKey: 'sideMenuRef',
-          },
-          properties: {},
-        },
-        { transaction },
-      );
-      instance.set('options.adminSchemaUid', schema['x-uid']);
+  async install() {
+    const uiSchemas = this.db.getRepository<any>('uiSchemas');
+    await uiSchemas.insert({
+      type: 'void',
+      'x-uid': 'nocobase-admin-menu',
+      'x-component': 'Menu',
+      'x-designer': 'Menu.Designer',
+      'x-initializer': 'MenuItemInitializers',
+      'x-component-props': {
+        mode: 'mix',
+        theme: 'dark',
+        // defaultSelectedUid: 'u8',
+        onSelect: '{{ onSelect }}',
+        sideMenuRefScopeKey: 'sideMenuRef',
+      },
+      properties: {},
     });
   }
 
@@ -69,18 +64,11 @@ export class ClientPlugin extends Plugin {
     });
     this.app.acl.allow('app', 'getLang');
     this.app.acl.allow('app', 'getInfo');
-    this.app.acl.allow('plugins', '*', 'public');
     this.app.acl.registerSnippet({
       name: 'app',
       actions: ['app:restart', 'app:clearCache'],
     });
     const dialect = this.app.db.sequelize.getDialect();
-    const restartMark = resolve(process.cwd(), 'storage', 'restart');
-    this.app.on('beforeStart', async () => {
-      if (fs.existsSync(restartMark)) {
-        fs.unlinkSync(restartMark);
-      }
-    });
 
     this.app.resource({
       name: 'app',
@@ -94,7 +82,8 @@ export class ClientPlugin extends Plugin {
           if (enabledLanguages.includes(currentUser?.appLang)) {
             lang = currentUser?.appLang;
           }
-          ctx.body = {
+
+          const info: any = {
             database: {
               dialect,
             },
@@ -103,6 +92,11 @@ export class ClientPlugin extends Plugin {
             name: ctx.app.name,
             theme: currentUser?.systemSettings?.theme || systemSetting?.options?.theme || 'default',
           };
+
+          if (process.env['EXPORT_LIMIT']) {
+            info.exportLimit = parseInt(process.env['EXPORT_LIMIT']);
+          }
+          ctx.body = info;
           await next();
         },
         async getLang(ctx, next) {
@@ -127,4 +121,4 @@ export class ClientPlugin extends Plugin {
   }
 }
 
-export default ClientPlugin;
+export default PluginClientServer;

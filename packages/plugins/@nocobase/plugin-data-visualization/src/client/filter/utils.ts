@@ -1,5 +1,16 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { DEFAULT_DATA_SOURCE_KEY, VariablesContextType } from '@nocobase/client';
 import { moment2str } from '@nocobase/utils/client';
 import dayjs from 'dayjs';
+import { Schema } from '@formily/react';
 
 export const getOptionsSchema = () => {
   const options = {
@@ -154,24 +165,60 @@ export const transformValue = (value: any, props: any) => {
       start = start.startOf('day');
       end = end.endOf('day');
     }
-    return [moment2str(start, props), moment2str(end, props)];
+    return [start.toISOString(), end.toISOString()];
   }
   return value;
 };
 
-export const setDefaultValue = async (field: any, variables: any) => {
+export const setDefaultValue = async (field: any, variablesCtx: VariablesContextType, localVariables?: any) => {
   const defaultValue = field.initialValue;
   const isVariable =
     typeof defaultValue === 'string' && defaultValue?.startsWith('{{$') && defaultValue?.endsWith('}}');
-  if (!isVariable || !variables) {
+  if (!isVariable || !variablesCtx) {
     field.setValue(defaultValue);
     field.setInitialValue(defaultValue);
   } else {
     field.loading = true;
-    const value = await variables.parseVariable(defaultValue);
+    const { value } = await variablesCtx.parseVariable(defaultValue, localVariables);
     const transformedValue = transformValue(value, field.componentProps);
     field.setValue(transformedValue);
     field.setInitialValue(transformedValue);
     field.loading = false;
   }
+};
+
+export const FILTER_FIELD_PREFIX_SEPARATOR = '-';
+
+export const getFilterFieldPrefix = (dataSource: string, fieldName: string) => {
+  return dataSource ? `${dataSource}${FILTER_FIELD_PREFIX_SEPARATOR}${fieldName}` : fieldName;
+};
+
+// [dataSource-]collection.fieldName.associateName
+export const parseFilterFieldName = (name: string) => {
+  const [prefix, fieldName] = name.split(FILTER_FIELD_PREFIX_SEPARATOR);
+  if (fieldName) {
+    return { dataSource: prefix, fieldName };
+  }
+  return { dataSource: DEFAULT_DATA_SOURCE_KEY, fieldName: prefix };
+};
+
+export const findSchema = (schema: Schema, key: string, targetName: string) => {
+  if (!Schema.isSchemaInstance(schema)) return null;
+  return schema.reduceProperties((buf, s) => {
+    let fieldName = s[key];
+    if (!fieldName.includes(FILTER_FIELD_PREFIX_SEPARATOR)) {
+      fieldName = `${DEFAULT_DATA_SOURCE_KEY}${FILTER_FIELD_PREFIX_SEPARATOR}${fieldName}`;
+    }
+    if (fieldName === targetName) {
+      return s;
+    }
+    if (s['x-component'] !== 'Action.Container' && s['x-component'] !== 'AssociationField.Viewer') {
+      const c = findSchema(s, key, targetName);
+      if (c) {
+        return c;
+      }
+    }
+
+    return buf;
+  });
 };

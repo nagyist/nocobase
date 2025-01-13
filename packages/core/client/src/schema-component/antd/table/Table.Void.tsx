@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { createForm, Field } from '@formily/core';
 import { FieldContext, FormContext, observer, useField, useFieldSchema } from '@formily/react';
 import { Options, Result } from 'ahooks/es/useRequest/src/types';
@@ -17,6 +26,8 @@ type TableVoidProps = TableProps<any> & {
   ) => Result<any, any> & { state?: any; setState?: any };
 };
 
+const pageSizeOptions = [5, 10, 20, 50, 100, 200];
+
 const usePaginationProps = (props: TableProps<any> & { request?: any }, service): TablePaginationConfig | false => {
   if (props.pagination === false) {
     return false;
@@ -32,6 +43,7 @@ const usePaginationProps = (props: TableProps<any> & { request?: any }, service)
     pagination.pageSize = pageSize;
   }
   return {
+    pageSizeOptions,
     showSizeChanger: true,
     ...pagination,
     onChange(page, pageSize) {

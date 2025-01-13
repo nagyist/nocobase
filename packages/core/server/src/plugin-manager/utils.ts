@@ -1,4 +1,15 @@
-import { isURL } from '@nocobase/utils';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+/* istanbul ignore next -- @preserve */
+
+import { importModule, isURL, requireResolve } from '@nocobase/utils';
 import { createStoragePluginSymLink } from '@nocobase/utils/plugin-symlink';
 import axios, { AxiosRequestConfig } from 'axios';
 import decompress from 'decompress';
@@ -9,6 +20,7 @@ import { builtinModules } from 'module';
 import os from 'os';
 import path from 'path';
 import semver from 'semver';
+import { getDepPkgPath, getPackageDir, getPackageFilePathWithExistCheck } from './clientStaticUtils';
 import {
   APP_NAME,
   DEFAULT_PLUGIN_PATH,
@@ -19,8 +31,8 @@ import {
   requireRegex,
 } from './constants';
 import deps from './deps';
+import { PluginManagerRepository } from './plugin-manager-repository';
 import { PluginData } from './types';
-import { getDepPkgPath, getPackageDir, getPackageFilePathWithExistCheck } from './clientStaticUtils';
 
 /**
  * get temp dir
@@ -70,11 +82,11 @@ export function getNodeModulesPluginDir(packageName: string) {
 export function getAuthorizationHeaders(registry?: string, authToken?: string) {
   const headers = {};
   if (registry && !authToken) {
-    const npmrcPath = path.join(process.cwd(), '.npmrc');
+    const npmrcPath = path.join(os.homedir(), '.npmrc');
     const url = new URL(registry);
     let envConfig: Record<string, string> = process.env;
     if (fs.existsSync(npmrcPath)) {
-      const content = fs.readFileSync(path.join(process.cwd(), '.npmrc'), 'utf-8');
+      const content = fs.readFileSync(npmrcPath, 'utf-8');
       envConfig = {
         ...envConfig,
         ...ini.parse(content),
@@ -191,7 +203,7 @@ export async function downloadAndUnzipToTempDir(fileUrl: string, authToken?: str
     throw new Error(`decompress ${fileUrl} failed`);
   }
 
-  const packageJson = requireNoCache(packageJsonPath);
+  const packageJson = await readJSONFileContent(packageJsonPath);
   const mainFile = path.join(tempPackageContentDir, packageJson.main);
   if (!fs.existsSync(mainFile)) {
     await removeTmpDir(tempFile, tempPackageContentDir);
@@ -277,6 +289,7 @@ export function getServerPackages(packageDir: string) {
     const exts = ['.js', '.ts', '.jsx', '.tsx'];
     const importRegex = /import\s+.*?\s+from\s+['"]([^'"\s.].+?)['"];?/g;
     const requireRegex = /require\s*\(\s*[`'"]([^`'"\s.].+?)[`'"]\s*\)/g;
+
     function setPluginsFromContent(reg: RegExp, content: string) {
       let match: RegExpExecArray | null;
       while ((match = reg.exec(content))) {
@@ -337,30 +350,38 @@ export function removePluginPackage(packageName: string) {
  * @example
  * getPackageJson('dayjs') => { name: 'dayjs', version: '1.0.0', ... }
  */
-export function getPackageJson(pluginName: string) {
+export async function getPackageJson(pluginName: string) {
   const packageDir = getStoragePluginDir(pluginName);
-  return getPackageJsonByLocalPath(packageDir);
+  return await getPackageJsonByLocalPath(packageDir);
 }
 
-export function getPackageJsonByLocalPath(localPath: string) {
+export async function getPackageJsonByLocalPath(localPath: string) {
   if (!fs.existsSync(localPath)) {
     return null;
   } else {
-    return requireNoCache(path.join(localPath, 'package.json'));
+    const fullPath = path.join(localPath, 'package.json');
+    const data = await fs.promises.readFile(fullPath, { encoding: 'utf-8' });
+    return JSON.parse(data);
   }
 }
 
 export async function updatePluginByCompressedFileUrl(
-  options: Partial<Pick<PluginData, 'compressedFileUrl' | 'packageName' | 'authToken'>>,
+  options: Partial<Pick<PluginData, 'compressedFileUrl' | 'packageName' | 'authToken'>> & {
+    repository: PluginManagerRepository;
+  },
 ) {
   const { packageName, version, tempFile, tempPackageContentDir } = await downloadAndUnzipToTempDir(
     options.compressedFileUrl,
     options.authToken,
   );
 
-  if (options.packageName && options.packageName !== packageName) {
+  const instance = await options.repository.findOne({
+    filter: { packageName },
+  });
+
+  if (!instance) {
     await removeTmpDir(tempFile, tempPackageContentDir);
-    throw new Error(`Plugin name in package.json must be ${options.packageName}, but got ${packageName}`);
+    throw new Error(`plugin ${packageName} does not exist`);
   }
 
   const { packageDir } = await copyTempPackageToStorageAndLinkToNodeModules(
@@ -394,9 +415,13 @@ export function removeRequireCache(fileOrPackageName: string) {
   delete require.cache[fileOrPackageName];
 }
 
-export function requireNoCache(fileOrPackageName: string) {
-  removeRequireCache(fileOrPackageName);
-  return require(fileOrPackageName);
+export async function requireNoCache(fileOrPackageName: string) {
+  return await importModule(fileOrPackageName);
+}
+
+export async function readJSONFileContent(filePath: string) {
+  const data = await fs.promises.readFile(filePath, { encoding: 'utf-8' });
+  return JSON.parse(data);
 }
 
 export function requireModule(m: any) {
@@ -409,19 +434,20 @@ export function requireModule(m: any) {
   return m.__esModule ? m.default : m;
 }
 
-function getExternalVersionFromDistFile(packageName: string): false | Record<string, string> {
+async function getExternalVersionFromDistFile(packageName: string): Promise<false | Record<string, string>> {
   const { exists, filePath } = getPackageFilePathWithExistCheck(packageName, 'dist/externalVersion.js');
   if (!exists) {
     return false;
   }
 
   try {
-    return requireNoCache(filePath);
+    return await requireNoCache(filePath);
   } catch (e) {
     console.error(e);
     return false;
   }
 }
+
 export function isNotBuiltinModule(packageName: string) {
   return !builtinModules.includes(packageName);
 }
@@ -497,17 +523,26 @@ export interface DepCompatible {
   versionRange: string;
   packageVersion: string;
 }
+
 export async function getCompatible(packageName: string) {
   let externalVersion: Record<string, string>;
-  if (!process.env.IS_DEV_CMD) {
-    const res = getExternalVersionFromDistFile(packageName);
+  const hasSrc = fs.existsSync(path.join(getPackageDir(packageName), 'src'));
+  let hasError = false;
+  if (hasSrc) {
+    try {
+      externalVersion = await getExternalVersionFromSource(packageName);
+    } catch {
+      hasError = true;
+    }
+  }
+
+  if (hasError || !hasSrc) {
+    const res = await getExternalVersionFromDistFile(packageName);
     if (!res) {
       return false;
     } else {
       externalVersion = res;
     }
-  } else {
-    externalVersion = await getExternalVersionFromSource(packageName);
   }
 
   return Object.keys(externalVersion).reduce<DepCompatible[]>((result, packageName) => {
@@ -515,8 +550,8 @@ export async function getCompatible(packageName: string) {
     const globalPackageName = deps[packageName]
       ? packageName
       : deps[packageName.split('/')[0]] // @nocobase and @formily
-      ? packageName.split('/')[0]
-      : undefined;
+        ? packageName.split('/')[0]
+        : undefined;
 
     if (globalPackageName) {
       const versionRange = deps[globalPackageName];
@@ -549,4 +584,20 @@ export async function checkAndGetCompatible(packageName: string) {
     isCompatible: compatible.every((item) => item.result),
     depsCompatible: compatible,
   };
+}
+
+export async function getPluginBasePath(packageName: string) {
+  if (!packageName) {
+    return;
+  }
+  const file = await fs.realpath(await requireResolve(packageName));
+  try {
+    const basePath = await fs.realpath(path.resolve(process.env.NODE_MODULES_PATH, packageName, 'src'));
+    if (file.startsWith(basePath)) {
+      return basePath;
+    }
+  } catch (error) {
+    // skip
+  }
+  return path.dirname(path.dirname(file));
 }

@@ -1,11 +1,22 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database, IDatabaseOptions, Transactionable } from '@nocobase/database';
 import Application, { AppSupervisor, Gateway, Plugin } from '@nocobase/server';
-import { Mutex } from 'async-mutex';
 import lodash from 'lodash';
-import path, { resolve } from 'path';
+import path from 'path';
 import { ApplicationModel } from '../server';
 
-export type AppDbCreator = (app: Application, options?: Transactionable & { context?: any }) => Promise<void>;
+export type AppDbCreator = (
+  app: Application,
+  options?: Transactionable & { context?: any; applicationModel?: ApplicationModel },
+) => Promise<void>;
 export type AppOptionsFactory = (appName: string, mainApp: Application) => any;
 export type SubAppUpgradeHandler = (mainApp: Application) => Promise<void>;
 
@@ -37,11 +48,8 @@ const defaultSubAppUpgradeHandle: SubAppUpgradeHandler = async (mainApp: Applica
       upgrading: true,
     });
 
-    console.log({ beforeSubAppStatus });
     try {
       mainApp.setMaintainingMessage(`upgrading sub app ${instance.name}...`);
-      console.log(`${instance.name}: upgrading...`);
-
       await subApp.runAsCLI(['upgrade'], { from: 'user' });
       if (!beforeSubAppStatus && AppSupervisor.getInstance().getAppStatus(instance.name) === 'initialized') {
         await AppSupervisor.getInstance().removeApp(instance.name);
@@ -56,7 +64,7 @@ const defaultSubAppUpgradeHandle: SubAppUpgradeHandler = async (mainApp: Applica
 
 const defaultDbCreator = async (app: Application) => {
   const databaseOptions = app.options.database as any;
-  const { host, port, username, password, dialect, database } = databaseOptions;
+  const { host, port, username, password, dialect, database, schema } = databaseOptions;
 
   if (dialect === 'mysql') {
     const mysql = require('mysql2/promise');
@@ -72,7 +80,7 @@ const defaultDbCreator = async (app: Application) => {
     await connection.end();
   }
 
-  if (dialect === 'postgres') {
+  if (['postgres', 'kingbase'].includes(dialect)) {
     const { Client } = require('pg');
 
     const client = new Client({
@@ -80,13 +88,17 @@ const defaultDbCreator = async (app: Application) => {
       port,
       user: username,
       password,
-      database: 'postgres',
+      database: dialect,
     });
 
     await client.connect();
 
     try {
-      await client.query(`CREATE DATABASE "${database}"`);
+      if (process.env.USE_DB_SCHEMA_IN_SUBAPP === 'true') {
+        await client.query(`CREATE SCHEMA IF NOT EXISTS ${schema}`);
+      } else {
+        await client.query(`CREATE DATABASE "${database}"`);
+      }
     } catch (e) {
       console.log(e);
     }
@@ -96,7 +108,7 @@ const defaultDbCreator = async (app: Application) => {
 };
 
 const defaultAppOptionsFactory = (appName: string, mainApp: Application) => {
-  const rawDatabaseOptions = PluginMultiAppManager.getDatabaseConfig(mainApp);
+  const rawDatabaseOptions = PluginMultiAppManagerServer.getDatabaseConfig(mainApp);
 
   if (rawDatabaseOptions.dialect === 'sqlite') {
     const mainAppStorage = rawDatabaseOptions.storage;
@@ -104,6 +116,11 @@ const defaultAppOptionsFactory = (appName: string, mainApp: Application) => {
       const mainStorageDir = path.dirname(mainAppStorage);
       rawDatabaseOptions.storage = path.join(mainStorageDir, `${appName}.sqlite`);
     }
+  } else if (
+    process.env.USE_DB_SCHEMA_IN_SUBAPP === 'true' &&
+    ['postgres', 'kingbase'].includes(rawDatabaseOptions.dialect)
+  ) {
+    rawDatabaseOptions.schema = appName;
   } else {
     rawDatabaseOptions.database = appName;
   }
@@ -115,17 +132,15 @@ const defaultAppOptionsFactory = (appName: string, mainApp: Application) => {
     },
     plugins: ['nocobase'],
     resourcer: {
-      prefix: '/api',
+      prefix: process.env.API_BASE_PATH,
     },
   };
 };
 
-export class PluginMultiAppManager extends Plugin {
+export class PluginMultiAppManagerServer extends Plugin {
   appDbCreator: AppDbCreator = defaultDbCreator;
   appOptionsFactory: AppOptionsFactory = defaultAppOptionsFactory;
   subAppUpgradeHandler: SubAppUpgradeHandler = defaultSubAppUpgradeHandle;
-
-  private beforeGetApplicationMutex = new Mutex();
 
   static getDatabaseConfig(app: Application): IDatabaseOptions {
     let oldConfig =
@@ -136,6 +151,7 @@ export class PluginMultiAppManager extends Plugin {
     if (!oldConfig && app.db) {
       oldConfig = app.db.options;
     }
+
     return lodash.cloneDeep(lodash.omit(oldConfig, ['migrator']));
   }
 
@@ -157,10 +173,14 @@ export class PluginMultiAppManager extends Plugin {
     });
   }
 
+  async beforeEnable() {
+    if (this.app.name !== 'main') {
+      throw new Error('@nocobase/plugin-multi-app-manager can only be enabled in the main app');
+    }
+  }
+
   async load() {
-    await this.db.import({
-      directory: resolve(__dirname, 'collections'),
-    });
+    await this.importCollections(path.resolve(__dirname, 'collections'));
 
     // after application created
     this.db.on(
@@ -168,17 +188,28 @@ export class PluginMultiAppManager extends Plugin {
       async (model: ApplicationModel, options: Transactionable & { context?: any }) => {
         const { transaction } = options;
 
+        const name = model.get('name') as string;
+
+        if (name === 'main') {
+          throw new Error('Application name "main" is reserved');
+        }
+
         const subApp = model.registerToSupervisor(this.app, {
           appOptionsFactory: this.appOptionsFactory,
         });
 
-        // create database
-        await this.appDbCreator(subApp, {
-          transaction,
-          context: options.context,
-        });
+        const quickstart = async () => {
+          // create database
+          await this.appDbCreator(subApp, {
+            transaction,
+            applicationModel: model,
+            context: options.context,
+          });
 
-        const startPromise = subApp.runCommand('start', '--quickstart');
+          await subApp.runCommand('start', '--quickstart');
+        };
+
+        const startPromise = quickstart();
 
         if (options?.context?.waitSubAppInstall) {
           await startPromise;
@@ -208,7 +239,8 @@ export class PluginMultiAppManager extends Plugin {
         return;
       }
 
-      const applicationRecord = (await self.app.db.getRepository('applications').findOne({
+      const mainApp = await appSupervisor.getApp('main');
+      const applicationRecord = (await mainApp.db.getRepository('applications').findOne({
         filter: {
           name,
         },
@@ -228,7 +260,7 @@ export class PluginMultiAppManager extends Plugin {
         return;
       }
 
-      const subApp = applicationRecord.registerToSupervisor(self.app, {
+      const subApp = applicationRecord.registerToSupervisor(mainApp, {
         appOptionsFactory: self.appOptionsFactory,
       });
 
@@ -238,7 +270,7 @@ export class PluginMultiAppManager extends Plugin {
       }
     }
 
-    AppSupervisor.getInstance().setAppBootstrapper(LazyLoadApplication);
+    AppSupervisor.getInstance().setAppBootstrapper(LazyLoadApplication.bind(this));
 
     Gateway.getInstance().addAppSelectorMiddleware(async (ctx, next) => {
       const { req } = ctx;

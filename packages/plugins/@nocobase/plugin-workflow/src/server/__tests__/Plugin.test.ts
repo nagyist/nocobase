@@ -1,6 +1,17 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { MockServer } from '@nocobase/test';
 import Database from '@nocobase/database';
 import { getApp, sleep } from '@nocobase/plugin-workflow-test';
+
+import Plugin, { Processor } from '..';
 import { EXECUTION_STATUS } from '../constants';
 
 describe('workflow > Plugin', () => {
@@ -8,12 +19,14 @@ describe('workflow > Plugin', () => {
   let db: Database;
   let PostRepo;
   let WorkflowModel;
+  let plugin: Plugin;
 
   beforeEach(async () => {
     app = await getApp();
     db = app.db;
     WorkflowModel = db.getCollection('workflows').model;
     PostRepo = db.getCollection('posts').repository;
+    plugin = app.pm.get(Plugin) as Plugin;
   });
 
   afterEach(() => app.destroy());
@@ -229,52 +242,6 @@ describe('workflow > Plugin', () => {
     });
   });
 
-  describe('cycling trigger', () => {
-    it('trigger should not be triggered more than once in same execution', async () => {
-      const workflow = await WorkflowModel.create({
-        enabled: true,
-        type: 'collection',
-        config: {
-          mode: 1,
-          collection: 'posts',
-        },
-      });
-
-      const n1 = await workflow.createNode({
-        type: 'create',
-        config: {
-          collection: 'posts',
-          params: {
-            values: {
-              title: 't2',
-            },
-          },
-        },
-      });
-
-      const post = await PostRepo.create({ values: { title: 't1' } });
-
-      await sleep(500);
-
-      const posts = await PostRepo.find();
-      expect(posts.length).toBe(2);
-
-      const [execution] = await workflow.getExecutions();
-      expect(execution.status).toBe(EXECUTION_STATUS.RESOLVED);
-
-      // NOTE: second trigger to ensure no skipped event
-      const p3 = await PostRepo.create({ values: { title: 't2' } });
-
-      await sleep(500);
-
-      const posts2 = await PostRepo.find();
-      expect(posts2.length).toBe(4);
-
-      const [execution2] = await workflow.getExecutions({ order: [['createdAt', 'DESC']] });
-      expect(execution2.status).toBe(EXECUTION_STATUS.RESOLVED);
-    });
-  });
-
   describe('dispatcher', () => {
     it('multiple triggers in same event', async () => {
       const w1 = await WorkflowModel.create({
@@ -306,7 +273,7 @@ describe('workflow > Plugin', () => {
 
       const p1 = await PostRepo.create({ values: { title: 't1' } });
 
-      await sleep(1000);
+      await sleep(500);
 
       const [e1] = await w1.getExecutions();
       expect(e1.status).toBe(EXECUTION_STATUS.RESOLVED);
@@ -332,11 +299,32 @@ describe('workflow > Plugin', () => {
       const p2 = await PostRepo.create({ values: { title: 't2' } });
       const p3 = await PostRepo.create({ values: { title: 't3' } });
 
-      await sleep(1000);
+      await sleep(500);
 
       const executions = await w1.getExecutions();
       expect(executions.length).toBe(3);
       expect(executions.map((item) => item.status)).toEqual(Array(3).fill(EXECUTION_STATUS.RESOLVED));
+    });
+
+    it('duplicated event trigger', async () => {
+      const w1 = await WorkflowModel.create({
+        enabled: true,
+        type: 'asyncTrigger',
+      });
+
+      const n1 = await w1.createNode({
+        type: 'asyncResume',
+      });
+
+      plugin.trigger(w1, {}, { eventKey: 'a' });
+      plugin.trigger(w1, {}, { eventKey: 'a' });
+
+      await sleep(1000);
+
+      const executions = await w1.getExecutions();
+      expect(executions.length).toBe(1);
+      const jobs = await executions[0].getJobs();
+      expect(jobs.length).toBe(1);
     });
 
     it('when server starts, process all created executions', async () => {
@@ -356,14 +344,15 @@ describe('workflow > Plugin', () => {
       const p1 = await PostRepo.create({ values: { title: 't1' } });
 
       const ExecutionModel = db.getCollection('executions').model;
-      const e1 = await ExecutionModel.create({
-        workflowId: w1.id,
+      const e1 = await w1.createExecution({
         key: w1.key,
-        useTransaction: w1.useTransaction,
         context: {
           data: p1.get(),
         },
       });
+
+      const e1s = await w1.getExecutions();
+      expect(e1s.length).toBe(1);
 
       await app.start();
 
@@ -378,10 +367,25 @@ describe('workflow > Plugin', () => {
 
       await db.reconnect();
 
-      const e2 = await ExecutionModel.create({
-        workflowId: w1.id,
+      const e2 = await w1.createExecution({
         key: w1.key,
-        useTransaction: w1.useTransaction,
+        context: {
+          data: p1.get(),
+        },
+        createdAt: p1.createdAt,
+      });
+
+      const w2 = await WorkflowModel.create({
+        enabled: true,
+        type: 'collection',
+        config: {
+          mode: 1,
+          collection: 'posts',
+        },
+      });
+
+      const e3 = await w2.createExecution({
+        key: w2.key,
         context: {
           data: p1.get(),
         },
@@ -393,6 +397,10 @@ describe('workflow > Plugin', () => {
 
       await e2.reload();
       expect(e2.status).toBe(EXECUTION_STATUS.QUEUEING);
+
+      // queueing execution of disabled workflow should not effect other executions
+      await e3.reload();
+      expect(e3.status).toBe(EXECUTION_STATUS.RESOLVED);
     });
   });
 
@@ -485,6 +493,77 @@ describe('workflow > Plugin', () => {
 
       const executions = await w1.getExecutions();
       expect(executions.length).toBe(0);
+    });
+  });
+
+  describe('deffered', () => {
+    it('deffered will not be process immediately, and can be start', async () => {
+      const w1 = await WorkflowModel.create({
+        enabled: true,
+        type: 'asyncTrigger',
+      });
+
+      plugin.trigger(w1, {}, { deferred: true });
+
+      await sleep(500);
+
+      const e1s = await w1.getExecutions();
+      expect(e1s.length).toBe(1);
+      expect(e1s[0].status).toBe(EXECUTION_STATUS.STARTED);
+
+      plugin.start(e1s[0]);
+
+      await sleep(500);
+
+      const e2s = await w1.getExecutions();
+      expect(e2s.length).toBe(1);
+      expect(e2s[0].status).toBe(EXECUTION_STATUS.RESOLVED);
+    });
+
+    it('sync workflow will ignore the deferred option, and start it immediately', async () => {
+      const w1 = await WorkflowModel.create({
+        enabled: true,
+        type: 'syncTrigger',
+      });
+
+      const processor = await plugin.trigger(w1, {}, { deferred: true });
+
+      const e1s = await w1.getExecutions();
+      expect(e1s.length).toBe(1);
+      expect(e1s[0].status).toBe(EXECUTION_STATUS.RESOLVED);
+    });
+  });
+
+  describe('sync', () => {
+    it('sync on trigger class', async () => {
+      const w1 = await WorkflowModel.create({
+        enabled: true,
+        type: 'syncTrigger',
+      });
+
+      const processor = (await plugin.trigger(w1, {})) as Processor;
+
+      const executions = await w1.getExecutions();
+      expect(executions.length).toBe(1);
+      expect(executions[0].status).toBe(EXECUTION_STATUS.RESOLVED);
+      expect(processor.execution.id).toBe(executions[0].id);
+      expect(processor.execution.status).toBe(executions[0].status);
+    });
+
+    it('sync on workflow instance', async () => {
+      const w1 = await WorkflowModel.create({
+        enabled: true,
+        type: 'asyncTrigger',
+        sync: true,
+      });
+
+      const processor = (await plugin.trigger(w1, {})) as Processor;
+
+      const executions = await w1.getExecutions();
+      expect(executions.length).toBe(1);
+      expect(executions[0].status).toBe(EXECUTION_STATUS.RESOLVED);
+      expect(processor.execution.id).toBe(executions[0].id);
+      expect(processor.execution.status).toBe(executions[0].status);
     });
   });
 });

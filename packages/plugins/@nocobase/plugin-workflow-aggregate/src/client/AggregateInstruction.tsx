@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useForm } from '@formily/react';
 import { Cascader } from 'antd';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -6,9 +15,11 @@ import {
   SchemaComponentContext,
   SchemaInitializerItemType,
   css,
+  joinCollectionName,
+  parseCollectionName,
   useCollectionDataSource,
   useCollectionFilterOptions,
-  useCollectionManager,
+  useCollectionManager_deprecated,
   useCompile,
 } from '@nocobase/client';
 
@@ -52,7 +63,7 @@ function useAssociatedFields() {
 
 function AssociatedConfig({ value, onChange, ...props }): JSX.Element {
   const { setValuesIn } = useForm();
-  const { getCollection } = useCollectionManager();
+  const { getCollection } = useCollectionManager_deprecated();
   const baseOptions = useAssociatedFields();
   const [options, setOptions] = useState(baseOptions);
 
@@ -116,25 +127,34 @@ function AssociatedConfig({ value, onChange, ...props }): JSX.Element {
       // need to get:
       // * source collection (from node.config)
       // * target collection (from field name)
-      const { collectionName, target, name } = field;
+      const { collectionName, target, name, dataSourceKey } = field;
 
-      const collection = getCollection(collectionName);
+      const collection = getCollection(collectionName, dataSourceKey);
       const primaryKeyField = collection.fields.find((f) => f.primaryKey);
 
-      setValuesIn('collection', target);
+      setValuesIn('collection', joinCollectionName(dataSourceKey, target));
 
       onChange({
         name,
         // primary key data path
         associatedKey: `{{${path.slice(0, -1).join('.')}.${primaryKeyField.name}}}`,
         // data associated collection name
-        associatedCollection: collectionName,
+        associatedCollection: joinCollectionName(dataSourceKey, collectionName),
       });
     },
     [onChange],
   );
 
-  return <Cascader {...props} value={p} options={options} onChange={onSelectChange} loadData={loadData as any} />;
+  return (
+    <Cascader
+      {...props}
+      value={p}
+      options={options}
+      changeOnSelect
+      onChange={onSelectChange}
+      loadData={loadData as any}
+    />
+  );
 }
 
 // based on collection:
@@ -217,7 +237,12 @@ export default class extends Instruction {
                   type: 'string',
                   required: true,
                   'x-decorator': 'FormItem',
-                  'x-component': 'CollectionSelect',
+                  'x-component': 'DataSourceCollectionCascader',
+                  'x-component-props': {
+                    dataSourceFilter(datasource) {
+                      return datasource.key === 'main' || datasource.options.isDBInstance;
+                    },
+                  },
                   title: `{{t("Data of collection", { ns: "${NAMESPACE}" })}}`,
                   'x-reactions': [
                     {
@@ -330,18 +355,21 @@ export default class extends Instruction {
           title: '{{t("Filter")}}',
           'x-decorator': 'FormItem',
           'x-component': 'Filter',
+          'x-use-component-props': () => {
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            const { values } = useForm();
+            const [dataSourceName, collectionName] = parseCollectionName(values?.collection);
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            const options = useCollectionFilterOptions(collectionName, dataSourceName);
+            return {
+              options,
+              className: css`
+                position: relative;
+                width: 100%;
+              `,
+            };
+          },
           'x-component-props': {
-            useProps() {
-              const { values } = useForm();
-              const options = useCollectionFilterOptions(values?.collection);
-              return {
-                options,
-                className: css`
-                  position: relative;
-                  width: 100%;
-                `,
-              };
-            },
             dynamicComponent: 'FilterDynamicComponent',
           },
           'x-reactions': [

@@ -1,8 +1,27 @@
-import { SchemaSettings } from '../../../application/schema-settings';
-import { useFieldSchema } from '@formily/react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
+import { useField, useFieldSchema } from '@formily/react';
 import _ from 'lodash';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCollection, useCollectionManager } from '../../../collection-manager';
+import { SchemaSettings } from '../../../application/schema-settings';
+import { useFormBlockContext } from '../../../block-provider/FormBlockProvider';
+import { useCollectionManager_deprecated, useCollection_deprecated } from '../../../collection-manager';
+import { useRecord } from '../../../record-provider';
+import { VariableInput, getShouldChange } from '../../../schema-settings';
+import { SchemaSettingsDataScope } from '../../../schema-settings/SchemaSettingsDataScope';
+import { useLocalVariables, useVariables } from '../../../variables';
+import { useDesignable } from '../../hooks';
+import { removeNullCondition } from '../filter';
+import { DynamicComponentProps } from '../filter/DynamicComponent';
+import { useIsFormReadPretty, useIsSelectFieldMode } from './FormItem.Settings';
 import {
   EditComponent,
   EditDescription,
@@ -13,6 +32,9 @@ import {
   EditValidationRules,
 } from './SchemaSettingOptions';
 
+/**
+ * @deprecated
+ */
 export const filterFormItemSettings = new SchemaSettings({
   name: 'FilterFormItemSettings',
   items: [
@@ -33,6 +55,60 @@ export const filterFormItemSettings = new SchemaSettings({
       Component: EditValidationRules,
     },
     {
+      name: 'setDataScope',
+      Component: SchemaSettingsDataScope,
+      useVisible() {
+        const isSelectFieldMode = useIsSelectFieldMode();
+        const isFormReadPretty = useIsFormReadPretty();
+        return isSelectFieldMode && !isFormReadPretty;
+      },
+      useComponentProps() {
+        const { getCollectionJoinField, getAllCollectionsInheritChain } = useCollectionManager_deprecated();
+        const { getField } = useCollection_deprecated();
+        const { form } = useFormBlockContext();
+        const record = useRecord();
+        const field = useField();
+        const fieldSchema = useFieldSchema();
+        const collectionField =
+          getField(fieldSchema['name']) || getCollectionJoinField(fieldSchema['x-collection-field']);
+        const variables = useVariables();
+        const localVariables = useLocalVariables();
+        const { dn } = useDesignable();
+        return {
+          collectionName: collectionField?.target,
+          defaultFilter: fieldSchema?.['x-component-props']?.service?.params?.filter || {},
+          form,
+          dynamicComponent: (props: DynamicComponentProps) => {
+            return (
+              <VariableInput
+                {...props}
+                form={form}
+                collectionField={props.collectionField}
+                record={record}
+                shouldChange={getShouldChange({
+                  collectionField: props.collectionField,
+                  variables,
+                  localVariables,
+                  getAllCollectionsInheritChain,
+                })}
+              />
+            );
+          },
+          onSubmit: ({ filter }) => {
+            filter = removeNullCondition(filter);
+            _.set(field.componentProps, 'service.params.filter', filter);
+            fieldSchema['x-component-props'] = field.componentProps;
+            dn.emit('patch', {
+              schema: {
+                ['x-uid']: fieldSchema['x-uid'],
+                'x-component-props': field.componentProps,
+              },
+            });
+          },
+        };
+      },
+    },
+    {
       name: 'fieldMode',
       Component: EditComponent,
     },
@@ -48,8 +124,8 @@ export const filterFormItemSettings = new SchemaSettings({
       name: 'divider',
       type: 'divider',
       useVisible() {
-        const { getCollectionJoinField } = useCollectionManager();
-        const { getField } = useCollection();
+        const { getCollectionJoinField } = useCollectionManager_deprecated();
+        const { getField } = useCollection_deprecated();
         const fieldSchema = useFieldSchema();
         const collectionField =
           getField(fieldSchema['name']) || getCollectionJoinField(fieldSchema['x-collection-field']);

@@ -1,24 +1,38 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { css } from '@emotion/css';
 import { observer, useFieldSchema } from '@formily/react';
 import React, { useEffect, useMemo } from 'react';
 import { useCompile } from '../../schema-component';
 import { Variable } from '.././../schema-component';
-import { useFormVariable } from '../VariableInput/hooks/useFormVariable';
-import { useIterationVariable } from '../VariableInput/hooks/useIterationVariable';
+import { useCurrentFormVariable } from '../VariableInput/hooks/useFormVariable';
+import { useCurrentObjectVariable } from '../VariableInput/hooks/useIterationVariable';
 
 export const ChildDynamicComponent = observer(
   (props: { rootCollection: string; onChange; value; default; collectionField }) => {
     const { rootCollection, onChange, value, collectionField } = props;
     const fieldSchema = useFieldSchema();
-    const formVariable = useFormVariable({ collectionName: rootCollection, collectionField });
-    const iterationVariable = useIterationVariable({
-      currentCollection: collectionField?.collectionName,
+    const { currentFormSettings } = useCurrentFormVariable({
+      collectionName: rootCollection,
+      collectionField,
+    });
+    const { currentObjectSettings } = useCurrentObjectVariable({
       schema: collectionField?.uiSchema,
       collectionField,
     });
 
     const compile = useCompile();
-    const result = useMemo(() => [formVariable, iterationVariable].filter(Boolean), [formVariable, iterationVariable]);
+    const result = useMemo(
+      () => [currentFormSettings, currentObjectSettings].filter(Boolean),
+      [currentFormSettings, currentObjectSettings],
+    );
     const scope = compile(result);
     useEffect(() => {
       onChange(fieldSchema.default);

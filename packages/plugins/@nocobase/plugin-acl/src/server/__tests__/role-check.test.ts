@@ -1,5 +1,14 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Database } from '@nocobase/database';
-import UsersPlugin from '@nocobase/plugin-users';
+import { CollectionRepository } from '@nocobase/plugin-data-source-main';
 import { MockServer } from '@nocobase/test';
 import { prepareApp } from './prepare';
 
@@ -35,12 +44,85 @@ describe('role check action', () => {
       },
     });
 
-    const userPlugin = app.getPlugin('users') as UsersPlugin;
     const agent = app.agent().login(user);
 
     // @ts-ignore
     const response = await agent.resource('roles').check();
 
     expect(response.statusCode).toEqual(200);
+  });
+
+  it('should return updated roles info', async () => {
+    const collectionManager = db.getRepository('collections') as CollectionRepository;
+    await collectionManager.create({
+      values: {
+        name: 'c1',
+        title: 'table1',
+      },
+      context: {},
+    });
+
+    await collectionManager.create({
+      values: {
+        name: 'c2',
+        title: 'table2',
+      },
+      context: {},
+    });
+
+    await db.getRepository('roles').create({
+      values: {
+        name: 'test',
+        resources: [
+          {
+            name: 'c1',
+            actions: [
+              {
+                name: 'create',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const user = await db.getRepository('users').create({
+      values: {
+        roles: ['test'],
+      },
+    });
+
+    const agent: any = app.agent().login(user);
+
+    const checkResp1 = await agent.resource('roles').check();
+    const actions = checkResp1.body.data.actions;
+    expect(actions['c1:create']).toBeDefined();
+
+    // update role
+    await db.getRepository('roles').update({
+      filter: {
+        name: 'test',
+      },
+      values: {
+        resources: [
+          {
+            name: 'c1',
+            actions: [
+              {
+                name: 'create',
+              },
+              {
+                name: 'update',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const checkResp2 = await agent.resource('roles').check();
+    const actions2 = checkResp2.body.data.actions;
+    expect(actions2['c1:create']).toBeDefined();
+    expect(actions2['c1:update']).toBeDefined();
   });
 });

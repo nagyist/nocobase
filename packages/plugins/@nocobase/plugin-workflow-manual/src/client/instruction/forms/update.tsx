@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { useFieldSchema } from '@formily/react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,11 +19,12 @@ import {
   SchemaSettingsDivider,
   SchemaSettingsLinkageRules,
   SchemaSettingsRemove,
-  useCollection,
+  useCollection_deprecated,
   useCollectionFilterOptions,
   useDesignable,
   useMenuSearch,
 } from '@nocobase/client';
+import { isValidFilter } from '@nocobase/utils/client';
 import { FilterDynamicComponent } from '@nocobase/plugin-workflow/client';
 
 import { NAMESPACE } from '../../../locale';
@@ -23,7 +33,7 @@ import { ManualFormType } from '../SchemaConfig';
 import { findSchema } from '../utils';
 
 function UpdateFormDesigner() {
-  const { name, title } = useCollection();
+  const { name, title } = useCollection_deprecated();
   const fieldSchema = useFieldSchema();
   const { t } = useTranslation();
   const { dn } = useDesignable();
@@ -37,15 +47,15 @@ function UpdateFormDesigner() {
           name: 'filter',
           type: 'object',
           title: `{{t("Filter")}}`,
-          // 'x-decorator': 'FormItem',
           'x-component': 'Filter',
+          'x-use-component-props': () => {
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            const options = useCollectionFilterOptions(fieldSchema?.['x-decorator-props']?.collection);
+            return {
+              options,
+            };
+          },
           'x-component-props': {
-            useProps() {
-              const options = useCollectionFilterOptions(fieldSchema?.['x-decorator-props']?.collection);
-              return {
-                options,
-              };
-            },
             dynamicComponent: 'FilterDynamicComponent',
           },
         }}
@@ -60,6 +70,7 @@ function UpdateFormDesigner() {
           });
           dn.refresh();
         }}
+        width="60%"
       />
       <SchemaSettingsLinkageRules collectionName={name} />
       <SchemaSettingsDivider />
@@ -76,26 +87,32 @@ function UpdateFormDesigner() {
 export default {
   title: `{{t("Update record form", { ns: "${NAMESPACE}" })}}`,
   config: {
-    useInitializer({ collections }) {
+    useInitializer({ allCollections }) {
       const childItems = useMemo(
         () =>
-          collections.map((item) => ({
-            name: _.camelCase(`updateRecordForm-child-${item.name}`),
-            type: 'item',
-            title: item.title,
-            label: item.label,
-            schema: {
-              collection: item.name,
-              title: `{{t("Update record", { ns: "${NAMESPACE}" })}}`,
-              formType: 'update',
-              'x-designer': 'UpdateFormDesigner',
-            },
-            Component: FormBlockInitializer,
+          allCollections.map(({ key, displayName, collections }) => ({
+            key: key,
+            name: key,
+            label: displayName,
+            type: 'subMenu',
+            children: collections.map((item) => ({
+              name: _.camelCase(`updateRecordForm-child-${item.name}`),
+              type: 'item',
+              title: item.title || item.tableName,
+              schema: {
+                collection: item.name,
+                dataSource: key,
+                title: `{{t("Update record", { ns: "${NAMESPACE}" })}}`,
+                formType: 'update',
+                'x-designer': 'UpdateFormDesigner',
+              },
+              Component: FormBlockInitializer,
+            })),
           })),
-        [collections],
+        [allCollections],
       );
-      const [isOpenSubMenu, setIsOpenSubMenu] = useState(false);
-      const searchedChildren = useMenuSearch(childItems, isOpenSubMenu, true);
+      const [openMenuKeys, setOpenMenuKeys] = useState([]);
+      const searchedChildren = useMenuSearch({ data: childItems, openKeys: openMenuKeys });
       return {
         name: 'updateRecordForm',
         key: 'updateRecordForm',
@@ -103,7 +120,7 @@ export default {
         title: `{{t("Update record form", { ns: "${NAMESPACE}" })}}`,
         componentProps: {
           onOpenChange(keys) {
-            setIsOpenSubMenu(keys.length > 0);
+            setOpenMenuKeys(keys);
           },
         },
         children: searchedChildren,
@@ -125,11 +142,14 @@ export default {
       formBlocks.forEach((formBlock) => {
         const [formKey] = Object.keys(formBlock.properties);
         const formSchema = formBlock.properties[formKey];
+        //获取actionBar的schemakey
+        const actionKey =
+          Object.entries(formSchema.properties).find(([key, f]) => f['x-component'] === 'ActionBar')?.[0] || 'actions';
         forms[formKey] = {
           ...formBlock['x-decorator-props'],
           type: 'update',
           title: formBlock['x-component-props']?.title || formKey,
-          actions: findSchema(formSchema.properties.actions, (item) => item['x-component'] === 'Action').map(
+          actions: findSchema(formSchema.properties[actionKey], (item) => item['x-component'] === 'Action').map(
             (item) => ({
               status: item['x-decorator-props'].value,
               values: item['x-action-settings']?.assignedValues?.values,
@@ -146,5 +166,12 @@ export default {
       // useFormBlockProps
     },
     components: {},
+  },
+  validate({ filter }) {
+    if (!filter || !isValidFilter(filter)) {
+      return 'Please check one of your update record form, and add at least one filter condition in form settings.';
+    }
+
+    return null;
   },
 } as ManualFormType;

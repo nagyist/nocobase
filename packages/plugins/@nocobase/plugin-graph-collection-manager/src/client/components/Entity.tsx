@@ -1,16 +1,24 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { DeleteOutlined, DownOutlined, EditOutlined, UpOutlined } from '@ant-design/icons';
 import { css } from '@emotion/css';
 import { SchemaOptionsContext } from '@formily/react';
 import { uid } from '@formily/shared';
 import {
-  CollectionCategroriesContext,
-  CollectionProvider,
-  PopoverWithStopPropagation,
+  CollectionCategoriesContext,
+  CollectionProvider_deprecated,
   SchemaComponent,
   SchemaComponentProvider,
   Select,
-  collection,
-  useCollectionManager,
+  StablePopover,
+  useCollectionManager_deprecated,
   useCompile,
   useCurrentAppInfo,
   useRecord,
@@ -27,14 +35,14 @@ import {
   useValuesFromRecord,
 } from '../action-hooks';
 import useStyles from '../style';
-import { getPopupContainer, useGCMTranslation } from '../utils';
+import { getPopupContainer, useGCMTranslation, collection } from '../utils';
 import { AddFieldAction } from './AddFieldAction';
 import { CollectionNodeProvder } from './CollectionNodeProvder';
 import { ConnectAssociationAction } from './ConnectAssociationAction';
 import { ConnectChildAction } from './ConnectChildAction';
 import { ConnectParentAction } from './ConnectParentAction';
-import { EditCollectionAction } from './EditCollectionAction';
 import { DeleteCollectionAction } from './DeleteCollectionAction';
+import { EditCollectionAction } from './EditCollectionAction';
 import { EditFieldAction } from './EditFieldAction';
 import { FieldSummary } from './FieldSummary';
 import { OverrideFieldAction } from './OverrideFieldAction';
@@ -58,7 +66,7 @@ const OperationButton: any = React.memo((props: any) => {
   // 获取当前字段列表
   const useCurrentFields = () => {
     const record = useRecord();
-    const { getCollectionFields } = useCollectionManager();
+    const { getCollectionFields } = useCollectionManager_deprecated();
     const fields = getCollectionFields(record.collectionName || record.name) as any[];
     return fields;
   };
@@ -121,23 +129,23 @@ const OperationButton: any = React.memo((props: any) => {
                     item: {
                       ...property,
                       title,
-                      __parent: collectionData.current,
                     },
+                    parentItem: collectionData.current,
                   },
                 },
                 delete: {
                   type: 'void',
                   'x-action': 'destroy',
-                  'x-component': 'Action',
+                  'x-component': 'Action.Link',
                   'x-visible': '{{isInheritField}}',
                   'x-component-props': {
                     component: DeleteOutlined,
                     icon: 'DeleteOutlined',
                     className: 'btn-del',
                     confirm: {
-                      title: "{{t('Delete record')}}",
                       getContainer: getPopupContainer,
-                      collectionConten: "{{t('Are you sure you want to delete it?')}}",
+                      title: "{{t('Delete record')}}",
+                      content: "{{t('Are you sure you want to delete it?')}}",
                     },
                     useAction: () =>
                       useDestroyFieldActionAndRefreshCM({
@@ -156,9 +164,9 @@ const OperationButton: any = React.memo((props: any) => {
                     item: {
                       ...property,
                       title,
-                      __parent: collectionData.current,
                       targetCollection: name,
                     },
+                    parentItem: collectionData.current,
                   },
                 },
                 view: {
@@ -171,8 +179,8 @@ const OperationButton: any = React.memo((props: any) => {
                     item: {
                       ...property,
                       title,
-                      __parent: collectionData.current,
                     },
+                    parentItem: collectionData.current,
                   },
                 },
                 connectAssociation: {
@@ -197,7 +205,7 @@ const OperationButton: any = React.memo((props: any) => {
     </div>
   );
 });
-
+OperationButton.displayName = 'OperationButton';
 const PopoverContent = React.forwardRef((props: any, ref) => {
   const { property, node, ...other } = props;
   const {
@@ -207,7 +215,7 @@ const PopoverContent = React.forwardRef((props: any, ref) => {
   } = node;
   const compile = useCompile();
   const { styles } = useStyles();
-  const { getInterface } = useCollectionManager();
+  const { getInterface } = useCollectionManager_deprecated();
   const [isHovered, setIsHovered] = useState(false);
   const CollectionConten = React.useCallback((data) => {
     const { type, name, primaryKey, allowNull, autoIncrement } = data;
@@ -250,14 +258,16 @@ const PopoverContent = React.forwardRef((props: any, ref) => {
         id={property.id}
         style={{
           background:
-            targetPort || sourcePort === property.id || associated?.includes(property.name) ? '#e6f7ff' : null,
+            targetPort === property.id || sourcePort === property.id || associated?.includes(property.name)
+              ? '#e6f7ff'
+              : null,
         }}
         onMouseEnter={() => {
           setIsHovered(true);
         }}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <PopoverWithStopPropagation
+        <StablePopover
           content={CollectionConten(property)}
           getPopupContainer={getPopupContainer}
           mouseLeaveDelay={0}
@@ -276,13 +286,14 @@ const PopoverContent = React.forwardRef((props: any, ref) => {
             <Badge color={typeColor(property)} />
             {compile(property.uiSchema?.title)}
           </div>
-        </PopoverWithStopPropagation>
+        </StablePopover>
         <div className={`type  field_type`}>{compile(getInterface(property.interface)?.title)}</div>
         {isHovered && <OperationButton property={property} {...operatioBtnProps} />}
       </div>
     </div>
   );
 });
+PopoverContent.displayName = 'PopoverContent';
 
 const PortsCom = React.memo<any>(({ targetGraph, collectionData, setTargetNode, node, loadCollections }) => {
   const {
@@ -296,7 +307,7 @@ const PortsCom = React.memo<any>(({ targetGraph, collectionData, setTargetNode, 
     if (
       v.isForeignKey ||
       v.primaryKey ||
-      ['obo', 'oho', 'o2o', 'o2m', 'm2o', 'm2m', 'linkTo', 'id'].includes(v.interface)
+      ['obo', 'oho', 'o2o', 'o2m', 'm2o', 'm2m', 'linkTo', 'id', 'mbm'].includes(v.interface)
     ) {
       return 'initPorts';
     } else {
@@ -376,9 +387,9 @@ const Entity: React.FC<{
     data: { database },
   } = useCurrentAppInfo();
   const collectionData = useRef();
-  const categoryData = useContext(CollectionCategroriesContext);
+  const categoryData = useContext(CollectionCategoriesContext);
   collectionData.current = { ...item, title, inherits: item.inherits && new Proxy(item.inherits, {}) };
-  const { category } = item;
+  const { category = [] } = item;
   const compile = useCompile();
   const loadCollections = async (field: any) => {
     return targetGraph.collections?.map((collection: any) => ({
@@ -404,12 +415,12 @@ const Entity: React.FC<{
       className={styles.entityContainer}
       style={{ boxShadow: attrs?.boxShadow, border: select ? '2px dashed #f5a20a' : 0 }}
     >
-      {category.map((v, index) => {
+      {category?.map((v, index) => {
         return (
           <Badge.Ribbon
             key={index}
             color={v.color}
-            style={{ width: '103%', height: '3px', marginTop: index * 5 - 8, borderRadius: 0 }}
+            style={{ width: '103%', height: '3px', marginTop: index * 5 - 4, borderRadius: 0 }}
             placement="start"
           />
         );
@@ -423,7 +434,7 @@ const Entity: React.FC<{
         <div className={styles.tableBtnClass}>
           <SchemaComponentProvider>
             <CollectionNodeProvder setTargetNode={setTargetNode} node={node}>
-              <CollectionProvider collection={collection}>
+              <CollectionProvider_deprecated collection={collection}>
                 <SchemaComponent
                   scope={{
                     useUpdateCollectionActionAndRefreshCM,
@@ -490,7 +501,7 @@ const Entity: React.FC<{
                     },
                   }}
                 />
-              </CollectionProvider>
+              </CollectionProvider_deprecated>
             </CollectionNodeProvder>
           </SchemaComponentProvider>
         </div>

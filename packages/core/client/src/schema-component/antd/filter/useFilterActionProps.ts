@@ -1,24 +1,35 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Field } from '@formily/core';
 import { useField, useFieldSchema } from '@formily/react';
 import flat from 'flat';
+import _ from 'lodash';
 import { useTranslation } from 'react-i18next';
 import { useBlockRequestContext } from '../../../block-provider';
-import { mergeFilter } from '../../../block-provider/SharedFilterProvider';
-import { useCollection, useCollectionManager } from '../../../collection-manager';
-
+import { useCollectionManager_deprecated, useCollection_deprecated } from '../../../collection-manager';
+import { mergeFilter } from '../../../filter-provider/utils';
+import { useDataLoadingMode } from '../../../modules/blocks/data-blocks/details-multi/setDataLoadingModeSettingsItem';
+import { useCompile } from '../../';
 export const useGetFilterOptions = () => {
-  const { getCollectionFields } = useCollectionManager();
+  const { getCollectionFields } = useCollectionManager_deprecated();
   const getFilterFieldOptions = useGetFilterFieldOptions();
 
-  return (collectionName) => {
-    const fields = getCollectionFields(collectionName);
-    const options = getFilterFieldOptions(fields);
+  return (collectionName, dataSource?: string, usedInVariable?: boolean) => {
+    const fields = getCollectionFields(collectionName, dataSource);
+    const options = getFilterFieldOptions(fields, usedInVariable);
     return options;
   };
 };
 
 export const useFilterOptions = (collectionName: string) => {
-  const { getCollectionFields } = useCollectionManager();
+  const { getCollectionFields } = useCollectionManager_deprecated();
   const fields = getCollectionFields(collectionName);
   const options = useFilterFieldOptions(fields);
   return options;
@@ -27,19 +38,21 @@ export const useFilterOptions = (collectionName: string) => {
 export const useGetFilterFieldOptions = () => {
   const fieldSchema = useFieldSchema();
   const nonfilterable = fieldSchema?.['x-component-props']?.nonfilterable || [];
-  const { getCollectionFields, getInterface } = useCollectionManager();
-  const field2option = (field, depth) => {
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
+  const field2option = (field, depth, usedInVariable?: boolean) => {
     if (nonfilterable.length && depth === 1 && nonfilterable.includes(field.name)) {
       return;
     }
     if (!field.interface) {
       return;
     }
+
     const fieldInterface = getInterface(field.interface);
-    if (!fieldInterface?.filterable) {
+    if (!fieldInterface?.filterable && !usedInVariable) {
       return;
     }
-    const { nested, children, operators } = fieldInterface.filterable;
+
+    const { nested, children, operators } = fieldInterface?.filterable || {};
     const option = {
       name: field.name,
       type: field.type,
@@ -69,28 +82,31 @@ export const useGetFilterFieldOptions = () => {
     }
     return option;
   };
-  const getOptions = (fields, depth) => {
+  const getOptions = (fields, depth, usedInVariable?: boolean) => {
     const options = [];
     fields.forEach((field) => {
-      const option = field2option(field, depth);
+      const option = field2option(field, depth, usedInVariable);
       if (option) {
         options.push(option);
       }
     });
     return options;
   };
-  return (fields) => getOptions(fields, 1);
+  return (fields, usedInVariable) => getOptions(fields, 1, usedInVariable);
 };
 
 export const useFilterFieldOptions = (fields) => {
   const fieldSchema = useFieldSchema();
   const nonfilterable = fieldSchema?.['x-component-props']?.nonfilterable || [];
-  const { getCollectionFields, getInterface } = useCollectionManager();
+  const { getCollectionFields, getInterface } = useCollectionManager_deprecated();
   const field2option = (field, depth) => {
     if (nonfilterable.length && depth === 1 && nonfilterable.includes(field.name)) {
       return;
     }
     if (!field.interface) {
+      return;
+    }
+    if (field.filterable === false) {
       return;
     }
     const fieldInterface = getInterface(field.interface);
@@ -146,8 +162,8 @@ const isEmpty = (obj) => {
   );
 };
 
-export const removeNullCondition = (filter) => {
-  const items = flat(filter || {});
+export const removeNullCondition = (filter, customFlat = flat) => {
+  const items = customFlat(filter || {});
   const values = {};
   for (const key in items) {
     const value = items[key];
@@ -155,11 +171,11 @@ export const removeNullCondition = (filter) => {
       values[key] = value;
     }
   }
-  return flat.unflatten(values);
+  return customFlat.unflatten(values);
 };
 
 export const useFilterActionProps = () => {
-  const { name } = useCollection();
+  const { name } = useCollection_deprecated();
   const options = useFilterOptions(name);
   const { service, props } = useBlockRequestContext();
   return useFilterFieldProps({ options, service, params: props?.params });
@@ -168,6 +184,10 @@ export const useFilterActionProps = () => {
 export const useFilterFieldProps = ({ options, service, params }) => {
   const { t } = useTranslation();
   const field = useField<Field>();
+  const dataLoadingMode = useDataLoadingMode();
+  const fieldSchema = useFieldSchema();
+  const compile = useCompile();
+
   return {
     options,
     onSubmit(values) {
@@ -175,6 +195,10 @@ export const useFilterFieldProps = ({ options, service, params }) => {
       const defaultFilter = params.filter;
       // filter parameter for the filter action
       const filter = removeNullCondition(values?.filter);
+
+      if (dataLoadingMode === 'manual' && _.isEmpty(filter)) {
+        return service.mutate(undefined);
+      }
 
       const filters = service.params?.[1]?.filters || {};
       filters[`filterAction`] = filter;
@@ -186,22 +210,29 @@ export const useFilterFieldProps = ({ options, service, params }) => {
       if (items?.length) {
         field.title = t('{{count}} filter items', { count: items?.length || 0 });
       } else {
-        field.title = t('Filter');
+        field.title = compile(fieldSchema.title) || t('Filter');
       }
     },
     onReset() {
       const filter = params.filter;
       const filters = service.params?.[1]?.filters || {};
       delete filters[`filterAction`];
-      service.run(
+
+      const newParams = [
         {
           ...service.params?.[0],
           filter: mergeFilter([...Object.values(filters), filter]),
           page: 1,
         },
         { filters },
-      );
-      field.title = t('Filter');
+      ];
+
+      if (dataLoadingMode === 'manual') {
+        service.params = newParams;
+        return service.mutate(undefined);
+      }
+
+      service.run(...newParams);
     },
   };
 };

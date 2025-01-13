@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { isArray } from 'mathjs';
 import Database from '../database';
 import FieldTypeMap from './field-type-map';
@@ -13,6 +22,16 @@ type InferredFieldResult = {
 };
 
 export class ViewFieldInference {
+  static extractTypeFromDefinition(typeDefinition) {
+    const leftParenIndex = typeDefinition.indexOf('(');
+
+    if (leftParenIndex === -1) {
+      return typeDefinition.toLowerCase();
+    }
+
+    return typeDefinition.substring(0, leftParenIndex).toLowerCase().trim();
+  }
+
   static async inferFields(options: {
     db: Database;
     viewName: string;
@@ -33,7 +52,7 @@ export class ViewFieldInference {
     const rawFields = [];
 
     for (const [name, column] of Object.entries(columns)) {
-      const inferResult: any = { name };
+      const inferResult: any = { name, rawType: column.type, field: name };
 
       const usage = columnUsage[name];
 
@@ -128,7 +147,7 @@ export class ViewFieldInference {
       };
     }
 
-    const queryType = options.type.toLowerCase().replace(/\(\d+\)/, '');
+    const queryType = this.extractTypeFromDefinition(options.type);
     const mappedType = fieldTypeMap[queryType];
 
     if (isArray(mappedType)) {

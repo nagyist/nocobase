@@ -1,6 +1,17 @@
-import React from 'react';
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
 
-import { Variable, useCompile, usePlugin } from '@nocobase/client';
+import React, { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { uniqBy } from 'lodash';
+
+import { Variable, parseCollectionName, useApp, useCompile, usePlugin } from '@nocobase/client';
 
 import { useFlowContext } from './FlowContext';
 import { NAMESPACE, lang } from './locale';
@@ -11,21 +22,26 @@ export type VariableOption = {
   key?: string;
   value?: string;
   label?: string;
-  children?: VariableOptions;
+  children?: VariableOption[] | null;
   [key: string]: any;
 };
 
-export type VariableOptions = VariableOption[] | null;
-
 export type VariableDataType =
-  | string
+  | 'boolean'
+  | 'number'
+  | 'string'
+  | 'date'
   | {
-      type: string;
-      options?: { entity?: boolean; collection?: string };
+      type: 'reference';
+      options: {
+        collection: string;
+        multiple?: boolean;
+        entity?: boolean;
+      };
     }
-  | ((field: any, appends?: string[]) => boolean);
+  | ((field: any) => boolean);
 
-export type OptionsOfUseVariableOptions = {
+export type UseVariableOptions = {
   types?: VariableDataType[];
   fieldNames?: {
     label?: string;
@@ -34,7 +50,6 @@ export type OptionsOfUseVariableOptions = {
   };
   appends?: string[] | null;
   depth?: number;
-  current?: any;
 };
 
 export const defaultFieldNames = { label: 'label', value: 'value', children: 'children' } as const;
@@ -42,7 +57,7 @@ export const defaultFieldNames = { label: 'label', value: 'value', children: 'ch
 export const nodesOptions = {
   label: `{{t("Node result", { ns: "${NAMESPACE}" })}}`,
   value: '$jobsMapByNodeKey',
-  useOptions(options: OptionsOfUseVariableOptions) {
+  useOptions(options: UseVariableOptions) {
     const { instructions } = usePlugin(WorkflowPlugin);
     const current = useNodeContext();
     const upstreams = useAvailableUpstreams(current);
@@ -61,7 +76,7 @@ export const nodesOptions = {
 export const triggerOptions = {
   label: `{{t("Trigger variables", { ns: "${NAMESPACE}" })}}`,
   value: '$context',
-  useOptions(options: OptionsOfUseVariableOptions) {
+  useOptions(options: UseVariableOptions) {
     const { triggers } = usePlugin(WorkflowPlugin);
     const { workflow } = useFlowContext();
     const trigger = triggers.get(workflow.type);
@@ -72,7 +87,7 @@ export const triggerOptions = {
 export const scopeOptions = {
   label: `{{t("Scope variables", { ns: "${NAMESPACE}" })}}`,
   value: '$scopes',
-  useOptions(options: OptionsOfUseVariableOptions) {
+  useOptions(options: UseVariableOptions & { current: any }) {
     const { fieldNames = defaultFieldNames, current } = options;
     const { instructions } = usePlugin(WorkflowPlugin);
     const source = useNodeContext();
@@ -98,18 +113,10 @@ export const scopeOptions = {
 export const systemOptions = {
   label: `{{t("System variables", { ns: "${NAMESPACE}" })}}`,
   value: '$system',
-  useOptions({ types, fieldNames = defaultFieldNames }: OptionsOfUseVariableOptions) {
-    return [
-      ...(!types || types.includes('date')
-        ? [
-            {
-              key: 'now',
-              [fieldNames.label]: lang('System time'),
-              [fieldNames.value]: 'now',
-            },
-          ]
-        : []),
-    ];
+  useOptions(options: UseVariableOptions) {
+    const { systemVariables } = usePlugin(WorkflowPlugin);
+    const compile = useCompile();
+    return compile(Array.from(systemVariables.getValues()));
   },
 };
 
@@ -136,13 +143,12 @@ export const BaseTypeSets = {
 // { type: 'reference', options: { collection: 'attachments', multiple: false } }
 // { type: 'reference', options: { collection: 'myExpressions', entity: false } }
 
-function matchFieldType(field, type): boolean {
-  const inputType = typeof type;
-  if (inputType === 'string') {
+function matchFieldType(field, type: VariableDataType): boolean {
+  if (typeof type === 'string') {
     return BaseTypeSets[type]?.has(field.interface);
   }
 
-  if (inputType === 'object' && type.type === 'reference') {
+  if (typeof type === 'object' && type.type === 'reference') {
     if (isAssociationField(field)) {
       return (
         type.options?.entity && (field.collectionName === type.options?.collection || type.options?.collection === '*')
@@ -157,7 +163,7 @@ function matchFieldType(field, type): boolean {
     }
   }
 
-  if (inputType === 'function') {
+  if (typeof type === 'function') {
     return type(field);
   }
 
@@ -165,7 +171,7 @@ function matchFieldType(field, type): boolean {
 }
 
 function isAssociationField(field): boolean {
-  return ['belongsTo', 'hasOne', 'hasMany', 'belongsToMany'].includes(field.type);
+  return ['belongsTo', 'hasOne', 'hasMany', 'belongsToMany', 'belongsToArray'].includes(field.type);
 }
 
 function getNextAppends(field, appends: string[] | null): string[] | null {
@@ -232,7 +238,7 @@ function useOptions(scope, opts) {
   };
 }
 
-export function useWorkflowVariableOptions(options: OptionsOfUseVariableOptions = {}) {
+export function useWorkflowVariableOptions(options: UseVariableOptions = {}) {
   const fieldNames = Object.assign({}, defaultFieldNames, options.fieldNames ?? {});
   const opts = Object.assign(options, { fieldNames });
   const result = [
@@ -247,31 +253,42 @@ export function useWorkflowVariableOptions(options: OptionsOfUseVariableOptions 
 }
 
 function getNormalizedFields(collectionName, { compile, getCollectionFields }) {
-  const fields = getCollectionFields(collectionName);
-  const foreignKeyFields: any[] = [];
-  const otherFields: any[] = [];
+  // NOTE: for compatibility with legacy version
+  const [dataSourceName, collection] = parseCollectionName(collectionName);
+  // NOTE: `dataSourceName` will be ignored in new version
+  const fields = getCollectionFields(collection, dataSourceName);
+  const fkFields: any[] = [];
+  const result: any[] = [];
   fields.forEach((field) => {
-    if (field.isForeignKey) {
-      foreignKeyFields.push(field);
+    if (field.isForeignKey && !field.primaryKey) {
+      fkFields.push(field);
     } else {
-      otherFields.push(field);
+      const fkField = fields.find((f) => f.name === field.foreignKey);
+      if (fkField) {
+        fkFields.push(fkField);
+      }
+      result.push(field);
     }
   });
-  for (let i = otherFields.length - 1; i >= 0; i--) {
-    const field = otherFields[i];
+  const foreignKeyFields = uniqBy(fkFields, 'name');
+  // NOTE: for all foreignKey fields
+  for (let i = result.length - 1; i >= 0; i--) {
+    const field = result[i];
     if (field.type === 'belongsTo') {
-      const foreignKeyField = foreignKeyFields.find((f) => f.name === field.foreignKey);
-      if (foreignKeyField) {
-        otherFields.splice(i, 0, {
+      const foreignKeyFieldIndex = foreignKeyFields.findIndex((f) => f.name === field.foreignKey);
+      if (foreignKeyFieldIndex > -1) {
+        const foreignKeyField = foreignKeyFields[foreignKeyFieldIndex];
+        result.splice(i, 0, {
           ...field,
           ...foreignKeyField,
           uiSchema: {
             ...field.uiSchema,
-            title: field.uiSchema?.title ? `${compile(field.uiSchema?.title)} ID` : foreignKeyField.name,
+            title: foreignKeyField.uiSchema?.title ? compile(foreignKeyField.uiSchema?.title) : foreignKeyField.name,
           },
         });
+        foreignKeyFields.splice(foreignKeyFieldIndex, 1);
       } else {
-        otherFields.splice(i, 0, {
+        result.splice(i, 0, {
           ...field,
           name: field.foreignKey,
           type: 'bigInt',
@@ -284,27 +301,20 @@ function getNormalizedFields(collectionName, { compile, getCollectionFields }) {
         });
       }
     } else if (field.type === 'context' && field.collectionName === 'users') {
-      const belongsToField =
-        otherFields.find((f) => f.type === 'belongsTo' && f.target === 'users' && f.foreignKey === field.name) ?? {};
-      otherFields.splice(i, 0, {
-        ...field,
-        type: field.dataType,
-        interface: belongsToField.interface,
-        uiSchema: {
-          ...belongsToField.uiSchema,
-          title: belongsToField.uiSchema?.title ? `${compile(belongsToField.uiSchema?.title)} ID` : field.name,
-        },
-      });
+      result.splice(i, 1);
     }
   }
+  result.push(...foreignKeyFields);
 
-  return otherFields.filter((field) => field.interface && !field.hidden);
+  return uniqBy(result, 'name').filter((field) => field.interface && !field.hidden);
 }
 
 function loadChildren(option) {
   const appends = getNextAppends(option.field, option.appends);
   const result = getCollectionFieldOptions({
-    collection: option.field.target,
+    collection: `${
+      option.field.dataSourceKey && option.field.dataSourceKey !== 'main' ? `${option.field.dataSourceKey}:` : ''
+    }${option.field.target}`,
     types: option.types,
     appends,
     depth: option.depth - 1,
@@ -333,8 +343,7 @@ export function getCollectionFieldOptions(options): VariableOption[] {
     getCollectionFields,
     fieldNames = defaultFieldNames,
   } = options;
-  const normalizedFields = getNormalizedFields(collection, { compile, getCollectionFields });
-  const computedFields = fields ?? normalizedFields;
+  const computedFields = fields ?? getNormalizedFields(collection, { compile, getCollectionFields });
   const boundLoadChildren = loadChildren.bind({ compile, getCollectionFields, fieldNames });
 
   const result: VariableOption[] = filterTypedFields({
@@ -365,6 +374,13 @@ export function getCollectionFieldOptions(options): VariableOption[] {
   });
 
   return result;
+}
+
+export function useGetCollectionFields(dataSourceName?) {
+  const app = useApp();
+  const { collectionManager } = app.dataSourceManager.getDataSource(dataSourceName);
+
+  return useCallback((collectionName) => collectionManager.getCollectionAllFields(collectionName), [collectionManager]);
 }
 
 export function WorkflowVariableInput({ variableOptions, ...props }): JSX.Element {

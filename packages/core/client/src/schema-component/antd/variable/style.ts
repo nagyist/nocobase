@@ -1,6 +1,15 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { genStyleHook } from './../__builtins__';
 
-export const useStyles = genStyleHook('nb-variable', (token) => {
+export const useStyles = genStyleHook('nb-variable', (token, props?: { hideVariableButton?: boolean }) => {
   const { componentCls, lineWidth, colorFillQuaternary } = token;
   const inputPaddingHorizontalBase = token.paddingSM - 1;
   const tagPaddingHorizontal = 8; // Fixed padding.
@@ -28,10 +37,12 @@ export const useStyles = genStyleHook('nb-variable', (token) => {
         marginBottom: 0,
       },
 
-      '.ant-input': {
-        borderTopRightRadius: 0,
-        borderBottomRightRadius: 0,
-      },
+      '.ant-input': props?.hideVariableButton
+        ? {}
+        : {
+            borderTopRightRadius: 0,
+            borderBottomRightRadius: 0,
+          },
 
       '.ant-tag': {
         display: 'inline-block',

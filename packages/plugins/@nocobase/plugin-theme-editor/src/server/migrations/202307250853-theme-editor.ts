@@ -1,9 +1,19 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { Model } from '@nocobase/database';
 import { Migration } from '@nocobase/server';
 import { uid } from '@nocobase/utils';
 import { compact, compactDark, dark, defaultTheme } from '../builtinThemes';
 
-export default class ThemeEditorMigration extends Migration {
+export default class extends Migration {
+  appVersion = '<0.14.0-alpha.8';
   async up() {
     const result = await this.app.version.satisfies('<0.14.0-alpha.8');
 

@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import { LoadingOutlined } from '@ant-design/icons';
 import { ArrayCollapse, ArrayItems, FormLayout } from '@formily/antd-v5';
 import { Field } from '@formily/core';
@@ -6,21 +15,22 @@ import { uid } from '@formily/shared';
 import _ from 'lodash';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useFilterByTk, useFormBlockContext } from '../../../block-provider';
-import { useCollection, useCollectionManager, useSortFields } from '../../../collection-manager';
+import { useFilterByTk } from '../../../block-provider';
+import { useFormBlockContext } from '../../../block-provider/FormBlockProvider';
+import { useCollectionManager_deprecated, useCollection_deprecated, useSortFields } from '../../../collection-manager';
 import { GeneralSchemaItems } from '../../../schema-items';
+import { GeneralSchemaDesigner } from '../../../schema-settings/GeneralSchemaDesigner';
 import {
-  GeneralSchemaDesigner,
-  SchemaSettingsDataScope,
   SchemaSettingsDivider,
   SchemaSettingsModalItem,
   SchemaSettingsRemove,
   SchemaSettingsSelectItem,
   SchemaSettingsSwitchItem,
-  isPatternDisabled,
-} from '../../../schema-settings';
-import useIsAllowToSetDefaultValue from '../../../schema-settings/hooks/useIsAllowToSetDefaultValue';
+} from '../../../schema-settings/SchemaSettings';
+import { SchemaSettingsDataScope } from '../../../schema-settings/SchemaSettingsDataScope';
+import { useIsAllowToSetDefaultValue } from '../../../schema-settings/hooks/useIsAllowToSetDefaultValue';
 import { useIsShowMultipleSwitch } from '../../../schema-settings/hooks/useIsShowMultipleSwitch';
+import { isPatternDisabled } from '../../../schema-settings/isPatternDisabled';
 import { useCompile, useDesignable, useFieldComponentOptions, useFieldTitle } from '../../hooks';
 import { removeNullCondition } from '../filter';
 import { RemoteSelect, RemoteSelectProps } from '../remote-select';
@@ -89,6 +99,8 @@ const InternalAssociationSelect = connect(
   mapReadPretty(ReadPretty),
 );
 
+InternalAssociationSelect.displayName = 'InternalAssociationSelect';
+
 interface AssociationSelectInterface {
   (props: any): React.ReactElement;
   Designer: React.FC;
@@ -99,8 +111,8 @@ export const AssociationSelect = InternalAssociationSelect as unknown as Associa
 
 AssociationSelect.Designer = function Designer() {
   const { getCollectionFields, getInterface, getCollectionJoinField, getCollection, isTitleField } =
-    useCollectionManager();
-  const { getField } = useCollection();
+    useCollectionManager_deprecated();
+  const { getField } = useCollection_deprecated();
   const { form } = useFormBlockContext();
   const field = useField<Field>();
   const fieldSchema = useFieldSchema();
@@ -258,8 +270,9 @@ AssociationSelect.Designer = function Designer() {
           }
           onSubmit={(v) => {
             const rules = [];
+            const customPredicate = (value) => value !== null && value !== undefined && !Number.isNaN(value);
             for (const rule of v.rules) {
-              rules.push(_.pickBy(rule, _.identity));
+              rules.push(_.pickBy(rule, customPredicate));
             }
             const schema = {
               ['x-uid']: fieldSchema['x-uid'],
@@ -348,7 +361,9 @@ AssociationSelect.Designer = function Designer() {
               description: fieldSchema['description'],
               default: fieldSchema['default'],
               'x-decorator': 'FormItem',
-              'x-designer': 'FormItem.Designer',
+              // 'x-designer': 'FormItem.Designer',
+              'x-toolbar': 'FormItemSchemaToolbar',
+              'x-settings': 'fieldSettings:FormItem',
               'x-component': type,
               'x-validator': fieldSchema['x-validator'],
               'x-collection-field': fieldSchema['x-collection-field'],
@@ -612,8 +627,8 @@ AssociationSelect.Designer = function Designer() {
  * @returns
  */
 AssociationSelect.FilterDesigner = function FilterDesigner() {
-  const { getCollectionFields, getInterface, getCollectionJoinField } = useCollectionManager();
-  const { getField } = useCollection();
+  const { getCollectionFields, getInterface, getCollectionJoinField } = useCollectionManager_deprecated();
+  const { getField } = useCollection_deprecated();
   const { form } = useFormBlockContext();
   const field = useField<Field>();
   const fieldSchema = useFieldSchema();

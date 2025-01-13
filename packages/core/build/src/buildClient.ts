@@ -1,3 +1,12 @@
+/**
+ * This file is part of the NocoBase (R) project.
+ * Copyright (c) 2020-2024 NocoBase Co., Ltd.
+ * Authors: NocoBase Team.
+ *
+ * This project is dual-licensed under AGPL-3.0 and NocoBase Commercial License.
+ * For more information, please refer to: https://www.nocobase.com/agreement.
+ */
+
 import react from '@vitejs/plugin-react';
 import fg from 'fast-glob';
 import fs from 'fs-extra';
@@ -7,7 +16,7 @@ import { build as viteBuild } from 'vite';
 import { libInjectCss } from 'vite-plugin-lib-inject-css';
 
 import { globExcludeFiles } from './constant';
-import { PkgLog, UserConfig } from './utils';
+import { PkgLog, UserConfig, getEnvDefine } from './utils';
 
 export async function buildClient(cwd: string, userConfig: UserConfig, sourcemap: boolean = false, log: PkgLog) {
   log('build client');
@@ -19,27 +28,23 @@ export async function buildClient(cwd: string, userConfig: UserConfig, sourcemap
     }
     return true;
   };
-  await buildEsm(cwd, userConfig, sourcemap, external, log);
-  await buildLib(cwd, userConfig, sourcemap, external, log);
+  await buildClientEsm(cwd, userConfig, sourcemap, external, log);
+  await buildClientLib(cwd, userConfig, sourcemap, external, log);
   await buildLocale(cwd, userConfig, log);
 }
 
 type External = (id: string) => boolean;
 
-export function buildEsm(cwd: string, userConfig: UserConfig, sourcemap: boolean, external: External, log: PkgLog) {
+function buildClientEsm(cwd: string, userConfig: UserConfig, sourcemap: boolean, external: External, log: PkgLog) {
   log('build client esm');
   const entry = path.join(cwd, 'src/index.ts').replaceAll(/\\/g, '/');
   const outDir = path.resolve(cwd, 'es');
   return viteBuild(
     userConfig.modifyViteConfig({
-      mode: 'production',
-      define: {
-        'process.env.NODE_ENV': JSON.stringify('production'),
-        'process.env.__TEST__': false,
-        'process.env.__E2E__': process.env.__E2E__ ? true : false,
-      },
+      mode: process.env.NODE_ENV || 'production',
+      define: getEnvDefine(),
       build: {
-        minify: false,
+        minify: process.env.NODE_ENV === 'production',
         outDir,
         cssCodeSplit: true,
         emptyOutDir: true,
@@ -61,7 +66,7 @@ export function buildEsm(cwd: string, userConfig: UserConfig, sourcemap: boolean
   );
 }
 
-export async function buildLib(
+async function buildClientLib(
   cwd: string,
   userConfig: UserConfig,
   sourcemap: boolean,
@@ -78,13 +83,13 @@ export async function buildLib(
 
   await viteBuild(
     userConfig.modifyViteConfig({
-      mode: 'production',
+      mode: process.env.NODE_ENV || 'production',
       esbuild: {
         format: 'cjs',
       },
       build: {
         outDir,
-        minify: false,
+        minify: process.env.NODE_ENV === 'production',
         sourcemap,
         lib: {
           entry: path.join(cwd, 'es/index.ts'),
